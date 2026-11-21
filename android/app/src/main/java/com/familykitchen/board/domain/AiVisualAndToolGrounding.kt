@@ -1,7 +1,6 @@
 package com.familykitchen.board.domain
 
 import kotlin.math.max
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -14,7 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
 // Zero Android, JNI, LiteRT, MediaPipe, or java.io imports are permitted inside domain/.
 
 /**
- * Builds a single compact pantry-grounded system prompt for on-device LiteRT-LM / Gemma inference.
+ * Builds a single compact pantry-grounded system prompt for on-device LiteRT-LM / Gemma or Cloud LLM inference.
  *
  * @param userPrompt Natural-language request from the parent.
  * @param board Active 7-day [WeeklyBoard].
@@ -24,6 +23,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * @param householdAllergens Active allergen exclusions.
  * @param householdProfile Optional full household profile (goals, growth stage, life events).
  * @param deviceProfile Active Samsung Galaxy S22 / S22 Ultra / Gemma E2B hardware profile.
+ * @param recentTurns Optional recent conversation turns (`<= 4`) providing multi-turn continuity.
  * @return Grounded single-pass prompt string.
  */
 fun buildPantryAwareSystemPrompt(
@@ -35,6 +35,7 @@ fun buildPantryAwareSystemPrompt(
   householdAllergens: List<String> = emptyList(),
   householdProfile: HouseholdProfile? = null,
   deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4,
+  recentTurns: List<AiChatTurn> = emptyList(),
 ): String {
   val focusTag = inferNutritionFocusFromPrompt(userPrompt)
   val catalogById = indexCatalogById(catalog)
@@ -62,23 +63,46 @@ fun buildPantryAwareSystemPrompt(
   val validRecipeIds = recipes.take(30).joinToString(",") { it.recipeId }
   val plannedSlotIds = board.slots.filter { it.status == MealSlotStatus.PLANNED }
     .take(9).joinToString(",") { "${it.slotId}:${it.slotType.name}" }
+  val defaultConv = !isMealOrRecipeProposalRequest(userPrompt)
+  val recentContext = formatRecentTurnsContext(recentTurns)
+  val responseRule = when {
+    defaultConv ->
+      "RESPONSE_RULE: Write a warm, specific, culinary-intelligent reply directly answering USER_REQUEST in " +
+        "\"assistantSummary\" (referencing real household pantry items or culinary technique when helpful — never " +
+        "generic canned filler). For greetings, chat, or cooking Q&A, set \"isConversationalOnly\": true and \"suggestedSwaps\": []."
+    else ->
+      "RESPONSE_RULE: Write a warm, specific, culinary-intelligent reply directly answering USER_REQUEST in " +
+        "\"assistantSummary\" (referencing real stocked items, cook times, and child-safe prep — never generic filler). " +
+        "Set \"isConversationalOnly\": false and include 0-3 \"suggestedSwaps\" using ONLY exact IDs from PLANNED_SLOTS and VALID_RECIPE_IDS (never \"...\")."
+  }
+  val outputFormat = when {
+    defaultConv ->
+      "OUTPUT_FORMAT: Return ONLY strict JSON {\"focusTag\":\"${focusTag.name}\",\"assistantSummary\":\"<your helpful response>\"," +
+        "\"isConversationalOnly\":true,\"suggestedSwaps\":[]}"
+    else ->
+      "OUTPUT_FORMAT: Return ONLY strict JSON {\"focusTag\":\"${focusTag.name}\",\"assistantSummary\":\"<your culinary response>\"," +
+        "\"isConversationalOnly\":false,\"suggestedSwaps\":[{\"slotId\":\"<exact PLANNED_SLOTS id>\",\"recipeId\":\"<exact VALID_RECIPE_IDS id>\",\"rationale\":\"<why>\"}]}"
+  }
 
-  return listOf(
-    "ROLE: Family Kitchen Board On-Device Nutrition Co-Pilot (Family of 4: Fred, Wife, 8yo, ${youngestStage.shortLabel}).",
-    "MARKET_AND_CURRENCY: $marketRegion (${activeCurrency.isoCode} ${activeCurrency.symbol}).",
-    "DEVICE_PROFILE: ${deviceProfile.displayName} (${deviceProfile.preferredDelegate}, ${deviceProfile.quantization}).",
-    "FOCUS_TAG: ${focusTag.name}",
-    "CONSTRAINTS: Weekday BREAKFAST calibratedActiveMinutes <= ${MAX_WEEKDAY_BREAKFAST_MINUTES}m (1.4x buffer); " +
-      "non-empty child safety tip for ${youngestStage.shortLabel}; allergens=(${effectiveAllergens.joinToString(",").ifEmpty { "NONE" }}).",
-    "ACTIVE_LIFE_EVENTS: $lifeEventSummary",
-    "IN_STOCK_TIER1_PANTRY (${inStockTier1.size}): ${inStockTier1.joinToString("; ").ifEmpty { "None" }}",
-    "TIER2_STAPLES (${tier2Statuses.size}): ${tier2Statuses.joinToString(", ").ifEmpty { "None" }}",
-    "PLANNED_SLOTS: $plannedSlotIds",
-    "VALID_RECIPE_IDS: $validRecipeIds",
-    "OUTPUT_FORMAT: Return ONLY strict JSON {\"focusTag\":\"${focusTag.name}\",\"assistantSummary\":\"...\"," +
-      "\"isConversationalOnly\":false,\"suggestedSwaps\":[{\"slotId\":\"...\",\"recipeId\":\"...\",\"rationale\":\"...\"}]}",
-    "USER_REQUEST: ${userPrompt.trim()}",
-  ).joinToString("\n")
+  return buildList {
+    add("ROLE: SavorAI Kitchen & Nutrition Sous-Chef (Household: ${householdProfile?.householdName ?: "Family of 4"}, youngest: ${youngestStage.shortLabel}).")
+    add("MARKET_AND_CURRENCY: $marketRegion (${activeCurrency.isoCode} ${activeCurrency.symbol}).")
+    add("DEVICE_PROFILE: ${deviceProfile.displayName} (${deviceProfile.preferredDelegate}, ${deviceProfile.quantization}).")
+    add("FOCUS_TAG: ${focusTag.name}")
+    add(
+      "CONSTRAINTS: Weekday BREAKFAST calibratedActiveMinutes <= ${MAX_WEEKDAY_BREAKFAST_MINUTES}m (1.4x buffer); " +
+        "non-empty child safety tip for ${youngestStage.shortLabel}; allergens=(${effectiveAllergens.joinToString(",").ifEmpty { "NONE" }}).",
+    )
+    add("ACTIVE_LIFE_EVENTS: $lifeEventSummary")
+    add("IN_STOCK_TIER1_PANTRY (${inStockTier1.size}): ${inStockTier1.joinToString("; ").ifEmpty { "None" }}")
+    add("TIER2_STAPLES (${tier2Statuses.size}): ${tier2Statuses.joinToString(", ").ifEmpty { "None" }}")
+    add("PLANNED_SLOTS: $plannedSlotIds")
+    add("VALID_RECIPE_IDS: $validRecipeIds")
+    if (recentContext != null) add("RECENT_CONVERSATION: $recentContext")
+    add(responseRule)
+    add(outputFormat)
+    add("USER_REQUEST: ${userPrompt.trim()}")
+  }.joinToString("\n")
 }
 
 /**
@@ -118,23 +142,14 @@ fun buildVisualIntakePrompt(
 }
 
 /**
- * Strips raw Gemma control tokens (`<pad>`, `<unk>`, `<bos>`, `<eos>`, `<start_of_turn>`,
- * `<end_of_turn>`, `<unused\d+>`) and outer Markdown code fences before JSON schema validation.
+ * Strips Gemma 4 reasoning blocks (`<|thought|>...`), Gemma 2/3/4 turn/control delimiters, and
+ * outer JSON Markdown code fences before schema validation.
  *
- * @param rawModelOutput Raw string emitted by LiteRT-LM or MediaPipe `LlmInference`.
+ * @param rawModelOutput Raw string emitted by LiteRT-LM, MediaPipe `LlmInference`, or Cloud AI.
  * @return Sanitized text ready for strict JSON parsing or UI display.
  */
-fun stripGemmaControlTokens(rawModelOutput: String): String {
-  // Remove Gemma turn delimiters and f16 NaN <unusedN> artifacts before JSON extraction.
-  val withoutTokens = rawModelOutput
-    .replace(Regex("<start_of_turn>\\s*(model|assistant)?", RegexOption.IGNORE_CASE), "")
-    .replace(Regex("<(pad|unk|bos|eos|end_of_turn)>", RegexOption.IGNORE_CASE), "")
-    .replace(Regex("<unused\\d+>", RegexOption.IGNORE_CASE), "")
-    .trim()
-  // Unwrap fenced ```json ... ``` blocks commonly emitted by instruction-tuned weights.
-  val fenceMatch = Regex("```(?:json)?\\s*([\\s\\S]*?)```", RegexOption.IGNORE_CASE).find(withoutTokens)
-  return (fenceMatch?.groupValues?.getOrNull(1) ?: withoutTokens).trim()
-}
+fun stripGemmaControlTokens(rawModelOutput: String): String =
+  sanitizeLlmRawOutput(rawModelOutput)
 
 /**
  * Parses and strictly catalog-grounds an untrusted LLM response into an
@@ -237,14 +252,16 @@ fun parseAndGroundAiResponse(
     }
   }
 
-  // Filter curated discovery candidates against active household allergen exclusions.
+  // Suppress unsolicited generic recipe/grocery cards on pure greetings or Q&A with 0 swaps.
+  val effectiveConversationalOnly =
+    isConversationalOnly || (groundedSwaps.isEmpty() && !isMealOrRecipeProposalRequest(userPrompt))
   val allergenTokens = allergens.map(::canonicalizeAllergenToken).toSet()
   val safeSuggestions = when {
-    isConversationalOnly -> emptyList()
+    effectiveConversationalOnly -> emptyList()
     else -> CURATED_BRAIN_BOOSTER_CANDIDATES.filter { c -> c.item.allergens.none { canonicalizeAllergenToken(it) in allergenTokens } }
   }
   val featuredCard = when {
-    isConversationalOnly -> null
+    effectiveConversationalOnly -> null
     else -> synthesizeFeaturedAiRecipeCard(
       userPrompt, focusTag, groundedSwaps,
       filterSchedulableRecipes(recipes, catalogById, allergens, pantryById),
@@ -255,7 +272,8 @@ fun parseAndGroundAiResponse(
   val proposal = AiMenuOptimizationProposal(
     proposalId = "ai_grounded_${focusTag.name.lowercase()}_${board.boardId}",
     focusTag = focusTag, assistantSummary = summary, slotSwaps = groundedSwaps,
-    newIngredientSuggestions = safeSuggestions, isConversationalOnly = isConversationalOnly,
+    newIngredientSuggestions = safeSuggestions, isConversationalOnly = effectiveConversationalOnly,
+    followUpPrompts = resolveGroundedFollowUps(rootObj, focusTag, effectiveConversationalOnly),
     featuredRecipeCard = featuredCard,
   )
   return SchemaValidator.validateAiMenuOptimizationProposal(proposal, catalog, recipes, board)
@@ -867,21 +885,3 @@ private fun parseDayIndexFromPrompt(promptLower: String): Int? = when {
   Regex("\\bsun(day)?\\b").containsMatchIn(promptLower) -> 6
   else -> null
 }
-
-// Locate the outermost '{...}' JSON object inside raw model text or fail with ValidationException.
-private fun extractJsonObjectSlice(text: String): String {
-  val start = text.indexOf('{')
-  val end = text.lastIndexOf('}')
-  requireDomainValid(start >= 0 && end > start, "JsonSlice") { "missing '{...}' JSON object boundaries" }
-  return text.substring(start, end + 1)
-}
-
-// Parse JSON via SchemaValidator.strictJson so malformed syntax maps to ValidationException.
-private fun parseJsonObjectStrict(entityName: String, rawJson: String): JsonObject =
-  try {
-    val parsed = SchemaValidator.strictJson.parseToJsonElement(rawJson)
-    parsed as? JsonObject ?: throw ValidationException("Invalid $entityName: expected JSON object", listOf("<root>: not object"))
-  } catch (err: SerializationException) {
-    val detail = err.message ?: "malformed JSON"
-    throw ValidationException("Invalid $entityName JSON: $detail", listOf(detail), err)
-  }

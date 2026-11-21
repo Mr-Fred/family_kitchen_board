@@ -302,6 +302,7 @@ enum class AiChatRole {
  * @property proposal Optional actionable menu/grocery optimization proposal card.
  * @property visualIntakeResult Optional grounded photo scan confirmation card.
  * @property toolCallResult Optional deterministic tool execution summary metadata.
+ * @property responseSourceLabel Optional concise provenance label (`"gemma-4-E2B-it"`, `"Offline Advisor"`, etc.).
  */
 @Serializable
 data class AiChatTurn(
@@ -313,6 +314,7 @@ data class AiChatTurn(
   val proposal: AiMenuOptimizationProposal? = null,
   val visualIntakeResult: VisualIntakeResult? = null,
   val toolCallResult: AiToolCallResult? = null,
+  val responseSourceLabel: String? = null,
 )
 
 /**

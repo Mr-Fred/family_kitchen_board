@@ -102,22 +102,39 @@ class HybridAiInferenceRouter(
   }
 
   /**
-   * Runs local model discovery when in [AiExecutionMode.ON_DEVICE] mode and returns the active
-   * synchronized [AiRuntimeState].
+   * Runs local model discovery when in [AiExecutionMode.ON_DEVICE] mode (or when no Cloud API key
+   * is stored yet, automatically recovering from a leftover keyless `CLOUD_API` toggle if a local
+   * `.litertlm` / `.task` model is `Ready`) and returns the synchronized [AiRuntimeState].
    */
   override suspend fun autoDiscoverAndInitialize(): AiRuntimeState {
-    if (vaultPort.configFlow.value.executionMode == AiExecutionMode.ON_DEVICE) {
-      onDevicePort.autoDiscoverAndInitialize()
+    val currentConfig = vaultPort.configFlow.value
+    if (currentConfig.executionMode == AiExecutionMode.ON_DEVICE || !currentConfig.hasStoredApiKey) {
+      val discovered = onDevicePort.autoDiscoverAndInitialize()
+      // Recover automatically from a leftover keyless CLOUD_API toggle when a local model is Ready.
+      if (!vaultPort.configFlow.value.hasStoredApiKey && discovered is AiRuntimeState.Ready) {
+        vaultPort.setExecutionMode(AiExecutionMode.ON_DEVICE)
+      }
     }
     return refreshRuntimeState()
   }
 
-  /** Delegates SAF `.litertlm` / `.task` model import to [onDevicePort] and refreshes state. */
+  /**
+   * Delegates SAF `.litertlm` / `.task` model import to [onDevicePort], switches execution mode to
+   * [AiExecutionMode.ON_DEVICE] whenever the imported local model initializes to `Ready` (preventing
+   * an unconfigured `CLOUD_API` mode from shadowing local weights), and refreshes [runtimeState].
+   */
   override suspend fun importAndLoadModel(
     sourceUriString: String,
     displayName: String?,
   ): AiRuntimeState {
     val importedState = onDevicePort.importAndLoadModel(sourceUriString, displayName)
+    // Switch out of CLOUD_API automatically when a local model loads so imported weights activate.
+    if (
+      importedState is AiRuntimeState.Ready &&
+      vaultPort.configFlow.value.executionMode != AiExecutionMode.ON_DEVICE
+    ) {
+      vaultPort.setExecutionMode(AiExecutionMode.ON_DEVICE)
+    }
     val synced = refreshRuntimeState()
     return when (vaultPort.configFlow.value.executionMode) {
       AiExecutionMode.ON_DEVICE -> importedState

@@ -222,15 +222,16 @@ class LiteRtMultimodalEngine(
           val activeMediaPipe = mediaPipeLlm
           val rawText = when {
             activeEngine != null && supportsConversationApi -> {
-              // Reuse persistent Conversation handle across text turns to avoid native JNI churn.
-              val activeConv = liteRtConversation
-                ?: activeEngine.createConversation().also { liteRtConversation = it }
+              // Release any prior Conversation handle and open a fresh per-turn Conversation so
+              // repeated 3,000-char system prompts never bloat or overflow the 2B model KV-cache.
+              runCatching { liteRtConversation?.close() }
+              liteRtConversation = null
+              var textConversation: Conversation? = null
               try {
-                activeConv.sendMessage(prompt).toString()
-              } catch (convErr: Throwable) {
-                runCatching { activeConv.close() }
-                if (liteRtConversation === activeConv) liteRtConversation = null
-                throw convErr
+                textConversation = activeEngine.createConversation()
+                textConversation.sendMessage(prompt).toString()
+              } finally {
+                runCatching { textConversation?.close() }
               }
             }
             activeSession != null -> activeSession.generateContent(listOf(InputData.Text(prompt)))
@@ -474,9 +475,12 @@ class LiteRtMultimodalEngine(
     }
 
     liteRtEngine = initializedEngine
-    // Create and retain a single Conversation handle; fall back to Session mode if unsupported.
+    // Probe Conversation support once at load time (closing immediately so KV-cache starts empty);
+    // fall back to Session mode if Conversation API is unsupported by this package.
     try {
-      liteRtConversation = initializedEngine.createConversation()
+      val probeConversation = initializedEngine.createConversation()
+      runCatching { probeConversation.close() }
+      liteRtConversation = null
       supportsConversationApi = true
     } catch (_: Throwable) {
       liteRtConversation = null

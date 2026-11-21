@@ -22,6 +22,8 @@ import com.familykitchen.board.domain.ValidationException
 import com.familykitchen.board.domain.VisionNotSupportedException
 import com.familykitchen.board.domain.VisualIntakeResult
 import com.familykitchen.board.domain.batchRestockPantry
+import com.familykitchen.board.domain.formatAiFallbackToastMessage
+import com.familykitchen.board.domain.formatAiResponseSourceLabel
 import com.familykitchen.board.domain.synthesizeCatalogItemFromLabel
 import com.familykitchen.board.domain.tryExecuteDeterministicToolIntent
 import com.familykitchen.board.ports.AiEdgePort
@@ -446,6 +448,7 @@ class AiChefCoordinator(
         messageText = groundedProposal.assistantSummary,
         createdAtIso = nowIso,
         proposal = groundedProposal,
+        responseSourceLabel = resolveActiveModelSourceLabel(),
       )
       val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
       return AiChefTurnOutcome(
@@ -466,6 +469,7 @@ class AiChefCoordinator(
       messageText = assistantMessage,
       createdAtIso = nowIso,
       visualIntakeResult = intakeResult,
+      responseSourceLabel = resolveActiveModelSourceLabel(),
     )
     val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
     // Confirmation gate: never auto-commit groundedRestockDeltas until ConfirmVisualRestock fires.
@@ -551,6 +555,7 @@ class AiChefCoordinator(
         messageText = toolResult.summaryMessage,
         createdAtIso = nowIso,
         toolCallResult = toolResult,
+        responseSourceLabel = SOURCE_LABEL_KITCHEN_TOOL,
       )
       val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
       val mutatedSnapshot = applyToolResultToSnapshot(snapshot, toolResult, history, nowIso)
@@ -564,8 +569,10 @@ class AiChefCoordinator(
       )
     }
 
-    // Step 2: when on-device runtime is Ready, run single-pass grounded LLM inference.
+    // Step 2: when on-device or cloud runtime is Ready, run grounded flexible LLM inference.
+    var fallbackDiagnosticToast: String? = null
     if (aiEdgePort.runtimeState.value is AiRuntimeState.Ready) {
+      val activeSourceLabel = resolveActiveModelSourceLabel()
       val systemPrompt = AiMenuAdvisorEngine.buildPantryAwareSystemPrompt(
         userPrompt = cleanPrompt,
         board = snapshot.weeklyBoard,
@@ -575,10 +582,11 @@ class AiChefCoordinator(
         householdAllergens = snapshot.householdProfile.householdAllergens,
         householdProfile = snapshot.householdProfile,
         deviceProfile = deviceProfile,
+        recentTurns = snapshot.aiTurnHistory.takeLast(RECENT_PROMPT_TURNS_LIMIT),
       )
       val llmGroundedProposal = try {
         val rawReply = aiEdgePort.generateText(systemPrompt)
-        AiMenuAdvisorEngine.parseAndGroundAiResponse(
+        AiMenuAdvisorEngine.groundFlexibleLlmTextReply(
           rawModelOutput = rawReply,
           userPrompt = cleanPrompt,
           board = snapshot.weeklyBoard,
@@ -589,8 +597,9 @@ class AiChefCoordinator(
         )
       } catch (cancel: CancellationException) {
         throw cancel
-      } catch (_: Throwable) {
-        // Text-only turns safely degrade to deterministic pantry advisor on JNI Error or bad JSON.
+      } catch (err: Throwable) {
+        // Record a secret-redacted diagnostic toast so Ready-mode fallbacks are never silent.
+        fallbackDiagnosticToast = formatAiFallbackToastMessage(err)
         null
       }
 
@@ -601,6 +610,7 @@ class AiChefCoordinator(
           messageText = llmGroundedProposal.assistantSummary,
           createdAtIso = nowIso,
           proposal = llmGroundedProposal,
+          responseSourceLabel = activeSourceLabel,
         )
         val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
         return AiChefTurnOutcome(
@@ -629,6 +639,7 @@ class AiChefCoordinator(
       messageText = fallbackProposal.assistantSummary,
       createdAtIso = nowIso,
       proposal = fallbackProposal,
+      responseSourceLabel = SOURCE_LABEL_OFFLINE_ADVISOR,
     )
     val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
     return AiChefTurnOutcome(
@@ -637,6 +648,7 @@ class AiChefCoordinator(
       assistantTurn = assistantTurn,
       updatedTurnHistory = history,
       updatedSnapshot = snapshot.copy(aiTurnHistory = history, updatedAtIso = nowIso),
+      toastMessage = fallbackDiagnosticToast,
     )
   }
 
@@ -811,6 +823,12 @@ class AiChefCoordinator(
     return if (deduplicated.size <= cap) deduplicated else deduplicated.takeLast(cap)
   }
 
+  // Derive concise model provenance badge (e.g., "gemma-4-E2B-it" or "Gemini · gemini-3.8-flash").
+  private fun resolveActiveModelSourceLabel(): String? {
+    val ready = aiEdgePort.runtimeState.value as? AiRuntimeState.Ready ?: return null
+    return formatAiResponseSourceLabel(ready.capabilities.backendLabel, ready.capabilities.modelName)
+  }
+
   // Generate monotonic epoch-backed turn IDs guaranteed never to collide with persisted history.
   private fun nextTurnId(prefix: String, reservedIds: Set<String> = emptySet()): String {
     val epochMillis = System.currentTimeMillis()
@@ -825,6 +843,9 @@ class AiChefCoordinator(
     /** Default rolling conversation buffer size (`12` messages = 6 user/assistant pairs). */
     const val DEFAULT_MAX_TURN_HISTORY: Int = 12
 
+    private const val RECENT_PROMPT_TURNS_LIMIT: Int = 4
+    private const val SOURCE_LABEL_KITCHEN_TOOL: String = "Kitchen Tool"
+    private const val SOURCE_LABEL_OFFLINE_ADVISOR: String = "Offline Advisor"
     private const val DEFAULT_IMAGE_LABEL: String = "Attached Photo"
 
     // Default pure-JVM file deletion callback removing temporary preprocessed captures safely.

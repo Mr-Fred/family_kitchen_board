@@ -672,7 +672,7 @@ object AiMenuAdvisorEngine {
   fun inferNutritionFocusFromPrompt(userPrompt: String): NutritionFocusTag =
     com.familykitchen.board.domain.inferNutritionFocusFromPrompt(userPrompt)
 
-  // Builds single-pass pantry-aware system prompt for LiteRT-LM / Gemma text turns.
+  // Builds single-pass pantry-aware system prompt for LiteRT-LM / Gemma / Cloud LLM text turns.
   /** Delegates to [com.familykitchen.board.domain.buildPantryAwareSystemPrompt]. */
   fun buildPantryAwareSystemPrompt(
     userPrompt: String,
@@ -683,8 +683,9 @@ object AiMenuAdvisorEngine {
     householdAllergens: List<String> = emptyList(),
     householdProfile: HouseholdProfile? = null,
     deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4,
+    recentTurns: List<AiChatTurn> = emptyList(),
   ): String = com.familykitchen.board.domain.buildPantryAwareSystemPrompt(
-    userPrompt, board, recipes, catalog, pantry, householdAllergens, householdProfile, deviceProfile,
+    userPrompt, board, recipes, catalog, pantry, householdAllergens, householdProfile, deviceProfile, recentTurns,
   )
 
   // Builds authentic neutral multimodal vision prompt (zero hardcoded fake grocery items).
@@ -711,6 +712,20 @@ object AiMenuAdvisorEngine {
     pantry: List<PantryLedgerEntry>,
     householdProfile: HouseholdProfile = HouseholdProfile(),
   ): AiMenuOptimizationProposal = com.familykitchen.board.domain.parseAndGroundAiResponse(
+    rawModelOutput, userPrompt, board, recipes, catalog, pantry, householdProfile,
+  )
+
+  // Grounds strict JSON, lenient JSON summaries, and natural plain-text LLM replies seamlessly.
+  /** Delegates to [com.familykitchen.board.domain.groundFlexibleLlmTextReply]. */
+  fun groundFlexibleLlmTextReply(
+    rawModelOutput: String,
+    userPrompt: String,
+    board: WeeklyBoard,
+    recipes: List<Recipe>,
+    catalog: List<IngredientCatalogItem>,
+    pantry: List<PantryLedgerEntry>,
+    householdProfile: HouseholdProfile = HouseholdProfile(),
+  ): AiMenuOptimizationProposal = com.familykitchen.board.domain.groundFlexibleLlmTextReply(
     rawModelOutput, userPrompt, board, recipes, catalog, pantry, householdProfile,
   )
 

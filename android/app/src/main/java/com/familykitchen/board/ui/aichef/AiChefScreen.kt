@@ -556,10 +556,8 @@ private fun SavorChatTurnView(
     val richCard = proposal?.featuredRecipeCard
     val intake = turn.visualIntakeResult
     val hasVisualArtifact = intake != null && hasRenderableVisualIntake(intake)
-    val hasActionableSwaps = proposal != null && !proposal.isConversationalOnly && proposal.slotSwaps.isNotEmpty()
-    val hasActionableGrocery = proposal != null && !proposal.isConversationalOnly && proposal.newIngredientSuggestions.isNotEmpty()
-    // Suppress duplicate prose wall when a structured artifact card communicates the outcome cleanly.
-    val hasStructuredArtifact = hasVisualArtifact || richCard != null || hasActionableSwaps || hasActionableGrocery
+    val sourceTag = turn.responseSourceLabel?.trim()?.takeIf { it.isNotBlank() }
+    val headerLabel = if (sourceTag != null) "Sous-Chef · $sourceTag · $timeBadge" else "Sous-Chef · $timeBadge"
 
     Column(modifier = Modifier.fillMaxWidth().padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       // Warm sageContainer Sous-Chef avatar with Restaurant icon (zero sparkles, zero blue pills).
@@ -567,11 +565,15 @@ private fun SavorChatTurnView(
         Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(extendedColors.sageContainer), contentAlignment = Alignment.Center) {
           Icon(Icons.Filled.Restaurant, contentDescription = null, tint = extendedColors.onSageContainer, modifier = Modifier.size(13.dp))
         }
-        Text("Sous-Chef · $timeBadge", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+          text = headerLabel, style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
       }
 
-      // Render prose bubble only for conversational or tool turns lacking a structured artifact card.
-      if (!hasStructuredArtifact && turn.messageText.isNotBlank()) {
+      // Always render the AI's actual assistantSummary prose bubble above any recipe or swap cards;
+      // suppress duplicate text only when VisualIntakeConfirmationCard renders its own scan header.
+      if (!hasVisualArtifact && turn.messageText.isNotBlank()) {
         Surface(
           shape = KitchenTheme.shapes.assistantChatBubble, color = MaterialTheme.colorScheme.surfaceContainerLowest,
           border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp, modifier = Modifier.fillMaxWidth(),
@@ -722,7 +724,10 @@ private fun SavorAiAssistantRichRecipePreview() {
   )
   val turns = listOf(
     AiChatTurn("u1", AiChatRole.USER, "Rescue expiring salmon and spinach", "2026-10-25T18:42:00Z"),
-    AiChatTurn("a1", AiChatRole.ASSISTANT, proposal.assistantSummary, "2026-10-25T18:43:00Z", proposal = proposal),
+    AiChatTurn(
+      "a1", AiChatRole.ASSISTANT, proposal.assistantSummary, "2026-10-25T18:43:00Z",
+      proposal = proposal, responseSourceLabel = "gemma-4-E2B-it",
+    ),
   )
   FamilyKitchenBoardTheme {
     AiChefScreen(
