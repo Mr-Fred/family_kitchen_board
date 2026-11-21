@@ -54,6 +54,7 @@ import com.familykitchen.board.domain.StapleStatus
 import com.familykitchen.board.domain.StorageLocation
 import com.familykitchen.board.domain.indexCatalogById
 import com.familykitchen.board.domain.indexPantryById
+import com.familykitchen.board.ui.export.KitchenExportActionRow
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
 
@@ -86,6 +87,9 @@ import com.familykitchen.board.ui.theme.KitchenTheme
  * @param onPairExpiringIngredients Launches Sous-Chef pairing prompt for two co-expiring items.
  * @param onViewTonightRescuePlan Opens tonight's zero-waste rescue recipes from the rescue bar.
  * @param currencySymbol Active household currency symbol (`"₱"` default).
+ * @param isExportingPdf `true` while a scoped multi-page Pantry PDF export is writing on IO.
+ * @param onCopyPantryToClipboard Copies the plain-text pantry inventory to the system clipboard.
+ * @param onSavePantryAsPdf Launches scoped `CreateDocument("application/pdf")` for Pantry stock.
  * @param modifier Optional Compose [Modifier].
  */
 @Composable
@@ -110,6 +114,9 @@ fun SmartPantryScreen(
   onPairExpiringIngredients: (IngredientCatalogItem, IngredientCatalogItem) -> Unit = { _, _ -> },
   onViewTonightRescuePlan: (List<Recipe>) -> Unit = {},
   currencySymbol: String = "₱",
+  isExportingPdf: Boolean = false,
+  onCopyPantryToClipboard: () -> Unit = {},
+  onSavePantryAsPdf: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   // Persist filter enum name and dismiss state as Bundle-safe primitives across recreation.
@@ -199,6 +206,17 @@ fun SmartPantryScreen(
             onScanReceiptClick = onScanReceiptAi,
             onAddItemClick = { showAddCard = !showAddCard },
             onAiAuditClick = onRunAiAudit,
+          )
+        }
+
+        // Tactile 48.dp Copy Pantry & Save PDF export pills (zero storage permissions via SAF).
+        item(key = "smart_pantry_export_actions") {
+          KitchenExportActionRow(
+            copyLabel = "Copy Pantry",
+            pdfLabel = "Save PDF",
+            isExportingPdf = isExportingPdf,
+            onCopyClick = onCopyPantryToClipboard,
+            onSavePdfClick = onSavePantryAsPdf,
           )
         }
 

@@ -60,6 +60,8 @@ import com.familykitchen.board.ui.aichef.ModelDownloadApprovalDialog
 import com.familykitchen.board.ui.board.CookedOverrideSheet
 import com.familykitchen.board.ui.board.TodayAndWeekScreen
 import com.familykitchen.board.ui.cookmode.StepByStepCookModeScreen
+import com.familykitchen.board.ui.export.KitchenExportController
+import com.familykitchen.board.ui.export.rememberKitchenDocumentExportController
 import com.familykitchen.board.ui.grocery.SmartGroceryScreen
 import com.familykitchen.board.ui.onboarding.FirstRunOnboardingHost
 import com.familykitchen.board.ui.onboarding.FirstRunOnboardingScreen
@@ -123,6 +125,11 @@ fun KitchenScaffold(
   BackHandler(enabled = uiState.activeCookModeSession != null) {
     viewModel.exitCookMode()
   }
+
+  // Remember zero-permission Clipboard + SAF CreateDocument("application/pdf") export controller.
+  val exportController = rememberKitchenDocumentExportController(
+    uiState = uiState, onPostToast = viewModel::postExportFeedback,
+  )
 
   // Forward all stateless UI state slices and explicit ViewModel method references.
   KitchenScaffoldContent(
@@ -200,7 +207,7 @@ fun KitchenScaffold(
     onSkipFirstRunOnboarding = viewModel::skipFirstRunOnboardingWithDemo,
     onRelaunchFirstRunOnboarding = viewModel::relaunchFirstRunOnboarding,
     onDismissOnboardingReplay = viewModel::dismissOnboardingReplay,
-    modifier = modifier,
+    exportController = exportController, modifier = modifier,
   )
 }
 
@@ -286,6 +293,7 @@ fun KitchenScaffoldContent(
   onSkipFirstRunOnboarding: () -> Unit = {},
   onRelaunchFirstRunOnboarding: () -> Unit = {},
   onDismissOnboardingReplay: () -> Unit = {},
+  exportController: KitchenExportController = KitchenExportController(),
   modifier: Modifier = Modifier,
 ) {
   val configuration = LocalConfiguration.current
@@ -533,7 +541,9 @@ fun KitchenScaffoldContent(
                       onFindRescueRecipes = onFindRescueRecipesFromPantry,
                       onPairExpiringIngredients = onPairExpiringFromPantry,
                       onViewTonightRescuePlan = onViewTonightRescueFromPantry,
-                      currencySymbol = currencySymbol,
+                      currencySymbol = currencySymbol, isExportingPdf = exportController.isExportingPdf,
+                      onCopyPantryToClipboard = exportController.onCopyPantryInventory,
+                      onSavePantryAsPdf = exportController.onSavePantryPdf,
                     )
                   }
 
@@ -584,6 +594,9 @@ fun KitchenScaffoldContent(
                       },
                       onOpenQaLab = onOpenQaLab, currencySymbol = currencySymbol,
                       marketRegionLabel = profile.marketRegionLabel,
+                      isExportingPdf = exportController.isExportingPdf,
+                      onCopyListToClipboard = exportController.onCopyGroceryList,
+                      onSaveListAsPdf = exportController.onSaveGroceryPdf,
                     )
                   }
                 }

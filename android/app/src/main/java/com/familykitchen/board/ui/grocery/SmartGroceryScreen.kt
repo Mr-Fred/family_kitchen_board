@@ -61,6 +61,7 @@ import com.familykitchen.board.domain.IngredientTier
 import com.familykitchen.board.domain.RestockDelta
 import com.familykitchen.board.domain.StapleStatus
 import com.familykitchen.board.domain.WeeklyGroceryDiff
+import com.familykitchen.board.ui.export.KitchenExportActionRow
 import com.familykitchen.board.ui.pantry.AddIngredientCard
 import com.familykitchen.board.ui.theme.ExtendedKitchenColors
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
@@ -111,6 +112,9 @@ private val SUPERMARKET_AISLES: List<AisleSpec> = listOf(
  * @param onOpenQaLab Opens `QaScenarioLabSheet` when the `Batch #` vault pill is tapped.
  * @param currencySymbol Active household currency symbol (`"₱"` default).
  * @param marketRegionLabel Active local market region label.
+ * @param isExportingPdf `true` while a scoped multi-page Grocery PDF export is writing on IO.
+ * @param onCopyListToClipboard Copies the plain-text shopping list to the system clipboard.
+ * @param onSaveListAsPdf Launches scoped `CreateDocument("application/pdf")` for the shopping list.
  * @param modifier Optional Compose [Modifier].
  */
 @Composable
@@ -138,6 +142,9 @@ fun SmartGroceryScreen(
   onOpenQaLab: () -> Unit = {},
   currencySymbol: String = householdProfile.currency.symbol,
   marketRegionLabel: String = householdProfile.marketRegionLabel,
+  isExportingPdf: Boolean = false,
+  onCopyListToClipboard: () -> Unit = {},
+  onSaveListAsPdf: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -233,6 +240,17 @@ fun SmartGroceryScreen(
             onToggleAddDrawer = { showAddDrawer = !showAddDrawer },
             onStartDictation = onStartVoiceDictation,
             onClearChecked = onClearCheckedItems,
+          )
+        }
+
+        // Tactile 48.dp Copy List & Save PDF export pills (zero storage permissions via SAF).
+        item(key = "grocery_export_actions") {
+          KitchenExportActionRow(
+            copyLabel = "Copy List",
+            pdfLabel = "Save PDF",
+            isExportingPdf = isExportingPdf,
+            onCopyClick = onCopyListToClipboard,
+            onSavePdfClick = onSaveListAsPdf,
           )
         }
 

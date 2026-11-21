@@ -262,6 +262,9 @@ class KitchenBoardViewModel(
   /** Dismisses the sticky top confirmation or warning toast banner. */
   fun dismissToast() = mutableUiState.update { it.withToast(null) }
 
+  /** Posts a dismissible export status or diagnostic banner (`Copy` / `Save PDF`) to [uiState]. */
+  fun postExportFeedback(message: String) = postToast(message)
+
   // --- Board, Cooked Deduction (`EC-04`–`EC-07`), Swap (`EC-13`), Skip (`EC-12`) & Prep ---
 
   /** Launches full-screen `StepByStepCookModeScreen` (and syncs `MorningPacerScreen`) for [slotId]. */
