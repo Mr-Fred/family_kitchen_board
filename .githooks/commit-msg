@@ -1,0 +1,287 @@
+#!/usr/bin/env node
+/**
+ * @fileoverview Git commit-msg clean-room guardrail for personal repository isolation.
+ * Scans every Git commit message file before commit creation and aborts non-zero
+ * if any corporate domain, intranet shortlink, internal path/tool identifier,
+ * workstation username/home directory, or API/private-key secret appears.
+ */
+'use strict';
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+/**
+ * Concatenates string fragments at runtime so this hook file never embeds raw forbidden tokens.
+ *
+ * @param {...string} parts String fragments to join.
+ * @return {string} Combined string.
+ */
+function joinParts(...parts) {
+  return parts.join('');
+}
+
+/**
+ * Escapes special regular-expression metacharacters in a literal runtime string.
+ *
+ * @param {string} value Raw literal string (such as OS username or home path).
+ * @return {string} Regex-escaped pattern fragment.
+ */
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Builds the compiled clean-room regular expression rules used to validate commit messages.
+ *
+ * @return {Array<{id: string, description: string, regex: RegExp}>} Ordered rule definitions.
+ */
+function buildCommitMessageRules() {
+  const corpPrimary = joinParts('goo', 'gle');
+  const corpCommunity = joinParts('goo', 'glers');
+  const corpTld = joinParts('g', 'oog');
+
+  const shortlinkPrefixes = [
+    joinParts('g', 'o'),
+    'b',
+    joinParts('c', 'l'),
+    joinParts('x', 'id'),
+    joinParts('ya', 'qs'),
+    joinParts('crit', 'ique'),
+  ].join('|');
+
+  const internalRepoAndBuildTerms = [
+    joinParts('goo', 'gle3'),
+    joinParts('ci', 'tc'),
+    joinParts('pi', 'per'),
+    joinParts('bl', 'aze-bin'),
+    joinParts('bl', 'aze-out'),
+    joinParts('bl', 'aze-testlogs'),
+    joinParts('src', 'fs'),
+    joinParts('sponge', '2'),
+    joinParts('bo', 'rgcron'),
+  ].join('|');
+
+  const internalToolTerms = [
+    joinParts('stub', 'by'),
+    joinParts('file', 'util'),
+    joinParts('mo', 'ma'),
+    joinParts('g3', 'doc'),
+    joinParts('buga', 'nizer'),
+    joinParts('ya', 'qs'),
+    joinParts('x', '20'),
+    joinParts('crit', 'ique'),
+  ].join('|');
+
+  const rules = [
+    {
+      id: 'CORP_EMAIL_OR_DOMAIN',
+      description: 'Corporate email address, domain, or internal host',
+      regex: new RegExp(
+        '\\b[a-z0-9._%+-]+@(?:' +
+          corpPrimary +
+          '|' +
+          corpCommunity +
+          ')\\.com\\b|\\b(?:' +
+          corpCommunity +
+          '|corp\\.' +
+          corpPrimary +
+          ')\\.com\\b|\\.' +
+          corpTld +
+          '\\b',
+        'i'
+      ),
+    },
+    {
+      id: 'INTERNAL_SHORTLINK',
+      description: 'Internal corporate shortlink reference',
+      regex: new RegExp(
+        '(?:^|[\\s(\\[{"\'])(?:' +
+          shortlinkPrefixes +
+          ')/[a-z0-9_-]{2,}|http://' +
+          joinParts('goo', 'gle3') +
+          '\\b',
+        'i'
+      ),
+    },
+    {
+      id: 'INTERNAL_MONOREPO_OR_WORKSTATION_PATH',
+      description: 'Internal monorepo, build artifact, or workstation filesystem path',
+      regex: new RegExp(
+        '/' +
+          corpPrimary +
+          '/(?:src|data|bin)|/usr/local/' +
+          corpPrimary +
+          '|\\b(?:' +
+          internalRepoAndBuildTerms +
+          ')\\b|(?<![A-Za-z0-9_])/Users/[A-Za-z0-9._-]+/|(?<![A-Za-z0-9_])[A-Za-z]:[/\\\\]+Users[/\\\\]+[A-Za-z0-9._-]+[/\\\\]+',
+        'i'
+      ),
+    },
+    {
+      id: 'INTERNAL_TOOLING_IDENTIFIERS',
+      description: 'Internal corporate tool or infrastructure identifier',
+      regex: new RegExp('\\b(?:' + internalToolTerms + ')\\b', 'i'),
+    },
+    {
+      id: 'WORKSTATION_USER_OR_HOST',
+      description: 'Workstation username or hostname leak',
+      regex: new RegExp(
+        '\\b(?:' +
+          joinParts('sourou', 'wilfried') +
+          '|' +
+          joinParts('wilfried\\.c\\.', corpCommunity) +
+          ')\\b',
+        'i'
+      ),
+    },
+    {
+      id: 'SECRET_API_OR_PRIVATE_KEY',
+      description: 'API key token or private key header in commit message',
+      regex: new RegExp(
+        '\\b(?:' +
+          'AIza[0-9A-Za-z_-]{12,}' +
+          '|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{12,}' +
+          '|ghp_[A-Za-z0-9]{12,}' +
+          '|github_pat_[A-Za-z0-9_]{16,}' +
+          '|ya29\\.[0-9A-Za-z._-]{16,}' +
+          '|AKIA[0-9A-Z]{16}' +
+          ')\\b|' +
+          joinParts('-----BEGIN ', '[A-Z ]*PRIVATE', ' KEY-----')
+      ),
+    },
+  ];
+
+  // Dynamically guard local $HOME path variants when present.
+  const homeDir = (os.homedir() || '').trim();
+  if (homeDir.length > 4) {
+    const homeVariants = Array.from(
+      new Set([homeDir, homeDir.replace(/\\/g, '/')])
+    ).map(escapeRegex);
+    rules.push({
+      id: 'LOCAL_HOME_PATH',
+      description: 'Hardcoded local workstation $HOME path',
+      regex: new RegExp('(?:' + homeVariants.join('|') + ')'),
+    });
+  }
+
+  // Dynamically guard current OS account name (excluding generic runner/OS accounts).
+  const genericAccounts = new Set([
+    'ubuntu',
+    'admin',
+    'administrator',
+    'runner',
+    'owner',
+    'users',
+    'public',
+    'default',
+    'guest',
+    'root',
+  ]);
+  let osUsername = '';
+  try {
+    osUsername = (os.userInfo().username || '').trim();
+  } catch {
+    osUsername = '';
+  }
+  if (osUsername.length >= 5 && !genericAccounts.has(osUsername.toLowerCase())) {
+    rules.push({
+      id: 'LOCAL_OS_USERNAME',
+      description: 'Local workstation OS username in commit message',
+      regex: new RegExp('\\b' + escapeRegex(osUsername) + '\\b', 'i'),
+    });
+  }
+
+  return rules;
+}
+
+/**
+ * Masks a matched token inside a line snippet so secrets or internal identifiers are not echoed verbatim.
+ *
+ * @param {string} line Full line containing a violation.
+ * @param {RegExpExecArray} match Regex match details with index.
+ * @return {string} Redacted single-line preview.
+ */
+function redactSnippet(line, match) {
+  const token = match[0] || '';
+  const start = typeof match.index === 'number' ? match.index : 0;
+  const end = start + token.length;
+  const masked = '[REDACTED:' + Math.max(1, token.length) + 'chars]';
+  return (line.slice(0, start) + masked + line.slice(end)).trim().slice(0, 120);
+}
+
+/**
+ * Scans commit message text line-by-line against all clean-room rules.
+ *
+ * @param {string} messageText Raw UTF-8 commit message file contents.
+ * @return {Array<{line: number, ruleId: string, description: string, preview: string}>} Detected violations.
+ */
+function scanCommitMessage(messageText) {
+  const rules = buildCommitMessageRules();
+  const lines = messageText.split(/\r?\n/);
+  const violations = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    // Skip standard Git-generated comment lines in interactive COMMIT_EDITMSG buffers.
+    if (line.startsWith('#')) continue;
+
+    for (const rule of rules) {
+      const match = rule.regex.exec(line);
+      if (match) {
+        violations.push({
+          line: i + 1,
+          ruleId: rule.id,
+          description: rule.description,
+          preview: redactSnippet(line, match),
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * CLI entrypoint invoked by Git with `$1` pointing to `.git/COMMIT_EDITMSG`.
+ *
+ * @return {number} Process exit code (0 when clean, 1 on error or leak).
+ */
+function main() {
+  const msgArg = process.argv[2];
+  if (!msgArg) {
+    console.error('❌ [COMMIT-MSG GUARDRAIL] Missing commit message file path argument ($1).');
+    return 1;
+  }
+
+  const resolvedMsgPath = path.resolve(process.cwd(), msgArg);
+  if (!fs.existsSync(resolvedMsgPath)) {
+    console.error('❌ [COMMIT-MSG GUARDRAIL] Commit message file not found: ' + msgArg);
+    return 1;
+  }
+
+  const content = fs.readFileSync(resolvedMsgPath, 'utf8');
+  const violations = scanCommitMessage(content);
+
+  if (violations.length > 0) {
+    console.error(
+      '❌ [COMMIT-MSG GUARDRAIL FAILED] Aborting commit due to ' +
+        violations.length +
+        ' forbidden clean-room or secret token(s):'
+    );
+    for (const v of violations) {
+      console.error(
+        '  - [' + v.ruleId + '] line ' + v.line + ' (' + v.description + ') -> ' + v.preview
+      );
+    }
+    return 1;
+  }
+
+  return 0;
+}
+
+if (require.main === module) {
+  process.exit(main());
+}
+
+module.exports = { buildCommitMessageRules, scanCommitMessage };
