@@ -98,7 +98,7 @@ import com.familykitchen.board.ui.theme.SavorBrandBadge
 
 // SavorAI Sous-Chef Screen featuring a decluttered conversational viewport, editorial welcome
 // card, quiet single-line AgentStatusPill, interactive structured artifacts, 1-tap Undo bar,
-// and a 2-tier persistent bottom SavorAgentComposer eliminating S22 wrap & cursor glitches.
+// and a 2-tier persistent bottom SavorAgentComposer eliminating 360dp wrap & cursor glitches.
 
 // Quick-action suggestion chips docked right above the composer when idle.
 private val SAVOR_QUICK_ACTION_PROMPTS: List<String> = listOf(
@@ -378,7 +378,7 @@ private fun SavorQuickPromptChipRow(onSelectPrompt: (String) -> Unit) {
 /**
  * 2-tier persistent bottom agent composer (`RoundedCornerShape(24.dp)`, `1.dp` warm border, `0.dp`
  * shadow): optional staged photo row + Row 1 `100%`-width `BasicTextField` (`maxLines = 1`
- * placeholder preventing S22 3-line wrap and mid-word line-2 cursor glitches) + Row 2 `48.dp`
+ * placeholder preventing 360dp 3-line wrap and mid-word line-2 cursor glitches) + Row 2 `48.dp`
  * tactile Camera, Photo, Voice + EN/FR, Reset, and Send controls.
  */
 @Composable
@@ -760,7 +760,7 @@ private fun SavorAiAssistantRichRecipePreview() {
 @Preview(name = "Sous-Chef — Spice Photo Scan & Staged Thumbnail", showBackground = true, widthDp = 360, heightDp = 780)
 @Composable
 private fun AiChefSpicePhotoArtifactPreview() {
-  // Showcases S22 360dp spice-rack VisualIntakeConfirmationCard and staged composer photo preview.
+  // Showcases compact 360dp spice-rack VisualIntakeConfirmationCard and staged composer preview.
   val readyVision = AiRuntimeState.Ready(RuntimeCapabilities(true, true, "LiteRT-LM GPU + Vision", "gemma-e2b-it-multimodal-int4.litertlm"))
   val spices = listOf(
     IngredientCatalogItem("ing_custom_ground_turmeric", "Ground Turmeric", IngredientCategory.PANTRY_STAPLE, IngredientTier.TIER_2_STAPLE, BaseUnit.GRAM, 100.0, defaultStorageLocation = StorageLocation.PANTRY),

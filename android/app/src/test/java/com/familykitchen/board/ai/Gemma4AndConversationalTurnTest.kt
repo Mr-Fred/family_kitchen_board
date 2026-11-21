@@ -41,7 +41,7 @@ import org.junit.Test
 
 /**
  * Hermetic JUnit 4 verification suite covering:
- * 1. Exact Samsung Galaxy S22 `"Hello"` regression across all 4 Gemma 4 (`gemma-4-E2B-it.litertlm`)
+ * 1. On-device Android `"Hello"` greeting grounding across all 4 Gemma 4 (`gemma-4-E2B-it.litertlm`)
  *    output shapes (thinking block + JSON echoing `"isConversationalOnly":false`, natural plain-text
  *    prose, JSON with copied `"..."` placeholder swap, and corrupt `"{not_valid_json"` fallback),
  * 2. Meal proposal hero cards alongside real LLM `assistantSummary` prose, multi-turn
@@ -155,7 +155,7 @@ class Gemma4AndConversationalTurnTest {
   )
 
   /**
-   * Reproduces the exact Galaxy S22 `"Hello"` screenshot regression across all 4 Gemma 4 output
+   * Verifies on-device Android `"Hello"` greeting grounding across all 4 Gemma 4 output
    * shapes, ensuring real AI greetings render with `isConversationalOnly == true`,
    * `featuredRecipeCard == null`, `responseSourceLabel == "gemma-4-E2B-it"`, salvaged summaries
    * on placeholder `"..."` swaps, and sanitized diagnostic toasts on corrupt JSON fallback.
@@ -339,7 +339,7 @@ class Gemma4AndConversationalTurnTest {
       importStateToEmit = localReadyState,
       discoverStateToEmit = localReadyState,
       textResponder = {
-        "<|thought|>Local Gemma active.<|turn|>Hello from local Gemma 4 on Galaxy S22!<|turn|>"
+        "<|thought|>Local Gemma active.<|turn|>Hello from local on-device Gemma 4!<|turn|>"
       },
     )
     val vault = InMemoryCloudCredentialVault()
@@ -367,7 +367,7 @@ class Gemma4AndConversationalTurnTest {
       val localHello = coordinator.submitTurn(baselineSnapshot, "Hello")
       assertEquals(1, onDevicePort.generateTextCallCount)
       assertEquals(AiTurnResolutionStatus.ON_DEVICE_TEXT_GROUNDED, localHello.status)
-      assertEquals("Hello from local Gemma 4 on Galaxy S22!", localHello.assistantTurn.messageText)
+      assertEquals("Hello from local on-device Gemma 4!", localHello.assistantTurn.messageText)
       assertEquals("gemma-4-E2B-it", localHello.assistantTurn.responseSourceLabel)
 
       // 2) Flip back to CLOUD_API (still no key) -> autoDiscoverAndInitialize() recovers ON_DEVICE.

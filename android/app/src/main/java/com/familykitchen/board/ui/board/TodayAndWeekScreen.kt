@@ -388,7 +388,7 @@ private fun PlannerUtilityPillStrip(
     weeklyPrepPlan == null || weeklyPrepPlan.tasks.isEmpty() -> "Batch Prep"
     else -> "Batch Prep (${weeklyPrepPlan.totalPrepMinutes}m)"
   }
-  // Balanced weights ensure all 3 48.dp utility pills fit cleanly on one row at 1.35x S22 scale.
+  // Balanced weights ensure all 3 48.dp utility pills fit cleanly on one row at 1.35x font scale.
   Row(
     modifier = Modifier.fillMaxWidth(),
     horizontalArrangement = Arrangement.spacedBy(8.dp),

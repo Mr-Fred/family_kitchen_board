@@ -86,7 +86,7 @@ fun PantryZoneSectionHeader(
   itemCount: Int,
   modifier: Modifier = Modifier,
 ) {
-  // Weight the left heading row so elevated S22 font scales never collide with the item count.
+  // Weight the left heading row so elevated 1.35x font scales never collide with the item count.
   Row(
     modifier = modifier.fillMaxWidth().padding(top = 4.dp),
     horizontalArrangement = Arrangement.SpaceBetween,
@@ -645,8 +645,8 @@ internal fun formatPantryQuantityWithUnit(quantity: Double, unit: BaseUnit): Str
 
 @Preview(showBackground = true, widthDp = 360)
 @Composable
-private fun PantryItemCardS22ScalePreview() {
-  // Verify S22 360dp 2-column Dry Goods alignment and singular "1 day left" Fridge row.
+private fun PantryItemCardCompactScalePreview() {
+  // Verify compact 360dp 2-column Dry Goods alignment and singular "1 day left" Fridge row.
   val baguette = IngredientCatalogItem("ing_baguette", "Crusty Artisan Baguette", IngredientCategory.BAKERY_GRAINS, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 2.0, defaultStorageLocation = StorageLocation.PANTRY)
   val oats = IngredientCatalogItem("ing_oats", "Rolled Whole Grain Oats", IngredientCategory.BAKERY_GRAINS, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, defaultStorageLocation = StorageLocation.PANTRY)
   val salmon = IngredientCatalogItem("ing_salmon", "Atlantic Salmon Fillets", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 800.0, defaultStorageLocation = StorageLocation.FRIDGE, defaultShelfLifeDays = 3)

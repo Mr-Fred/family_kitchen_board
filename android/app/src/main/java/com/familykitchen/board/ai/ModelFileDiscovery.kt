@@ -1,5 +1,6 @@
 package com.familykitchen.board.ai
 
+import android.app.ActivityManager
 import android.content.Context
 import android.net.Uri
 import android.os.Build
@@ -20,19 +21,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
-// Scoped model discovery and atomic .part SAF importer targeting Galaxy S22 and S22 Ultra.
+// Scoped model discovery and atomic .part SAF importer for Android 12+ phones and tablets.
 // Requires zero MANAGE_EXTERNAL_STORAGE or READ_EXTERNAL_STORAGE permissions on Android 12+.
 
 /**
  * Immutable snapshot of the host Android device hardware used to select OpenCL GPU vs CPU
- * execution delegates and default Gemma model profiles.
+ * execution delegates and default RAM-tier Gemma model profiles across any manufacturer.
  *
- * @property manufacturer Device manufacturer string (for example, `"samsung"`).
- * @property model Device model identifier (for example, `"SM-S901U"` or `"SM-S908U"`).
- * @property hardware Kernel/SoC hardware identifier (for example, `"qcom"`, `"s5e9925"`, `"ranchu"`).
- * @property isEmulator `true` when running on an Android emulator lacking physical Adreno/Xclipse GPU.
- * @property isGalaxyS22Ultra `true` when running on a 12 GB Samsung Galaxy S22 Ultra (`SM-S908*`).
- * @property isGalaxyS22Family `true` when running on any Samsung Galaxy S22 / S22+ / S22 Ultra.
+ * @property manufacturer Device manufacturer string reported by `Build.MANUFACTURER`.
+ * @property model Device model identifier reported by `Build.MODEL`.
+ * @property hardware Kernel/SoC hardware identifier (for example, `"qcom"`, `"tensor"`, `"ranchu"`).
+ * @property isEmulator `true` when running on an Android emulator lacking a physical mobile GPU.
+ * @property totalRamBytes Total physical system RAM in bytes (`0L` when unknown).
+ * @property isHighMemoryDevice `true` on physical devices with `>= 10 GiB` total RAM (`12 GB+` tiers).
  * @property recommendedProfile Default [EdgeDeviceProfile] matched to device RAM and GPU capacity.
  */
 data class HardwareEnvironmentInfo(
@@ -40,9 +41,9 @@ data class HardwareEnvironmentInfo(
   val model: String,
   val hardware: String,
   val isEmulator: Boolean,
-  val isGalaxyS22Ultra: Boolean,
-  val isGalaxyS22Family: Boolean,
-  val recommendedProfile: EdgeDeviceProfile,
+  val totalRamBytes: Long = 0L,
+  val isHighMemoryDevice: Boolean = false,
+  val recommendedProfile: EdgeDeviceProfile = EdgeDeviceProfile.COMPACT_GEMMA_1B_INT4,
 )
 
 /**
@@ -92,7 +93,7 @@ class ModelFileDiscovery(
   ): List<DiscoveredModelInfo> =
     withContext(ioDispatcher) {
       // Perform filesystem directory walks off the UI thread to prevent startup frame drops.
-      val hardwareInfo = detectHardwareEnvironment()
+      val hardwareInfo = detectHardwareEnvironment(totalRamBytes = readDeviceTotalRamBytes())
       discoverModelsInDirectories(resolveScopedModelDirectories(), minSizeBytes, hardwareInfo)
     }
 
@@ -148,10 +149,19 @@ class ModelFileDiscovery(
         format = format,
         expectedTotalBytes = metadata.second,
         minSizeBytes = minSizeBytes,
-        hardwareInfo = detectHardwareEnvironment(),
+        hardwareInfo = detectHardwareEnvironment(totalRamBytes = readDeviceTotalRamBytes()),
         onProgress = onProgress,
       )
     }
+
+  // Query total physical device RAM safely via ActivityManager (returns 0L if unavailable).
+  private fun readDeviceTotalRamBytes(): Long =
+    runCatching {
+      val activityManager = appContext.getSystemService(ActivityManager::class.java) ?: return@runCatching 0L
+      val memInfo = ActivityManager.MemoryInfo()
+      activityManager.getMemoryInfo(memInfo)
+      memInfo.totalMem.coerceAtLeast(0L)
+    }.getOrDefault(0L)
 
   // Extract DISPLAY_NAME and SIZE safely; return (-1L) when a SAF provider omits stream length.
   private fun queryDocumentMetadata(uri: Uri): Pair<String?, Long> =
@@ -176,6 +186,12 @@ class ModelFileDiscovery(
     /** Minimum byte threshold (`100 MB`) distinguishing real quantized weights from stub files. */
     const val MIN_MODEL_FILE_SIZE_BYTES: Long = 100L * 1024L * 1024L
 
+    /**
+     * Physical RAM threshold (`10 GiB`) classifying `12 GB`, `16 GB`, and `24 GB` Android phones
+     * and tablets from any manufacturer as [HardwareEnvironmentInfo.isHighMemoryDevice].
+     */
+    const val HIGH_MEMORY_THRESHOLD_BYTES: Long = 10L * 1024L * 1024L * 1024L
+
     // Fallback basename used only if SAF document metadata omits DISPLAY_NAME completely.
     private const val DEFAULT_IMPORTED_MODEL_NAME: String = "imported_gemma_model.litertlm"
 
@@ -186,14 +202,16 @@ class ModelFileDiscovery(
     private const val MAX_SCAN_DEPTH: Int = 3
 
     /**
-     * Inspects `android.os.Build` properties safely (handling `null` platform strings in local JVM
-     * unit tests) to classify Samsung Galaxy S22, Galaxy S22 Ultra, and Android Emulator hosts.
+     * Inspects `android.os.Build` properties and total physical RAM safely (handling `null`
+     * platform strings in local JVM unit tests) to classify Android Emulator vs physical RAM-tier
+     * hosts universally across any Android manufacturer.
      *
      * @param manufacturer Raw `Build.MANUFACTURER` override for deterministic JVM testing.
      * @param model Raw `Build.MODEL` override for deterministic JVM testing.
      * @param device Raw `Build.DEVICE` override for deterministic JVM testing.
      * @param hardware Raw `Build.HARDWARE` override for deterministic JVM testing.
      * @param fingerprint Raw `Build.FINGERPRINT` override for deterministic JVM testing.
+     * @param totalRamBytes Total physical system RAM in bytes (`0L` default when unqueried).
      * @return Resolved [HardwareEnvironmentInfo] with recommended [EdgeDeviceProfile].
      */
     fun detectHardwareEnvironment(
@@ -202,37 +220,30 @@ class ModelFileDiscovery(
       device: String = Build.DEVICE.orEmpty(),
       hardware: String = Build.HARDWARE.orEmpty(),
       fingerprint: String = Build.FINGERPRINT.orEmpty(),
+      totalRamBytes: Long = 0L,
     ): HardwareEnvironmentInfo {
       val modelLower = model.lowercase()
       val deviceLower = device.lowercase()
       val hardwareLower = hardware.lowercase()
       val fingerprintLower = fingerprint.lowercase()
 
-      // Detect QEMU/Goldfish/Ranchu emulators where CPU backend avoids OpenCL stub crashes.
+      // Detect QEMU/Goldfish/Ranchu/AVD emulators where CPU backend avoids OpenCL stub crashes.
       val isEmulator = fingerprintLower.contains("generic") ||
         fingerprintLower.contains("emulator") ||
         modelLower.contains("sdk_gphone") ||
         modelLower.contains("emulator") ||
         modelLower.contains("android sdk built for") ||
+        deviceLower.contains("emu") ||
         hardwareLower.contains("ranchu") ||
         hardwareLower.contains("goldfish")
 
-      // SM-S908* / b0q / b0s identify Samsung Galaxy S22 Ultra (12 GB RAM configuration).
-      val isS22Ultra = modelLower.contains("s908") ||
-        modelLower.contains("s22 ultra") ||
-        deviceLower == "b0q" ||
-        deviceLower == "b0s"
-
-      // SM-S901* (S22), SM-S906* (S22+), and SM-S908* (S22 Ultra) share Adreno 730 / Exynos 2200.
-      val isS22Family = isS22Ultra ||
-        modelLower.contains("s901") ||
-        modelLower.contains("s906") ||
-        modelLower.contains("galaxy s22") ||
-        deviceLower in setOf("r0q", "r0s", "g0q", "g0s")
-
-      val defaultProfile = when {
-        isS22Ultra -> EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4
-        else -> EdgeDeviceProfile.GALAXY_S22_GEMMA_1B_INT4
+      // Physical Android devices with >= 10 GiB RAM (12 GB / 16 GB / 24 GB tiers) default to 2B.
+      val safeRam = totalRamBytes.coerceAtLeast(0L)
+      val isHighMem = !isEmulator && safeRam >= HIGH_MEMORY_THRESHOLD_BYTES
+      val recommendedProfile = if (isHighMem) {
+        EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4
+      } else {
+        EdgeDeviceProfile.COMPACT_GEMMA_1B_INT4
       }
 
       return HardwareEnvironmentInfo(
@@ -240,9 +251,9 @@ class ModelFileDiscovery(
         model = model.ifBlank { "Device" },
         hardware = hardware.ifBlank { "unknown" },
         isEmulator = isEmulator,
-        isGalaxyS22Ultra = isS22Ultra,
-        isGalaxyS22Family = isS22Family,
-        recommendedProfile = defaultProfile,
+        totalRamBytes = safeRam,
+        isHighMemoryDevice = isHighMem,
+        recommendedProfile = recommendedProfile,
       )
     }
 
@@ -442,7 +453,7 @@ class ModelFileDiscovery(
       }
     }
 
-    // Map multimodal E2B, 2B S22 Ultra, and 1B base S22 packages to their calibrated profiles.
+    // Map multimodal Gemma 4 / E2B bundles, 2B or >= 10 GiB RAM hosts, and compact 1B packages.
     private fun inferRecommendedProfile(
       fileName: String,
       format: ModelFileFormat,
@@ -451,12 +462,18 @@ class ModelFileDiscovery(
       val lower = fileName.lowercase()
       return when {
         format == ModelFileFormat.LITERT_LM &&
-          (lower.contains("e2b") || lower.contains("multimodal") || lower.contains("vision") || lower.contains("gemma-4") || lower.contains("gemma4")) ->
+          (
+            lower.contains("e2b") ||
+              lower.contains("multimodal") ||
+              lower.contains("vision") ||
+              lower.contains("gemma-4") ||
+              lower.contains("gemma4")
+            ) ->
           EdgeDeviceProfile.GEMMA_4_E2B_MULTIMODAL
-        lower.contains("2b") || hardwareInfo.isGalaxyS22Ultra ->
-          EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4
+        lower.contains("2b") || hardwareInfo.isHighMemoryDevice ->
+          EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4
         else ->
-          EdgeDeviceProfile.GALAXY_S22_GEMMA_1B_INT4
+          EdgeDeviceProfile.COMPACT_GEMMA_1B_INT4
       }
     }
   }

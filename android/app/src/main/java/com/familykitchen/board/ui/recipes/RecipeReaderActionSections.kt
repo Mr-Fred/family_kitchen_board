@@ -217,7 +217,7 @@ internal fun PantryMatchAndQuickActionsSection(
       shadowElevation = 0.dp,
     ) {
       Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // IntrinsicSize.Max keeps all 3 tiles uniform on elevated S22 font scaling.
+        // IntrinsicSize.Max keeps all 3 tiles uniform on elevated 1.35x font scaling.
         Row(
           modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
           horizontalArrangement = Arrangement.spacedBy(8.dp),

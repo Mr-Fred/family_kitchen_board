@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Primary native Android [ComponentActivity] hosting the `SavorAI` (`Family Kitchen Board`)
- * Jetpack Compose Material 3 shell on Samsung Galaxy S22 and Galaxy S22 Ultra (`minSdk = 31`).
+ * Jetpack Compose Material 3 shell on Android 12+ phones and tablets (`minSdk = 31`).
  *
  * Configures edge-to-edge system bars, prunes stale temporary camera captures in `cacheDir/captures/`,
  * and wires offline-first persistence (`LocalJsonKitchenStorage`), seed asset validation

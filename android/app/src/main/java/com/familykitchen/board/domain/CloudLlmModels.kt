@@ -31,7 +31,7 @@ private const val MIN_PREVIEWABLE_KEY_LENGTH = 10
  */
 @Serializable
 enum class AiExecutionMode(val displayLabel: String) {
-  // Default privacy-first posture running 100% offline via LiteRT-LM / MediaPipe on Galaxy S22 GPU.
+  // Default privacy-first posture running 100% offline via LiteRT-LM / MediaPipe on Android GPU/CPU.
   /** Runs text and vision inference locally on-device with zero network traffic. */
   ON_DEVICE("On-Device (Offline)"),
 

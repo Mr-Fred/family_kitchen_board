@@ -86,7 +86,7 @@ import com.familykitchen.board.ui.theme.SavorBrandBadge
 import kotlinx.coroutines.delay
 
 // Warm, serene 4-step SavorAI First-Run Onboarding Host (imperative SAF + BackHandler shell) and
-// pure stateless FirstRunOnboardingScreen Composable with Galaxy S22 1.35x font-scale resilience.
+// pure stateless FirstRunOnboardingScreen Composable with compact 360dp 1.35x font-scale resilience.
 
 // Fixed 4-step guided structure: 1 Household -> 2 Market -> 3 Pantry -> 4 AI Sous-Chef.
 private const val TOTAL_ONBOARDING_STEPS: Int = 4
@@ -101,7 +101,7 @@ private val ALLOWED_ONBOARDING_MODEL_EXTENSIONS: Set<String> = setOf("litertlm",
  * @param initialProfile Current persisted [HouseholdProfile] used to seed initial draft defaults.
  * @param isReplayMode `false` on a brand-new install (`Skip · Demo`), `true` when re-launched (`Close`).
  * @param runtimeState Live on-device [AiRuntimeState] surfaced on Step 4.
- * @param activeDeviceProfile Selected Galaxy S22 / S22 Ultra / Gemma E2B hardware profile.
+ * @param activeDeviceProfile Selected on-device hardware profile.
  * @param cloudConfig Non-secret [CloudLlmConfig] state slice surfaced on Step 4.
  * @param isVerifyingCloudKey `true` while probing Cloud LLM connectivity.
  * @param isRefreshingCloudModels `true` while syncing live `/models` identifiers.
@@ -224,7 +224,7 @@ fun FirstRunOnboardingHost(
  * @param draft Immutable [FirstRunOnboardingDraft] state slice.
  * @param isReplayMode `false` on cold installs (`"Skip · Demo"`), `true` on replays (`"Close"`).
  * @param runtimeState Current on-device [AiRuntimeState].
- * @param activeDeviceProfile Active Galaxy S22 / Gemma hardware profile.
+ * @param activeDeviceProfile Active on-device hardware profile.
  * @param cloudConfig Non-secret [CloudLlmConfig] state slice.
  * @param isVerifyingCloudKey `true` while verifying an HTTPS Cloud API key.
  * @param isRefreshingCloudModels `true` while syncing live `/models` for the active provider.
@@ -249,7 +249,7 @@ fun FirstRunOnboardingScreen(
   draft: FirstRunOnboardingDraft,
   isReplayMode: Boolean,
   runtimeState: AiRuntimeState = AiRuntimeState.Uninitialized,
-  activeDeviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4,
+  activeDeviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
   cloudConfig: CloudLlmConfig = CloudLlmConfig(),
   isVerifyingCloudKey: Boolean = false,
   isRefreshingCloudModels: Boolean = false,
@@ -290,7 +290,7 @@ fun FirstRunOnboardingScreen(
       )
       HorizontalDivider(color = extendedColors.borderSubtle)
 
-      // Center scrollable step body up to 640.dp for clean portrait S22 and wide counter parity.
+      // Center scrollable step body up to 640.dp for compact 360dp Android and wide counter parity.
       Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         Column(
           modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth()

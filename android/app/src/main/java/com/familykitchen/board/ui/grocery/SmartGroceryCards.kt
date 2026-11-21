@@ -206,7 +206,7 @@ fun PantryDeduplicationBanner(
       modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      // Weighted title + non-wrapping savings pill prevents 6-line vertical "Sa\nve\nd" wrap on S22.
+      // Weighted title + non-wrapping savings pill prevents vertical "Sa\nve\nd" wrap on 360dp.
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -600,7 +600,7 @@ fun GroceryDockedSummaryBar(
         }
       }
 
-      // Single-line summary + 48.dp action pill resilient at 1.35x S22 font scale.
+      // Single-line summary + 48.dp action pill resilient at 1.35x font scale on 360dp screens.
       Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

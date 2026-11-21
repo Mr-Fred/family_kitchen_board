@@ -63,7 +63,7 @@ import com.familykitchen.board.ui.theme.KitchenTheme
 
 /**
  * Stateless Material 3 screen implementing `smart_pantry_expiry` with editorial minimalism and
- * Galaxy S22 `1.35x` font-scale resilience: Top Stat Pulse Bar, 3-Column Quick Command Strip,
+ * compact `360dp` `1.35x` font-scale resilience: Top Stat Pulse Bar, 3-Column Quick Command Strip,
  * `48.dp` Zone Filter Scroller, `Action Required (Within 48h)` rescue cards, lazy `Fridge & Produce`
  * cards, lazy 2-column `Dry Goods & Pantry` + `Freezer` rows, and slim `52.dp` dismissible rescue bar.
  *
@@ -157,7 +157,7 @@ fun SmartPantryScreen(
   }
   // Sum paired tile counts so the Dry Goods header badge reflects exact stocked item totals.
   val dryPantryCount = remember(dryPantryRows) { dryPantryRows.sumOf { it.size } }
-  // Group Freezer stock into pairs for balanced 2-column counter layout at 1.35x S22 font scale.
+  // Group Freezer stock into pairs for balanced 2-column counter layout at 1.35x font scale.
   val freezerRows = remember(dashboard.freezerItems, catalogById) {
     dashboard.freezerItems
       .mapNotNull { entry -> catalogById[entry.ingredientId]?.let { entry to it } }

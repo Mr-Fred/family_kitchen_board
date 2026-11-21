@@ -73,7 +73,7 @@ import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
 
 // Family Dietary, Consumer Household Template, Counter Display Preferences, & Growth Profile
-// modal bottom sheet with 48.dp+ steppers and Galaxy S22 font-scale resilience.
+// modal bottom sheet with 48.dp+ steppers and compact 360dp 1.35x font-scale resilience.
 
 // Canonical allergen exclusions enforced across AvailabilityFilter and GroceryDiffEngine (EC-02).
 private val HOUSEHOLD_ALLERGEN_OPTIONS: List<String> =
@@ -289,7 +289,7 @@ fun FamilyProfileSheetContent(
       }
     }
 
-    // Full-width Kitchen Name + 2-column Morning Lead / Evening Lead prevents label crushing on S22.
+    // Full-width Kitchen Name + 2-column Morning / Evening Lead prevents label crushing on 360dp.
     OutlinedTextField(
       value = householdName,
       onValueChange = { householdName = it },
@@ -298,7 +298,7 @@ fun FamilyProfileSheetContent(
       keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next),
       modifier = Modifier.fillMaxWidth(),
     )
-    // Two-column row gives Morning Lead and Evening Lead ~168dp each on a 360dp S22 viewport.
+    // Two-column row gives Morning Lead and Evening Lead ~168dp each on a compact 360dp viewport.
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
       OutlinedTextField(
         value = morningLeadName,
@@ -565,7 +565,7 @@ private fun MemberGoalEditorCard(
         )
       }
 
-      // Weighted label + 48.dp x 48.dp age steppers prevent right-edge "+" button crush on S22.
+      // Weighted label + 48.dp x 48.dp age steppers prevent right-edge "+" button crush on 360dp.
       if (member.memberId == "OLDER_KID") {
         Row(
           modifier = Modifier.fillMaxWidth(),

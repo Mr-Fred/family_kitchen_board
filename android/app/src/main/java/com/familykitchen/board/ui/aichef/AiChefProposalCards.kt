@@ -148,9 +148,11 @@ fun VisualIntakeConfirmationCard(
           color = MaterialTheme.colorScheme.onSurface,
           modifier = Modifier.weight(1f),
         )
-        // Badge group stays <= 2 capsules so narrow S22 screens never wrap title text.
+        // Badge group stays <= 2 capsules so compact 360dp screens never wrap title text.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+          // Display singular/plural detected ingredient count pill whenever grounded chips exist.
           if (selectableChips.isNotEmpty()) {
+            // Sage pill keeps item count visually distinct from the Saved confirmation state.
             Surface(shape = CircleShape, color = extendedColors.sageContainer) {
               Text(
                 text = "${selectableChips.size} ${if (selectableChips.size == 1) "item" else "items"}",

@@ -72,7 +72,7 @@ private const val TEN_GIB_THRESHOLD_BYTES: Long = 10L * BYTES_PER_GIB_DL
 fun formatMbOrGb(bytes: Long): String {
   val nonNegative = bytes.coerceAtLeast(0L)
   return when {
-    // Switch to tenths-of-GB above 10 GiB so large S22 free-space numbers stay concise.
+    // Switch to tenths-of-GB above 10 GiB so large device free-space numbers stay concise.
     nonNegative >= TEN_GIB_THRESHOLD_BYTES -> {
       val tenthsGib = (nonNegative * 10L) / BYTES_PER_GIB_DL
       "${formatAsciiThousands(tenthsGib / 10L)}.${tenthsGib % 10L} GB"
@@ -103,7 +103,7 @@ fun ModelDownloadApprovalDialog(
   onDismiss: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  // Disable narrow platform dialog width insets so 360dp Galaxy S22 screens retain generous width.
+  // Disable narrow platform dialog width insets so compact 360dp Android screens retain full width.
   Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
     ModelDownloadApprovalCard(
       approvalSpec = approvalSpec, onSelectPreset = onSelectPreset,
@@ -116,7 +116,7 @@ fun ModelDownloadApprovalDialog(
 /**
  * Stateless Warm Linen / Counter Dark approval card rendered inside [ModelDownloadApprovalDialog]
  * and directly testable in headless Compose `@Preview`s with vertical scroll resilience at `1.35x`
- * Galaxy S22 font scaling.
+ * font scaling on compact `360dp` Android screens.
  *
  * @param approvalSpec Pre-flight [ModelDownloadApprovalSpec] telemetry snapshot.
  * @param onSelectPreset Callback refreshing storage/resume math for a newly selected preset.
@@ -158,7 +158,7 @@ fun ModelDownloadApprovalCard(
           }
           Column {
             Text("Download On-Device Gemma 4?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Text("Runs 100% locally on Galaxy GPU after download", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Runs 100% locally on your device after download", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
           }
         }
         IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
@@ -166,7 +166,7 @@ fun ModelDownloadApprovalCard(
         }
       }
 
-      // Scrollable middle body keeps chips, telemetry, and notices accessible on short S22 screens.
+      // Scrollable middle body keeps chips, telemetry, and notices accessible on compact 360dp screens.
       Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Preset FilterChips (48.dp+ minHeight) re-query StatFs & .part resume bytes immediately.
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -198,7 +198,7 @@ fun ModelDownloadApprovalCard(
 
       HorizontalDivider(color = extendedColors.borderSubtle)
 
-      // Bottom actions (48.dp+): FlowRow wraps cleanly at 1.35x S22 font scale without clipping.
+      // Bottom actions (48.dp+): FlowRow wraps cleanly at 1.35x font scale on 360dp screens.
       FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = onDismiss, shape = CircleShape, modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)) {
           Text("Not Now", style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
@@ -245,7 +245,7 @@ fun OnDeviceModelDownloadCtaRow(
     containerColor = extendedColors.herbalSage, contentColor = MaterialTheme.colorScheme.onPrimary,
   )
 
-  // Stack full-width 48.dp pills vertically so labels never truncate on 360dp S22 at 1.35x scale.
+  // Stack full-width 48.dp pills vertically so labels never truncate on 360dp screens at 1.35x.
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Button(
       onClick = onRequestDownloadApproval, enabled = !isBusy, shape = CircleShape, colors = sageButtonColors,
@@ -429,7 +429,7 @@ private fun ModelDownloadApprovalWifiPreview() {
 @Preview(name = "Approval Dialog — Cellular Metered Resume", showBackground = true, widthDp = 360)
 @Composable
 private fun ModelDownloadApprovalCellularResumePreview() {
-  // Showcases 360dp S22 partial .part resume telemetry, Honey-Amber mobile warning, and Cancel CTA.
+  // Showcases compact 360dp partial .part resume telemetry, Honey-Amber warning, and Cancel CTA.
   FamilyKitchenBoardTheme(darkTheme = false) {
     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       ModelDownloadApprovalCard(

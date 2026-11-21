@@ -105,7 +105,7 @@ fun rememberKitchenDocumentExportController(
   val latestUiState by rememberUpdatedState(uiState)
   val latestOnPostToast by rememberUpdatedState(onPostToast)
 
-  // Hold the prepared document in memory and persist kind name across S22 orientation changes.
+  // Hold the prepared document in memory and persist kind name across device orientation changes.
   var pendingPdfDocument by remember { mutableStateOf<ExportedKitchenDocument?>(null) }
   var pendingExportKind by rememberSaveable { mutableStateOf<String?>(null) }
   var isExportingPdf by remember { mutableStateOf(false) }
@@ -225,7 +225,7 @@ fun rememberKitchenDocumentExportController(
  * Tactile 2-pill equal-weight export bar offering `48.dp` minimum touch targets for one-tap
  * plain-text clipboard copy and scoped `Save PDF` document generation.
  *
- * Calibrated for `360dp` Samsung Galaxy S22 viewports up to `1.35x` system font scaling using
+ * Calibrated for compact `360dp` Android viewports up to `1.35x` system font scaling using
  * single-line ellipsis (`maxLines = 1`, `softWrap = false`, `TextOverflow.Ellipsis`) and crisp
  * `1.dp` warm stone borders with `0.dp` shadow elevation.
  *
@@ -450,7 +450,7 @@ private fun KitchenExportActionRowDaylightPreview() {
   }
 }
 
-/** Counter Dark `@Preview` verifying `360dp` Galaxy S22 `1.35x` font-scale legibility. */
+/** Counter Dark `@Preview` verifying compact `360dp` `1.35x` font-scale legibility. */
 @Preview(
   name = "KitchenExportActionRow — Counter Dark 1.35x",
   showBackground = true,

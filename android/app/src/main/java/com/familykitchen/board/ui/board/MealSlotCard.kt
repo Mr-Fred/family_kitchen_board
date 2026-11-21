@@ -610,7 +610,7 @@ private fun FamilyGoalPlatingBox(
       modifier = Modifier.padding(12.dp),
       verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-      // Weight title row so "Edit Goals" button stays single-line at 1.35x S22 font scaling.
+      // Weight title row so "Edit Goals" button stays single-line at 1.35x font scaling.
       Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,

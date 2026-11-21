@@ -93,7 +93,7 @@ fun AiModeSegmentedToggle(
     modifier = modifier.fillMaxWidth(),
   ) {
     Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-      // Render equal-weight 48.dp non-wrapping pills so labels never clip at 1.35x S22 font scale.
+      // Render equal-weight 48.dp non-wrapping pills so labels never clip at 1.35x font scale.
       modeOptions.forEach { (mode, label) ->
         val isSelected = activeMode == mode
         // Map hardware Memory icon to local Gemma and Cloud icon to HTTPS provider mode.
@@ -382,7 +382,7 @@ private fun CloudKeystoreVaultCard(
         }
 
         else -> {
-          // Masked password field disables Samsung/OEM keyboard dictionary caching for API keys.
+          // Masked password field disables OEM/system keyboard dictionary caching for API keys.
           OutlinedTextField(
             value = draftKey, onValueChange = onDraftKeyChange,
             label = { Text("${cloudConfig.provider.shortLabel} API Key") },

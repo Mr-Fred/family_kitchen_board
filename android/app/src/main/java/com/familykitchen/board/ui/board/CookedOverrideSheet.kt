@@ -74,7 +74,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 // Adjust / Override Cooked Meal bottom sheet supporting EC-04..EC-07, EC-11..EC-13 with 48.dp+
-// steppers and defaultMinSize buttons for Galaxy S22 font-scale resilience.
+// steppers and defaultMinSize buttons for compact 360dp 1.35x font-scale resilience.
 
 /**
  * Stateless Material 3 [ModalBottomSheet] presenting meal adjustments, instant swaps, and
@@ -178,7 +178,7 @@ fun CookedOverrideSheetContent(
     }.toList()
   }
 
-  // Scrollable modal body padded for software keyboard (`imePadding`) on compact S22 screens.
+  // Scrollable modal body padded for software keyboard (`imePadding`) on compact 360dp screens.
   Column(
     modifier = modifier
       .fillMaxWidth()
@@ -478,7 +478,7 @@ private fun IngredientOverrideStepperRow(
   onIncrement: () -> Unit,
 ) {
   val extendedColors = KitchenTheme.extendedColors
-  // Weight left ingredient column so right-hand 48.dp - / + steppers never push off-screen on S22.
+  // Weight left ingredient column so right-hand 48.dp - / + steppers stay on-screen at 360dp.
   Surface(
     shape = RoundedCornerShape(14.dp),
     color = MaterialTheme.colorScheme.surfaceContainerLowest,

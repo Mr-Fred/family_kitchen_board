@@ -244,7 +244,7 @@ internal fun SavorWelcomeBanner(
 /**
  * Collapsible hybrid On-Device & Cloud AI Setup Panel (`"AI Model & Cloud Key Setup"`) switching
  * cleanly between Android Keystore Cloud API keys (`Gemini`, `OpenAI`, `Claude`, `OpenRouter`) and
- * Samsung Galaxy S22 / S22 Ultra / Gemma E2B on-device `.litertlm` models.
+ * universal Android RAM-tier on-device `.litertlm` models.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -335,7 +335,7 @@ fun EdgeAiRuntimeSetupPanel(
           val progressNote = when (runtimeState) {
             is AiRuntimeState.Importing ->
               "${runtimeState.fileName} • ${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes, runtimeState.isNetworkDownload)}"
-            is AiRuntimeState.Loading -> "Initializing ${runtimeState.modelName} on Galaxy GPU (10–25s)…"
+            is AiRuntimeState.Loading -> "Initializing ${runtimeState.modelName} on device GPU (10–25s)…"
             AiRuntimeState.Discovering -> "Scanning local storage for Gemma models…"
             else -> ""
           }
@@ -366,7 +366,7 @@ fun EdgeAiRuntimeSetupPanel(
               )
             }
 
-            // Render local Galaxy S22 / Gemma E2B profiles, 1-tap Gemma 4 download, and SAF picker.
+            // Render universal Android .litertlm profiles, 1-tap Gemma 4 download, and SAF picker.
             AiExecutionMode.ON_DEVICE -> {
               // Hardware profile chips enforce >= 48.dp touch height for comfortable single-hand selection.
               FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -486,7 +486,7 @@ fun VisionUnsupportedGateBanner(
       Text(reasonExplanation, style = MaterialTheme.typography.bodySmall, color = extendedColors.onChildSafety)
       // Embed live spinner, byte counter, progress bar, and 48.dp Cancel CTA while busy.
       if (isBusy) ModelOperationProgressBanner(runtimeState = runtimeState, onCancelDownload = onCancelDownload)
-      // FlowRow wraps 48.dp actions cleanly across rows on 360dp S22 at 1.35x font scale.
+      // FlowRow wraps 48.dp actions cleanly across rows on compact 360dp screens at 1.35x scale.
       FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -641,7 +641,7 @@ private fun decodeSampledThumbnailOrNull(rawPath: String, targetEdgePx: Int): Im
     BitmapFactory.decodeFile(candidateFile.absolutePath, bounds)
     val maxDim = max(bounds.outWidth, bounds.outHeight)
     if (maxDim <= 0) return null
-    // Compute power-of-two sample factor so high-MP Galaxy S22 JPEGs decode in < 2ms.
+    // Compute power-of-two sample factor so high-MP camera JPEGs decode in < 2ms.
     var sampleSize = 1
     while (maxDim / (sampleSize * 2) >= targetEdgePx) sampleSize *= 2
     // Second pass decodes the bounded thumbnail into an ImageBitmap for composer rendering.

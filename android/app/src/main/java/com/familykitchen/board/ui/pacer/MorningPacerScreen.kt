@@ -125,7 +125,7 @@ fun MorningPacerScreen(
       .padding(PaddingValues(horizontal = 16.dp, vertical = 12.dp)),
     verticalArrangement = Arrangement.spacedBy(14.dp),
   ) {
-    // Concise segmented labels prevent "Weekly Prep (4" mid-parenthesis clipping on S22 scaling.
+    // Concise segmented labels prevent "Weekly Prep (4" mid-parenthesis clipping at 1.35x scale.
     val modes = listOf(
       PacerMode.DAILY_PACER to "Daily (≤${MAX_WEEKDAY_BREAKFAST_MINUTES}m)",
       PacerMode.WEEKLY_PREP to "Batch Prep (${weeklyPrepPlan.tasks.size})",
@@ -594,7 +594,7 @@ private fun CountdownRingCard(
           )
         }
 
-        // Concise "+1 min" label without duplicate leading Add icon prevents "+ +1" S22 wrap.
+        // Concise "+1 min" label without duplicate leading Add icon prevents "+ +1" 360dp wrap.
         OutlinedButton(
           onClick = onAddOneMinute,
           modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp),

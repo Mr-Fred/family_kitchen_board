@@ -35,7 +35,7 @@
       android:supportsRtl="true"
       android:theme="@style/Theme.FamilyKitchenBoard">
 
-    <!-- Enable Adreno 730 / Exynos 2200 OpenCL GPU acceleration on Samsung Galaxy S22 & S22 Ultra -->
+    <!-- Enable optional mobile OpenCL GPU acceleration on Android 12+ devices (automatic CPU fallback) -->
     <uses-native-library
         android:name="libOpenCL.so"
         android:required="false" />

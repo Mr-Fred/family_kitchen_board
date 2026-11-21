@@ -12,7 +12,7 @@ android {
 
   defaultConfig {
     applicationId = "com.familykitchen.board"
-    // Targets Samsung Galaxy S22 & S22 Ultra running Android 12+ (API 31+).
+    // Targets modern Android 12+ phones and tablets across all manufacturers (API 31+).
     minSdk = 31
     targetSdk = 34
     versionCode = 1
@@ -40,7 +40,7 @@ android {
 
   packaging {
     jniLibs {
-      // Required so native OpenCL / LiteRT-LM shared libraries load cleanly on Galaxy S22 GPU.
+      // Required so native OpenCL / LiteRT-LM shared libraries load cleanly on Android GPU drivers.
       useLegacyPackaging = true
     }
     resources {

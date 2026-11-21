@@ -682,7 +682,7 @@ object AiMenuAdvisorEngine {
     pantry: List<PantryLedgerEntry>,
     householdAllergens: List<String> = emptyList(),
     householdProfile: HouseholdProfile? = null,
-    deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4,
+    deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
     recentTurns: List<AiChatTurn> = emptyList(),
   ): String = com.familykitchen.board.domain.buildPantryAwareSystemPrompt(
     userPrompt, board, recipes, catalog, pantry, householdAllergens, householdProfile, deviceProfile, recentTurns,

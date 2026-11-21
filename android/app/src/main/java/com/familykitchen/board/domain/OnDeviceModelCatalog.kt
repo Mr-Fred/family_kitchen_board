@@ -33,12 +33,12 @@ enum class DownloadableGemmaPreset(
   val supportsVision: Boolean,
   val targetProfile: EdgeDeviceProfile,
 ) {
-  // Recommended 2B multimodal vision + text bundle fitting comfortably in 8 GB Galaxy S22 RAM.
-  /** Recommended ~2.0 GB Gemma 4 E2B multimodal vision + text `.litertlm` package. */
+  // Recommended 2B multimodal vision + text bundle fitting comfortably on 8 GB+ RAM Android devices.
+  /** Recommended ~2.0 GB Gemma 4 E2B multimodal vision + text `.litertlm` package for 8 GB+ RAM devices. */
   GEMMA_4_E2B_VISION(
     presetId = "gemma_4_e2b_it",
     displayName = "Gemma 4 E2B (Vision + Text)",
-    shortBadge = "Recommended • ~2.0 GB",
+    shortBadge = "Recommended (8 GB+ RAM) • ~2.0 GB",
     fileName = "gemma-4-E2B-it.litertlm",
     downloadUrl = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm",
     approxSizeBytes = 2_050L * 1024L * 1024L,
@@ -48,12 +48,12 @@ enum class DownloadableGemmaPreset(
     targetProfile = EdgeDeviceProfile.GEMMA_4_E2B_MULTIMODAL,
   ),
 
-  // Higher-capacity E4B multimodal bundle calibrated for 12 GB RAM Galaxy S22 Ultra devices.
-  /** Pro ~3.2 GB Gemma 4 E4B multimodal vision + text `.litertlm` package for 12 GB S22 Ultra. */
+  // Higher-capacity E4B multimodal bundle calibrated for 12 GB+ RAM Android phones and tablets.
+  /** Pro ~3.2 GB Gemma 4 E4B multimodal vision + text `.litertlm` package for 12 GB+ RAM devices. */
   GEMMA_4_E4B_VISION(
     presetId = "gemma_4_e4b_it",
     displayName = "Gemma 4 E4B (Pro Vision + Text)",
-    shortBadge = "12 GB S22 Ultra • ~3.2 GB",
+    shortBadge = "12 GB+ RAM Devices • ~3.2 GB",
     fileName = "gemma-4-E4B-it.litertlm",
     downloadUrl = "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm",
     approxSizeBytes = 3_300L * 1024L * 1024L,

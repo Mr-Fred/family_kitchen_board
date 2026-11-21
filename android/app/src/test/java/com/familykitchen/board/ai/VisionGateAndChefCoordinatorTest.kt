@@ -7,6 +7,7 @@ import com.familykitchen.board.domain.AiChefAction
 import com.familykitchen.board.domain.BaseUnit
 import com.familykitchen.board.domain.BomLine
 import com.familykitchen.board.domain.CookOwner
+import com.familykitchen.board.domain.DownloadableGemmaPreset
 import com.familykitchen.board.domain.EdgeDeviceProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
 import com.familykitchen.board.domain.IngredientCategory
@@ -368,63 +369,80 @@ class VisionGateAndChefCoordinatorTest {
   }
 
   /**
-   * Verifies [ModelFileDiscovery] hardware classification, `.litertlm` priority ranking, `.part`
-   * partial-transfer filtering, path-traversal filename sanitization, and atomic `.part` imports.
+   * Verifies [ModelFileDiscovery] universal RAM-tier & emulator classification, backwards-compatible
+   * [EdgeDeviceProfile.fromDeviceIdOrDefault] legacy ID resolution, device-agnostic display labels,
+   * `.litertlm` priority ranking, `.part` filtering, filename sanitization, and atomic imports.
    */
   @Test
-  fun modelFileDiscovery_classifiesS22ProfilesIgnoresPartFilesAndImportsAtomically() = runTest {
-    val s22Info = ModelFileDiscovery.detectHardwareEnvironment("samsung", "SM-S901U", "r0q", "qcom", "samsung/r0q")
-    assertTrue(s22Info.isGalaxyS22Family)
-    assertFalse(s22Info.isGalaxyS22Ultra)
-    assertEquals(EdgeDeviceProfile.GALAXY_S22_GEMMA_1B_INT4, s22Info.recommendedProfile)
+  fun modelFileDiscovery_classifiesRamTiersEmulatorsLegacyIdsAndImportsAtomically() = runTest {
+    val gib = 1024L * 1024L * 1024L
+    // 1. Standard 8 GB Android phone defaults to COMPACT_GEMMA_1B_INT4 (isHighMemoryDevice == false).
+    val compactPhoneInfo = ModelFileDiscovery.detectHardwareEnvironment(
+      manufacturer = "Google", model = "Pixel 8", totalRamBytes = 8L * gib,
+    )
+    assertFalse(compactPhoneInfo.isEmulator)
+    assertFalse(compactPhoneInfo.isHighMemoryDevice)
+    assertEquals(EdgeDeviceProfile.COMPACT_GEMMA_1B_INT4, compactPhoneInfo.recommendedProfile)
 
-    val s22UltraInfo = ModelFileDiscovery.detectHardwareEnvironment("samsung", "SM-S908U", "b0q", "qcom", "samsung/b0q")
-    assertTrue(s22UltraInfo.isGalaxyS22Ultra)
-    assertEquals(EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4, s22UltraInfo.recommendedProfile)
+    // 2. High-RAM 12 GB+ Android flagship / tablet defaults to BALANCED_GEMMA_2B_INT4.
+    val highRamDeviceInfo = ModelFileDiscovery.detectHardwareEnvironment(
+      manufacturer = "OnePlus", model = "CPH2581", totalRamBytes = 12L * gib,
+    )
+    assertFalse(highRamDeviceInfo.isEmulator)
+    assertTrue(highRamDeviceInfo.isHighMemoryDevice)
+    assertEquals(EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4, highRamDeviceInfo.recommendedProfile)
 
-    val emulatorInfo = ModelFileDiscovery.detectHardwareEnvironment("Google", "sdk_gphone64_arm64", "emu64a", "ranchu", "generic/emulator")
+    // 3. Android Emulator stays COMPACT_GEMMA_1B_INT4 (isHighMemoryDevice == false) even with 12 GB host RAM.
+    val emulatorInfo = ModelFileDiscovery.detectHardwareEnvironment(
+      model = "sdk_gphone64_arm64", hardware = "ranchu",
+      fingerprint = "google/sdk_gphone64_arm64/emu64a", totalRamBytes = 12L * gib,
+    )
     assertTrue(emulatorInfo.isEmulator)
+    assertFalse(emulatorInfo.isHighMemoryDevice)
+    assertEquals(EdgeDeviceProfile.COMPACT_GEMMA_1B_INT4, emulatorInfo.recommendedProfile)
+
+    // 4. Verify universal IDs + backwards-compatible legacy profile IDs resolve deterministically.
+    assertEquals(EdgeDeviceProfile.COMPACT_GEMMA_1B_INT4, EdgeDeviceProfile.fromDeviceIdOrDefault("compact_gemma_1b_int4"))
+    assertEquals(EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4, EdgeDeviceProfile.fromDeviceIdOrDefault("balanced_gemma_2b_int4"))
+    assertEquals(EdgeDeviceProfile.GEMMA_4_E2B_MULTIMODAL, EdgeDeviceProfile.fromDeviceIdOrDefault("gemma_4_e2b_multimodal_int4"))
+    assertEquals(EdgeDeviceProfile.COMPACT_GEMMA_1B_INT4, EdgeDeviceProfile.fromDeviceIdOrDefault("samsung_galaxy_s22_gemma_1b_int4"))
+    assertEquals(EdgeDeviceProfile.COMPACT_GEMMA_1B_INT4, EdgeDeviceProfile.fromDeviceIdOrDefault("GALAXY_S22_GEMMA_1B_INT4"))
+    assertEquals(EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4, EdgeDeviceProfile.fromDeviceIdOrDefault("samsung_galaxy_s22_ultra_gemma_2b_int4"))
+    assertEquals(EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4, EdgeDeviceProfile.fromDeviceIdOrDefault("GALAXY_S22_ULTRA_GEMMA_2B_INT4"))
+    assertEquals(EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4, EdgeDeviceProfile.fromDeviceIdOrDefault(null))
+
+    // 5. Ensure user-facing profile display names and preset badges carry zero legacy model branding.
+    assertTrue(EdgeDeviceProfile.entries.none { it.displayName.contains("Galaxy", true) || it.displayName.contains("S22", true) })
+    assertTrue(DownloadableGemmaPreset.entries.none { it.shortBadge.contains("Galaxy", true) || it.shortBadge.contains("S22", true) })
     assertEquals("gemma-e2b.litertlm", ModelFileDiscovery.sanitizeModelFileName("../../evil/path/gemma-e2b.litertlm"))
 
-    // Verify directory discovery skips .part/.tmp/tiny files and ranks .litertlm ahead of .task.
+    // 6. Verify directory discovery skips .part/.tmp/tiny files and ranks .litertlm ahead of .task.
     val modelsDir = tempFolder.newFolder("scoped_models")
     File(modelsDir, "gemma-2b.task").writeBytes(ByteArray(4096) { 1 })
     File(modelsDir, "gemma-e2b-vision.litertlm").writeBytes(ByteArray(2048) { 2 })
     File(modelsDir, "incomplete.litertlm.part").writeBytes(ByteArray(8192) { 3 })
     File(modelsDir, "tiny_stub.litertlm").writeBytes(ByteArray(64) { 4 })
 
-    val discovered = ModelFileDiscovery.discoverModelsInDirectories(
-      directories = listOf(modelsDir),
-      minSizeBytes = 1024L,
-      hardwareInfo = s22UltraInfo,
-    )
+    val discovered = ModelFileDiscovery.discoverModelsInDirectories(listOf(modelsDir), 1024L, highRamDeviceInfo)
     assertEquals(listOf("gemma-e2b-vision.litertlm", "gemma-2b.task"), discovered.map { it.fileName })
     assertEquals(EdgeDeviceProfile.GEMMA_4_E2B_MULTIMODAL, discovered.first().recommendedProfile)
+    assertEquals(EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4, discovered.last().recommendedProfile)
 
     // Verify atomic .part stream import promotes complete files and unlinks truncated transfers.
     val importDir = tempFolder.newFolder("imported_models")
     val validPayload = ByteArray(2048) { 7 }
     val imported = ModelFileDiscovery.importStreamToModelsDir(
-      inputStream = ByteArrayInputStream(validPayload),
-      modelsDir = importDir,
-      sanitizedFileName = "gemma-3-1b-it-gpu-int4.litertlm",
-      format = ModelFileFormat.LITERT_LM,
-      expectedTotalBytes = validPayload.size.toLong(),
-      minSizeBytes = 1024L,
-      hardwareInfo = s22Info,
+      ByteArrayInputStream(validPayload), importDir, "gemma-3-1b-it-gpu-int4.litertlm",
+      ModelFileFormat.LITERT_LM, validPayload.size.toLong(), 1024L, compactPhoneInfo,
     )
     assertTrue(File(imported.absolutePath).isFile)
+    assertEquals(EdgeDeviceProfile.COMPACT_GEMMA_1B_INT4, imported.recommendedProfile)
     assertFalse(File(importDir, "gemma-3-1b-it-gpu-int4.litertlm.part").exists())
 
     try {
       ModelFileDiscovery.importStreamToModelsDir(
-        inputStream = ByteArrayInputStream(ByteArray(512)),
-        modelsDir = importDir,
-        sanitizedFileName = "truncated.litertlm",
-        format = ModelFileFormat.LITERT_LM,
-        expectedTotalBytes = 2048L,
-        minSizeBytes = 1024L,
-        hardwareInfo = s22Info,
+        ByteArrayInputStream(ByteArray(512)), importDir, "truncated.litertlm",
+        ModelFileFormat.LITERT_LM, 2048L, 1024L, compactPhoneInfo,
       )
       throw AssertionError("Expected ValidationException for truncated model stream")
     } catch (expected: ValidationException) {
@@ -434,7 +452,7 @@ class VisionGateAndChefCoordinatorTest {
   }
 
   /**
-   * Regression test for Samsung Galaxy S22 multi-session crash: verifies that instantiating a fresh
+   * Regression test for multi-session cold-relaunch crash: verifies that instantiating a fresh
    * [AiChefCoordinator] (`turnSequence = 0`) against a persisted [KitchenSnapshot] that already
    * contains `"user_txt_1"` and `"asst_det_2"` (plus legacy duplicate IDs) produces 100% distinct
    * `turnId`s so Compose `LazyColumn` never throws `Key was already used`.
@@ -499,7 +517,7 @@ class VisionGateAndChefCoordinatorTest {
     assertNotNull(textOutcome.assistantTurn.proposal)
 
     // 2. Vision turn catches UnsatisfiedLinkError, preserves pantry stock, and deletes temp JPEG.
-    val tempPhoto = createSimulatedCaptureFile("s22_jni_error_scan.jpg")
+    val tempPhoto = createSimulatedCaptureFile("device_jni_error_scan.jpg")
     val visionOutcome = coordinator.submitTurn(
       snapshot = textOutcome.updatedSnapshot,
       promptText = "Scan this fridge shelf",

@@ -231,7 +231,7 @@ internal fun CookModeMultiTimerCard(
           )
         }
 
-        // Single "+1m" text without a leading Add icon fixes the "+ +1" S22 audit collision.
+        // Single "+1m" text without a leading Add icon fixes the "+ +1" 360dp audit collision.
         OutlinedButton(
           onClick = onAddOneMinute,
           modifier = Modifier.weight(0.85f).defaultMinSize(minHeight = 52.dp),
@@ -615,7 +615,7 @@ internal fun CookModeBottomDock(
           contentColor = Color.White,
         ),
       ) {
-        // Concise labels fit comfortably at 1.35x S22 font scale without truncating "Pantry".
+        // Concise labels fit comfortably at 1.35x font scale on 360dp screens without truncating.
         val primaryLabel = if (sessionState.isFinalStep) "Finish & Deduct ✓" else "Next Step →"
         Text(
           text = primaryLabel,

@@ -229,7 +229,7 @@ fun QaScenarioLabSheetContent(
           )
         }
 
-        // Concise non-wrapping time labels prevent "7:00 AM..." / "8:30 PM..." S22 clipping.
+        // Concise non-wrapping time labels prevent "7:00 AM..." / "8:30 PM..." 360dp clipping.
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
           SegmentedButton(
             selected = !isEveningMode,

@@ -3,7 +3,7 @@ package com.familykitchen.board.domain
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Pure Kotlin AI Chef domain contracts, Galaxy S22 / S22 Ultra hardware profiles, and UDF actions.
+// Pure Kotlin AI Chef domain contracts, universal Android RAM-tier profiles, and UDF actions.
 // Keeps multimodal visual intake and proposal models 100% decoupled from LiteRT-LM JNI classes.
 
 /**
@@ -35,11 +35,11 @@ enum class NutritionFocusTag(val displayLabel: String) {
 }
 
 /**
- * Pre-calibrated on-device Edge AI hardware and model profiles targeting Samsung Galaxy S22
- * and Galaxy S22 Ultra (`minSdk = 31`, Adreno 730 / Exynos 2200 OpenCL GPU + CPU fallback).
+ * Pre-calibrated universal on-device Edge AI RAM-tier and model profiles for Android 12+ phones
+ * and tablets (`minSdk = 31`, OpenCL GPU acceleration with automatic CPU fallback).
  *
  * @property deviceId Stable profile identifier persisted in user preferences.
- * @property displayName Human-readable hardware + model profile selector label.
+ * @property displayName Human-readable RAM-tier + model profile selector label.
  * @property minAndroidApiLevel Minimum Android SDK level (`31` / Android 12+).
  * @property preferredDelegate Preferred LiteRT-LM hardware delegate (`"GPU"` with `"CPU"` fallback).
  * @property recommendedModelFileName Suggested `.litertlm` package filename for SAF import.
@@ -60,11 +60,11 @@ enum class EdgeDeviceProfile(
   val supportsMultimodalVision: Boolean,
   val supportsAudioScribe: Boolean,
 ) {
-  // Base S22 profile: 8GB RAM budget favors 1B int4 weights at 1024 max output tokens.
-  /** Compact 1B int4 text model tailored for base Galaxy S22 8GB RAM headroom. */
-  GALAXY_S22_GEMMA_1B_INT4(
-    deviceId = "samsung_galaxy_s22_gemma_1b_int4",
-    displayName = "Galaxy S22 (Gemma 1B int4 GPU)",
+  // Compact profile: 6-8 GB RAM headroom favors 1B int4 weights at 1024 max output tokens.
+  /** Compact 1B int4 text model calibrated for 6–8 GB RAM Android 12+ devices. */
+  COMPACT_GEMMA_1B_INT4(
+    deviceId = "compact_gemma_1b_int4",
+    displayName = "Compact 1B (6–8 GB RAM)",
     minAndroidApiLevel = 31,
     preferredDelegate = "GPU",
     recommendedModelFileName = "gemma-3-1b-it-gpu-int4.litertlm",
@@ -74,11 +74,11 @@ enum class EdgeDeviceProfile(
     supportsAudioScribe = true,
   ),
 
-  // S22 Ultra profile: 12GB RAM comfortably hosts 2B int4 weights with 1536 max tokens.
-  /** Higher-capacity 2B int4 text model tailored for Galaxy S22 Ultra 12GB RAM. */
-  GALAXY_S22_ULTRA_GEMMA_2B_INT4(
-    deviceId = "samsung_galaxy_s22_ultra_gemma_2b_int4",
-    displayName = "Galaxy S22 Ultra (Gemma 2B int4 GPU)",
+  // Balanced profile: 8-12 GB+ RAM comfortably hosts 2B int4 weights with 1536 max tokens.
+  /** Higher-capacity 2B int4 text model calibrated for 8–12 GB+ RAM Android 12+ devices. */
+  BALANCED_GEMMA_2B_INT4(
+    deviceId = "balanced_gemma_2b_int4",
+    displayName = "Balanced 2B (8–12 GB RAM)",
     minAndroidApiLevel = 31,
     preferredDelegate = "GPU",
     recommendedModelFileName = "gemma2-2b-it-gpu-int4.litertlm",
@@ -88,19 +88,53 @@ enum class EdgeDeviceProfile(
     supportsAudioScribe = true,
   ),
 
-  // Multimodal E2B profile: unlocks authentic Content.ImageFile camera and gallery scanning.
-  /** Multimodal Gemma E2B int4 `.litertlm` profile enabling real camera and gallery vision scans. */
+  // Multimodal Gemma 4 E2B profile: unlocks authentic Content.ImageFile camera and gallery scanning.
+  /** Multimodal Gemma 4 E2B int4 `.litertlm` profile enabling real camera and gallery vision scans. */
   GEMMA_4_E2B_MULTIMODAL(
     deviceId = "gemma_4_e2b_multimodal_int4",
-    displayName = "Gemma E2B Multimodal Vision (S22 / S22 Ultra GPU)",
+    displayName = "Gemma 4 Vision (8 GB+ RAM)",
     minAndroidApiLevel = 31,
     preferredDelegate = "GPU",
-    recommendedModelFileName = "gemma-e2b-it-multimodal-int4.litertlm",
+    recommendedModelFileName = "gemma-4-E2B-it.litertlm",
     quantization = "int4",
     maxTokens = 1536,
     supportsMultimodalVision = true,
     supportsAudioScribe = true,
-  ),
+  );
+
+  companion object {
+    // Legacy persisted profile identifiers migrated transparently to universal RAM-tier profiles.
+    private val LEGACY_COMPACT_1B_IDS: Set<String> = setOf(
+      "samsung_galaxy_s22_gemma_1b_int4",
+      "galaxy_s22_gemma_1b_int4",
+    )
+    private val LEGACY_BALANCED_2B_IDS: Set<String> = setOf(
+      "samsung_galaxy_s22_ultra_gemma_2b_int4",
+      "galaxy_s22_ultra_gemma_2b_int4",
+    )
+
+    /**
+     * Resolves a persisted `deviceId` or enum constant name into its [EdgeDeviceProfile],
+     * migrating legacy pre-universal 1B/2B identifiers cleanly and defaulting to
+     * [BALANCED_GEMMA_2B_INT4] when blank or unrecognized.
+     *
+     * @param rawDeviceId Raw persisted `deviceId` or enum constant name, or `null`.
+     * @return Matching [EdgeDeviceProfile] or [BALANCED_GEMMA_2B_INT4] fallback.
+     */
+    fun fromDeviceIdOrDefault(rawDeviceId: String?): EdgeDeviceProfile {
+      val normalized = rawDeviceId?.trim()?.takeIf { it.isNotEmpty() } ?: return BALANCED_GEMMA_2B_INT4
+      // Check canonical universal deviceId and enum names first before legacy migration lookup.
+      entries.firstOrNull { profile ->
+        profile.deviceId.equals(normalized, ignoreCase = true) ||
+          profile.name.equals(normalized, ignoreCase = true)
+      }?.let { return it }
+      return when (normalized.lowercase()) {
+        in LEGACY_COMPACT_1B_IDS -> COMPACT_GEMMA_1B_INT4
+        in LEGACY_BALANCED_2B_IDS -> BALANCED_GEMMA_2B_INT4
+        else -> BALANCED_GEMMA_2B_INT4
+      }
+    }
+  }
 }
 
 /**
@@ -337,7 +371,7 @@ sealed interface AiChefAction {
   /** Removes the currently staged image preview chip and cleans up its temp file. */
   data object ClearAttachedImage : AiChefAction
 
-  /** Switches the active Samsung S22 / S22 Ultra / Gemma E2B hardware profile. */
+  /** Switches the active universal Android RAM-tier / Gemma hardware profile. */
   data class SelectDeviceProfile(val profile: EdgeDeviceProfile) : AiChefAction
 
   /** Imports a user-selected `.litertlm`, `.task`, or `.bin` model via SAF `OpenDocument`. */

@@ -211,7 +211,7 @@ class AndroidVoiceInputAdapter(context: Context) : VoiceInputPort {
       }
 
       override fun onError(error: Int) {
-        // Recover gracefully if Samsung/Android recognizer streamed partial words before silence timeout.
+        // Recover gracefully if the Android recognizer streamed partial words before silence timeout.
         val recoveredPartial = latestPartialHypothesis.trim()
         latestPartialHypothesis = ""
         if (

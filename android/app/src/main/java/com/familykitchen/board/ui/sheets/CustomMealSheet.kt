@@ -80,7 +80,7 @@ import com.familykitchen.board.ui.theme.KitchenTheme
 import kotlin.math.min
 
 // Modal sheet and stateless content for creating or scheduling preset & custom family meals
-// with 48.dp+ steppers stacked cleanly in 2 rows for Galaxy S22 font-scale legibility.
+// with 48.dp+ steppers stacked cleanly in 2 rows for compact 360dp 1.35x font-scale legibility.
 
 private val DAY_LABELS: List<String> = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
@@ -370,7 +370,7 @@ fun CustomMealSheetContent(
       modifier = Modifier.fillMaxWidth(),
     )
 
-    // Stack 48.dp Prep & Cook steppers cleanly in 2 rows to prevent horizontal S22 row crush.
+    // Stack 48.dp Prep & Cook steppers cleanly in 2 rows to prevent horizontal 360dp row crush.
     Surface(
       shape = RoundedCornerShape(16.dp),
       color = extendedColors.parchment,
@@ -580,7 +580,7 @@ fun CustomMealSheetContent(
   }
 }
 
-// Full-width 48.dp x 48.dp minute stepper row preventing horizontal S22 row crush.
+// Full-width 48.dp x 48.dp minute stepper row preventing horizontal 360dp row crush.
 @Composable
 private fun MinuteStepperRow(label: String, minutes: Int, onDelta: (Int) -> Unit) {
   Row(

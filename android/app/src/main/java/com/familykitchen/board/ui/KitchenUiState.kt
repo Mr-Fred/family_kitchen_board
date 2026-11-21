@@ -130,7 +130,7 @@ enum class VoiceCaptureTarget {
  * @property aiRuntimeState Live on-device `LiteRtMultimodalEngine` initialization/capability state.
  * @property voiceInputState Live `VoiceInputPort` speech recognition state (`en-US` / `fr-FR`).
  * @property activeVoiceTarget Target screen consuming the current microphone session.
- * @property activeDeviceProfile Selected Galaxy S22 / S22 Ultra / Gemma E2B hardware profile.
+ * @property activeDeviceProfile Selected universal Android RAM-tier on-device hardware profile.
  * @property attachedImagePath Preprocessed JPEG path staged in the AI Chef composer, or `null`.
  * @property attachedImageLabel Display filename badge for [attachedImagePath], or `null`.
  * @property isPreprocessingImage `true` while EXIF-rotating and downscaling a newly picked photo.
@@ -156,7 +156,9 @@ enum class VoiceCaptureTarget {
  */
 @Immutable
 data class KitchenUiState(
+  // True while initial cold-start snapshot and catalog hydration are still in flight.
   val isLoading: Boolean = true,
+  // Default landing tab opens the conversational AI Sous-Chef surface immediately.
   val activeDestination: TopLevelDestination = TopLevelDestination.ASK_AI,
   val groceriesSubDestination: GroceriesSubDestination = GroceriesSubDestination.GROCERY_LIST,
   val activePacerMode: PacerMode = PacerMode.DAILY_PACER,
@@ -187,7 +189,7 @@ data class KitchenUiState(
   val aiRuntimeState: AiRuntimeState = AiRuntimeState.Uninitialized,
   val voiceInputState: VoiceInputState = VoiceInputState.Idle,
   val activeVoiceTarget: VoiceCaptureTarget = VoiceCaptureTarget.AI_CHEF,
-  val activeDeviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4,
+  val activeDeviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
   val attachedImagePath: String? = null,
   val attachedImageLabel: String? = null,
   val isPreprocessingImage: Boolean = false,

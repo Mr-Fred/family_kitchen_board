@@ -189,7 +189,7 @@ fun SmartGroceryScreen(
     }
   }
 
-  // Reclaim above-the-fold height so Aisle 1 items appear immediately without scrolling on S22.
+  // Reclaim above-the-fold height so Aisle 1 items appear immediately on compact 360dp screens.
   Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
     Box(modifier = modifier.fillMaxSize()) {
       LazyColumn(

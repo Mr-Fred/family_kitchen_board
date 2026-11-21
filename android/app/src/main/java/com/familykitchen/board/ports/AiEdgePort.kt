@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
  * @property supportsText `true` when on-device text generation is ready.
  * @property supportsVision `true` **only** when multimodal image+text `Conversation` is active.
  * @property backendLabel Active hardware delegate label (e.g., `"LiteRT-LM GPU + Vision"`).
- * @property modelName Loaded model package filename (e.g., `"gemma-e2b-it-multimodal-int4.litertlm"`).
+ * @property modelName Loaded model package filename (e.g., `"gemma-4-E2B-it.litertlm"`).
  */
 data class RuntimeCapabilities(
   val supportsText: Boolean,
@@ -107,7 +107,7 @@ enum class ModelFileFormat {
  * @property sizeBytes Verified complete file size in bytes (`> 100 MB`, never a `.part` temp file).
  * @property format Package format (`LITERT_LM` prioritized ahead of `MEDIAPIPE_TASK` / `MEDIAPIPE_BIN`).
  * @property supportsVisionCandidate Whether the package format can initialize a vision backend.
- * @property recommendedProfile Suggested Samsung Galaxy S22 / S22 Ultra hardware profile.
+ * @property recommendedProfile Suggested universal Android RAM-tier hardware profile.
  */
 data class DiscoveredModelInfo(
   val fileName: String,
@@ -115,12 +115,12 @@ data class DiscoveredModelInfo(
   val sizeBytes: Long,
   val format: ModelFileFormat = ModelFileFormat.LITERT_LM,
   val supportsVisionCandidate: Boolean = format == ModelFileFormat.LITERT_LM,
-  val recommendedProfile: EdgeDeviceProfile = EdgeDeviceProfile.GALAXY_S22_GEMMA_1B_INT4,
+  val recommendedProfile: EdgeDeviceProfile = EdgeDeviceProfile.COMPACT_GEMMA_1B_INT4,
 )
 
 /**
- * Hexagonal port for thread-safe on-device text and multimodal vision inference on Samsung Galaxy
- * S22 and Galaxy S22 Ultra (`LiteRT-LM 0.16.1` primary + `MediaPipe Tasks GenAI 0.10.22` fallback).
+ * Hexagonal port for thread-safe on-device text and multimodal vision inference on Android 12+
+ * devices (`LiteRT-LM 0.16.1` primary + `MediaPipe Tasks GenAI 0.10.22` fallback).
  */
 interface AiEdgePort {
   /** Reactive lifecycle state stream observed by `KitchenBoardViewModel` and `AiChefScreen`. */

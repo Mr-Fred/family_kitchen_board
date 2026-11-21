@@ -338,7 +338,7 @@ private fun WeeklyPrepHeroCard(
         trackColor = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.6f),
       )
 
-      // Non-wrapping 48.dp timer buttons prevent "Re\n↻ se\nt" vertical crush on S22 scaling.
+      // Non-wrapping 48.dp timer buttons prevent "Re\n↻ se\nt" vertical crush at 1.35x scaling.
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

@@ -5,7 +5,7 @@ description: "Mandatory Hexagonal Kotlin 2.2, Jetpack Compose Material 3, @Previ
 
 # Native Android Architecture & Engineering Rules
 
-These invariants govern all architecture, Kotlin implementation, Jetpack Compose UI, on-device multimodal AI, testing, and repository hygiene inside `Family Kitchen Board` (`applicationId = "com.familykitchen.board"`, `minSdk = 31`, `targetSdk = 34`, offline-first targeting Samsung Galaxy S22 and Galaxy S22 Ultra).
+These invariants govern all architecture, Kotlin implementation, Jetpack Compose UI, on-device multimodal AI, testing, and repository hygiene inside `Family Kitchen Board` (`applicationId = "com.familykitchen.board"`, `minSdk = 31`, `targetSdk = 34`, offline-first targeting **Android 12+ phones and tablets** universally with automatic `ActivityManager` RAM-tier profile selection—`Compact 1B (6–8 GB RAM)`, `Balanced 2B (8–12 GB RAM)`, and `Gemma 4 Vision (8 GB+ RAM)`—optional mobile `libOpenCL.so` GPU acceleration (`android:required="false"`) with automatic CPU fallback, and compact `360dp` `1.35x` font-scale layout resilience).
 
 ## Hexagonal Boundaries & Pure `domain/` Invariant
 
@@ -42,7 +42,7 @@ These invariants govern all architecture, Kotlin implementation, Jetpack Compose
   - Expose asynchronous boundaries as `suspend` functions and state streams as `StateFlow` / `Flow` bound to managed `CoroutineScope`s (`viewModelScope` in ViewModels; injected `CoroutineDispatcher`s in adapters). Never call `Thread.sleep()` or `runBlocking` in production code, and never create uncancelled orphan `CoroutineScope`s.
   - **`Mutex`-Serialized Native Engine Access**: Guard every JNI call on `LiteRtMultimodalEngine` (`Engine`, `Conversation`, `Session`, and MediaPipe `LlmInference` initialization, inference, conversation reset, and teardown) inside a coroutine `Mutex` (`engineMutex.withLock { ... }`) to prevent concurrent native memory access or `SIGSEGV` during turn overlap or model reload.
   - **Deterministic `.close()` Teardown & Per-Scan Conversation Reset**: Create or reset a fresh `Conversation` for each image scan so multi-photo sessions do not exhaust KV-cache RAM on 8 GB devices, and deterministically call `.close()` on all active `Conversation`, `Session`, `Engine`, and `LlmInference` handles (plus `SpeechRecognizer.destroy()`) on model switch and `ViewModel.onCleared()` / `Activity.onDestroy()`.
-  - **Atomic `.part` Model File Import**: Import user-selected `.litertlm`, `.task`, and `.bin` models via `ActivityResultContracts.OpenDocument` into `File(context.filesDir, "models")` by streaming to a `*.part` temporary file and renaming atomically only after full byte verification (plus zero-permission discovery in `context.getExternalFilesDir("models")`).
+  - **Atomic `.part` Model File Import & Universal RAM-Tier Selection**: Import user-selected `.litertlm`, `.task`, and `.bin` models via `ActivityResultContracts.OpenDocument` into `File(context.filesDir, "models")` by streaming to a `*.part` temporary file and renaming atomically only after full byte verification (plus zero-permission discovery in `context.getExternalFilesDir("models")`), selecting default `EdgeDeviceProfile` tiers (`COMPACT_GEMMA_1B_INT4`, `BALANCED_GEMMA_2B_INT4`, `GEMMA_4_E2B_MULTIMODAL`) from `ActivityManager` total physical RAM (`>= 10 GiB` high-memory threshold) and emulator detection rather than hardcoded OEM model names, and keeping `<uses-native-library android:name="libOpenCL.so" android:required="false" />` optional with automatic CPU fallback.
 
 ## Jetpack Compose + Material 3 & Mandatory `@Preview` Standard
 
@@ -52,8 +52,8 @@ These invariants govern all architecture, Kotlin implementation, Jetpack Compose
 - **Unidirectional Data Flow (UDF)**:
   - `KitchenBoardViewModel` owns presentation orchestration and exposes one immutable `StateFlow<KitchenUiState>` observed via `collectAsStateWithLifecycle()`.
   - Screen, card, and sheet composables MUST remain stateless: accept immutable state slices and explicit event callbacks (`(AiChefAction) -> Unit`, `(MealSlotId) -> Unit`, etc.), and never accept `ViewModel`, `Activity`, `Context`, or port implementations as composable parameters.
-- **Adaptive Layout & Calm Culinary Material 3 Theme**:
-  - `KitchenScaffold` MUST render a 4-destination bottom `NavigationBar` (`Today`, `Pacer`, `Kitchen` with live grocery deficit `Badge`, `AI Chef`) on compact portrait phones and switch automatically to a `NavigationRail` + multi-column counter layout in landscape / wide-screen counter mode.
+- **Adaptive Layout, `360dp` `1.35x` Font-Scale Resilience & Calm Culinary Material 3 Theme**:
+  - `KitchenScaffold` MUST render the 5-destination bottom `NavigationBar` (`Chef`, `Plan`, `Pantry`, `Recipes`, `Shop` with live grocery deficit `Badge`) on compact portrait phones (resilient down to `360dp` width at `1.35x` accessibility font scale with `>= 48.dp` touch targets) and switch automatically to a `NavigationRail` + multi-column counter layout in landscape / wide-screen tablet mode.
   - Provide complete **Warm Daylight** (`#FAF7F2` Linen background, `#EFECE6` canvas, `#FFFFFF` surface cards, `#2D6A4F` Sage primary, `#B84A24` Terracotta accent, `#FEF3C7`/`#F59E0B` child-safety callout tokens, `#EEF2FF`/`#6366F1` 8:30 PM night-prep banner tokens) and **Ambient Counter Dark** Material 3 color schemes in `ui/theme/`.
 - **Mandatory `@Preview` Requirement**:
   - **Every** screen composable (`TodayAndWeekScreen`, `MorningPacerScreen`, `PantryAndGroceryScreen`, `AiChefScreen`) and **every** major card or bottom-sheet composable (`MealSlotCard`, `CookedOverrideSheet`, `CustomMealSheet`, `FamilyProfileSheet`, `QaScenarioLabSheet`) MUST include `@Preview` functions wrapped in `FamilyKitchenBoardTheme`.

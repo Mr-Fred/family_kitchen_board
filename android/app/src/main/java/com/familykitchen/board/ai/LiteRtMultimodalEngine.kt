@@ -41,7 +41,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Production Android implementation of [AiEdgePort] integrating `litertlm-android:0.16.1` (primary
- * OpenCL GPU + multimodal vision engine on Samsung Galaxy S22 & S22 Ultra) with
+ * OpenCL GPU + CPU multimodal vision engine on Android 12+ devices) with
  * `tasks-genai:0.10.22` (`maxTokens = 1024`) fallback for `.task` and `.bin` text bundles.
  *
  * Key architectural guarantees:
@@ -51,7 +51,7 @@ import kotlinx.coroutines.withContext
  *    [ModelNotReadyException], and calling it when `!capabilities.supportsVision` or `liteRtEngine`
  *    is inactive (text-only `.litertlm`, `Session` fallback, or MediaPipe `LlmInference`)
  *    **immediately** throws [VisionNotSupportedException]—never silently dropping an image.
- * 3. **Bounded 8 GB S22 KV-Cache**: Opens a fresh `Conversation` per inference turn and closes it
+ * 3. **Bounded 8 GB RAM KV-Cache**: Opens a fresh `Conversation` per inference turn and closes it
  *    in `finally` so multi-photo kitchen scans never exhaust RAM across repeated turns.
  *
  * @param context Android context providing `cacheDir` and `filesDir` for native shader/model caches.
@@ -335,7 +335,7 @@ class LiteRtMultimodalEngine(
   /**
    * Executes an authentic multimodal vision + text turn against [preprocessedImagePath] inside
    * [engineMutex] on a fresh per-scan LiteRT-LM `Conversation` (closed deterministically in
-   * `finally` to protect 8 GB Galaxy S22 RAM headroom).
+   * `finally` to protect 8 GB Android device RAM headroom).
    *
    * **Hard Non-Silent Vision Gate**:
    * - Throws [ModelNotReadyException] if [runtimeState] is not [AiRuntimeState.Ready].
@@ -396,7 +396,7 @@ class LiteRtMultimodalEngine(
         }
 
         withContext(inferenceDispatcher) {
-          // Release any cached text Conversation first so two native Conversations never contend on S22 GPU RAM.
+          // Release any cached text Conversation first so two native Conversations never contend on device GPU RAM.
           runCatching { liteRtConversation?.close() }
           liteRtConversation = null
 

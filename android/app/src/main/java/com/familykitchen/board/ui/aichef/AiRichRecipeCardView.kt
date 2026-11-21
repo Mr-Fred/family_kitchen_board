@@ -283,7 +283,7 @@ fun AiRichRecipeSuggestionCard(
           )
         }
 
-        // Secondary 48.dp buttons replace legacy 40.dp pills to prevent S22 text clipping.
+        // Secondary 48.dp buttons replace legacy 40.dp pills to prevent 360dp text clipping.
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           OutlinedButton(
             onClick = onAddToPlan,

@@ -52,7 +52,7 @@ import com.familykitchen.board.ui.theme.KitchenTheme
 import kotlin.math.roundToInt
 
 // Cookbook browser filter pills, dynamic-height offline gourmet Hero Banner, and offline plain-text
-// ACTION_SEND recipe share helpers for CleanRecipeReaderScreen (zero sparkles, S22-scale resilient).
+// ACTION_SEND recipe share helpers for CleanRecipeReaderScreen (zero sparkles, 360dp-scale resilient).
 
 /**
  * Cookbook browser filter tabs surfaced at the top of `CleanRecipeReaderScreen`.
@@ -199,7 +199,7 @@ internal fun CookbookBrowserHeader(
 
 /**
  * Dynamic-height (`heightIn(min = 228.dp)`) offline culinary Hero Banner sizing naturally around
- * `recipe.title` (`maxLines = 3`, `Newsreader` `26.sp`) so elevated S22 font scaling never clips
+ * `recipe.title` (`maxLines = 3`, `Newsreader` `26.sp`) so elevated `1.35x` font scaling never clips
  * or hides the dish title.
  */
 @Composable
@@ -360,7 +360,7 @@ internal fun RecipeReaderHeroBanner(
           )
         }
 
-        // Newsreader 26.sp / 32.sp headline guaranteed visible at 1.35x S22 display/font scaling.
+        // Newsreader 26.sp / 32.sp headline guaranteed visible at 1.35x display/font scaling.
         Text(
           text = recipe.title,
           style = MaterialTheme.typography.displaySmall.copy(

@@ -84,7 +84,7 @@ import com.familykitchen.board.ui.theme.SavorBrandBadge
 import kotlinx.coroutines.delay
 
 // Stateless, tactile 4-step First-Run Onboarding section cards calibrated for Warm Linen daylight,
-// Ambient Counter Dark OLED legibility, 48.dp+ touch targets, and Galaxy S22 1.35x font scaling.
+// Ambient Counter Dark OLED legibility, 48.dp+ touch targets, and compact 360dp 1.35x font scaling.
 
 // Canonical allergen exclusions mirrored across AvailabilityFilter and GroceryDiffEngine (EC-02).
 private val ONBOARDING_ALLERGEN_OPTIONS: List<String> =
@@ -240,7 +240,7 @@ fun OnboardingHouseholdStepSection(
         modifier = Modifier.fillMaxWidth(),
       )
       else -> Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Two equal-weight columns keep labels uncrushed at 1.35x Galaxy S22 font scale.
+        // Two equal-weight columns keep labels uncrushed at 1.35x font scale on compact 360dp screens.
         OutlinedTextField(
           value = draft.morningLeadName, onValueChange = { onDraftChange(draft.copy(morningLeadName = it)) },
           label = { Text("Morning Cook", maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -558,7 +558,7 @@ private fun CuratedBasicsChecklistCard(
  * Gemma SAF model setup using shared `com.familykitchen.board.ui.aichef` components.
  *
  * @param runtimeState Live on-device [AiRuntimeState] (`Uninitialized`, `Importing`, `Loading`, `Ready`).
- * @param activeDeviceProfile Selected Samsung Galaxy S22 / S22 Ultra / Gemma E2B hardware profile.
+ * @param activeDeviceProfile Selected universal Android RAM-tier on-device hardware profile.
  * @param cloudConfig Active non-secret [CloudLlmConfig] state slice.
  * @param isVerifyingCloudKey `true` while verifying an HTTPS Cloud LLM key.
  * @param isRefreshingCloudModels `true` while syncing live `/models` for the selected provider.
@@ -641,7 +641,7 @@ fun OnboardingAiSetupStepSection(
               Text(formatAiRuntimeBadgeLabel(runtimeState), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
           }
-          // Hardware profile chips enforce 48.dp touch targets on compact Galaxy S22 screens.
+          // Hardware profile chips enforce 48.dp touch targets on compact 360dp Android screens.
           FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             EdgeDeviceProfile.entries.forEach { profile ->
               val modeTag = if (profile.supportsMultimodalVision) "Vision + Text" else "Text"

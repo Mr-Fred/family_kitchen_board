@@ -22,7 +22,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * @param pantry Current pantry ledger entries.
  * @param householdAllergens Active allergen exclusions.
  * @param householdProfile Optional full household profile (goals, growth stage, life events).
- * @param deviceProfile Active Samsung Galaxy S22 / S22 Ultra / Gemma E2B hardware profile.
+ * @param deviceProfile Active universal Android RAM-tier / Gemma hardware profile.
  * @param recentTurns Optional recent conversation turns (`<= 4`) providing multi-turn continuity.
  * @return Grounded single-pass prompt string.
  */
@@ -34,7 +34,7 @@ fun buildPantryAwareSystemPrompt(
   pantry: List<PantryLedgerEntry>,
   householdAllergens: List<String> = emptyList(),
   householdProfile: HouseholdProfile? = null,
-  deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4,
+  deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
   recentTurns: List<AiChatTurn> = emptyList(),
 ): String {
   val focusTag = inferNutritionFocusFromPrompt(userPrompt)

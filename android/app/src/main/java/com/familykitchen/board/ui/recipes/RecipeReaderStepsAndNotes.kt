@@ -77,7 +77,7 @@ internal fun ReaderIngredientsChecklistSection(
   }
 
   Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    // Weighted left header + non-wrapping 48.dp TextButton fixes "Unchec\nk all" wrap on S22.
+    // Weighted left header + non-wrapping 48.dp TextButton fixes "Unchec\nk all" wrap on 360dp.
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,

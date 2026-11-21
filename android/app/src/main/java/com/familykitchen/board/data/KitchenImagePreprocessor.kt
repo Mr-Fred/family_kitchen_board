@@ -22,7 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 // Scoped FileProvider camera capture and EXIF-normalized <= 1280px JPEG preprocessor.
-// Eliminates legacy low-res extras["data"] thumbnails, file:// URIs, and 108MP heap spikes on S22.
+// Eliminates legacy low-res extras["data"] thumbnails, file:// URIs, and high-MP heap spikes.
 
 /**
  * Scoped camera capture provisioning and EXIF-aware image downscaling helper for on-device
@@ -46,7 +46,7 @@ object KitchenImagePreprocessor {
   /** Balanced JPEG encoding quality (`88`) preserving receipt OCR and produce label crispness. */
   const val INFERENCE_JPEG_QUALITY: Int = 88
 
-  // Copy buffer size (64 KB) for streaming high-resolution S22 gallery URIs into staging cache.
+  // Copy buffer size (64 KB) for streaming high-resolution camera/gallery URIs into staging cache.
   private const val COPY_BUFFER_BYTES: Int = 64 * 1024
 
   // Default max age (30 minutes) when pruning orphaned camera captures after process death.
@@ -91,8 +91,8 @@ object KitchenImagePreprocessor {
    * downscales proportionally so `max(width, height) <= maxDimensionPx` (`1280` px default), and
    * writes a JPEG at quality [jpegQuality] (`88` default) into `cacheDir/captures/`.
    *
-   * Uses a two-pass bounds check + `inSampleSize` pre-subsample so 50 MP / 108 MP Samsung Galaxy
-   * S22 / S22 Ultra photos never exhaust Java heap memory.
+   * Uses a two-pass bounds check + `inSampleSize` pre-subsample so high-resolution 50 MP–200 MP
+   * Android camera photos never exhaust Java heap memory.
    *
    * @param context Android context providing `contentResolver` and `cacheDir`.
    * @param sourceUri Scoped `content://` URI from `PickVisualMedia` or `TakePicture`.

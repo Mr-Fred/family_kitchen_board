@@ -22,7 +22,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
-// Mutex-guarded atomic JSON persistence adapter for offline household state on Galaxy S22/S22 Ultra.
+// Mutex-guarded atomic JSON persistence adapter for offline household state on Android 12+ devices.
 // Streams every batch mutation to kitchen_snapshot_v1.json.tmp + fsync + atomic rename in O(1) writes.
 
 /**

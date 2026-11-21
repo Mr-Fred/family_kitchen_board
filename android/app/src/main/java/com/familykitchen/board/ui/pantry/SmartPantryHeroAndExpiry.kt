@@ -175,7 +175,7 @@ fun PantryStatPulseBar(
         }
       }
 
-      // Metric 3: 44.dp circular Waste Score progress ring preventing "96\n%" wrap on S22 scaling.
+      // Metric 3: 44.dp circular Waste Score progress ring preventing "96\n%" wrap at 1.35x scale.
       Row(verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
           Canvas(modifier = Modifier.size(44.dp)) {
@@ -345,7 +345,7 @@ fun ActionRequiredExpiryPanel(
       modifier = Modifier.fillMaxWidth().padding(14.dp),
       verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-      // Weight left heading row so "Action Required" never squeezes the 48h value capsule on S22.
+      // Weight left heading row so "Action Required" never squeezes the 48h capsule on 360dp.
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -508,7 +508,7 @@ private fun ExpiringItemRichCard(
         val primaryPillBg = if (isUrgentOneDay) extendedColors.terracottaContainer else extendedColors.sageContainer
         val primaryPillFg = if (isUrgentOneDay) extendedColors.onTerracottaContainer else extendedColors.onSageContainer
 
-        // Weight(1f) + softWrap=false prevents multi-line text slicing at 1.35x S22 font scale.
+        // Weight(1f) + softWrap=false prevents multi-line text slicing at 1.35x font scale.
         Surface(
           shape = CircleShape,
           color = primaryPillBg,

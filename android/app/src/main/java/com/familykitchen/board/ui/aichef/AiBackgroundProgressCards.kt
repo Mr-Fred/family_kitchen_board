@@ -154,8 +154,8 @@ fun ModelOperationProgressBanner(
       )
     }
     is AiRuntimeState.Loading -> {
-      // Reassure Galaxy S22 users while OpenCL shaders compile during first model load.
-      headline = "Initializing ${runtimeState.modelName} on Galaxy GPU…"
+      // Reassure Android users while OpenCL/GPU shaders compile during first model load.
+      headline = "Initializing ${runtimeState.modelName} on device GPU…"
       subtitle = "Mapping weights & compiling OpenCL shaders (typically 10–25s)."
     }
     AiRuntimeState.Discovering -> {

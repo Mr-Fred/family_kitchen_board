@@ -96,7 +96,7 @@ import kotlinx.coroutines.delay
  * Shared `SavorAI` Top App Bar prioritizing the weighted left brand identity ([SavorBrandBadge]
  * `34.dp` rounded-11 culinary cocotte mark + non-wrapping `"SavorAI"` + `"· <subtitle>"`) and
  * capping the right action cluster at `<= 3` `48.dp` touch controls so `SavorAI` is never crushed
- * to `0.dp` even at `1.35x` Galaxy S22 display/font scaling.
+ * to `0.dp` even at `1.35x` display/font scaling on compact `360dp` phones.
  */
 @Composable
 fun SavorTopAppBar(
@@ -145,7 +145,7 @@ fun SavorTopAppBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         // Left: Weighted SavorAI culinary emblem + non-wrapping brand title + muted dot subtitle.
-        // Using Modifier.weight(1f) with bounded <= 3 right controls guarantees >= 160.dp on S22.
+        // Using Modifier.weight(1f) with bounded <= 3 right controls guarantees >= 160.dp on 360dp phones.
         Row(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -392,7 +392,7 @@ fun SavorGlobalModelProgressStrip(
       "$verb ${runtimeState.fileName} • $progressDetail"
     }
     is AiRuntimeState.Loading ->
-      "Initializing ${runtimeState.modelName} on Galaxy GPU…"
+      "Initializing ${runtimeState.modelName} on device GPU…"
     else -> return
   }
 
@@ -475,7 +475,7 @@ fun SavorBottomNavigationBar(
   Column(modifier = modifier.fillMaxWidth()) {
     HorizontalDivider(thickness = 1.dp, color = extendedColors.borderSubtle)
     NavigationBar(containerColor = extendedColors.canvasWarm, tonalElevation = 0.dp, modifier = modifier.fillMaxWidth()) {
-      // Render all 5 first-class destinations with non-wrapping labels for S22 1.35x scaling.
+      // Render all 5 first-class destinations with non-wrapping labels for 360dp 1.35x scaling.
       TopLevelDestination.entries.forEach { destination ->
         val isSelected = destination == activeDestination
         val badgeCount = badgeCountForDestination(destination, groceryBadgeCount, expiringSoonCount)
@@ -518,7 +518,7 @@ fun SavorWideNavigationRail(
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
-  // Preserves vertical screen height when a Galaxy S22 or tablet rests horizontally on the counter.
+  // Preserves vertical screen height when an Android 12+ device rests horizontally on the counter.
   Row(modifier = modifier.fillMaxHeight()) {
     NavigationRail(containerColor = extendedColors.canvasWarm, modifier = Modifier.fillMaxHeight()) {
       Spacer(modifier = Modifier.height(12.dp))
@@ -580,7 +580,7 @@ fun PlanModeSwitcherBar(
         PacerMode.DAILY_PACER to "Daily Plan",
         PacerMode.WEEKLY_PREP to "Batch Prep ($batchTaskCount)",
       )
-      // Render equal-weight 48.dp touch pills so both modes stay legible on S22 1.35x scaling.
+      // Render equal-weight 48.dp touch pills so both modes stay legible at 360dp 1.35x scaling.
       options.forEach { (mode, label) ->
         val isSelected = activeMode == mode
         val icon = if (mode == PacerMode.DAILY_PACER) Icons.Filled.CalendarToday else Icons.Filled.Timer

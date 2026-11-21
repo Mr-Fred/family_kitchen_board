@@ -115,7 +115,7 @@ class AiChefCoordinator(
    * @param snapshot Current household state snapshot.
    * @param action User prompt submission action carrying optional `attachedImagePath`.
    * @param attachedImageLabel Optional human-readable chip label for an attached photo.
-   * @param deviceProfile Active Samsung Galaxy S22 / S22 Ultra / Gemma E2B hardware profile.
+   * @param deviceProfile Active universal Android RAM-tier / Gemma hardware profile.
    * @param nowIso Deterministic ISO-8601 timestamp stamped onto generated chat turns.
    * @return Complete [AiChefTurnOutcome] ready for state emission and `O(1)` persistence.
    */
@@ -123,7 +123,7 @@ class AiChefCoordinator(
     snapshot: KitchenSnapshot,
     action: AiChefAction.SubmitPrompt,
     attachedImageLabel: String? = null,
-    deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4,
+    deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
     nowIso: String = DEFAULT_TIMESTAMP_ISO,
   ): AiChefTurnOutcome =
     submitTurn(
@@ -161,7 +161,7 @@ class AiChefCoordinator(
     promptText: String,
     attachedImagePath: String? = null,
     attachedImageLabel: String? = null,
-    deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.GALAXY_S22_ULTRA_GEMMA_2B_INT4,
+    deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
     nowIso: String = DEFAULT_TIMESTAMP_ISO,
     activeDayIndex: Int = 0,
   ): AiChefTurnOutcome {

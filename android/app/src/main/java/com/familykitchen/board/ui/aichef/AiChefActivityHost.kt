@@ -49,7 +49,7 @@ private val ALLOWED_MODEL_EXTENSIONS: Set<String> = setOf("litertlm", "task", "b
  * @param turnHistory Rolling 6-turn AI Chef conversation transcript.
  * @param runtimeState Current on-device LiteRT-LM / MediaPipe runtime state.
  * @param voiceState Current speech-to-text capture state (`en-US` / `fr-FR`).
- * @param activeDeviceProfile Selected Samsung Galaxy S22 / S22 Ultra / Gemma E2B profile.
+ * @param activeDeviceProfile Selected universal Android RAM-tier on-device hardware profile.
  * @param attachedImagePath Currently staged image URI or preprocessed file path, or `null`.
  * @param attachedImageLabel Display filename for the staged image, or `null`.
  * @param onAction Unidirectional callback dispatching [AiChefAction] intents to `ViewModel`.
