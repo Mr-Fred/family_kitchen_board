@@ -1,0 +1,7 @@
+{
+  "default_max_lines": 700,
+  "min_lines": 350,
+  "min_comment_ratio": 0.05,
+  "personal_project_only": true,
+  "forbid_corporate_or_internal_leaks": true
+}

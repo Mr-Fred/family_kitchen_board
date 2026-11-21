@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base { html, body { width: 100vw; margin: 0; padding: 0; } body { overscroll-behavior: none; } .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } main > :first-child { margin-top: 0 !important; } main > :last-child { margin-bottom: 0 !important; } } ::-webkit-scrollbar { display: none; }</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "tertiary-container": "#a65d00", "surface-container-low": "#f1f3ff", "surface-container": "#e8eeff", "tertiary-fixed": "#ffdcc1", "outline": "#6f7a72", "on-primary-fixed": "#002113", "on-surface-variant": "#3f4943", "on-tertiary-container": "#fff1e9", "surface-variant": "#dde2f3", "tertiary-fixed-dim": "#ffb877", "surface-container-lowest": "#ffffff", "on-tertiary": "#ffffff", "on-secondary-container": "#721c09", "outline-variant": "#bec9c0", "tertiary": "#834800", "on-primary-container": "#d0ffe2", "inverse-on-surface": "#ecf0ff", "background": "#f9f9ff", "on-surface": "#161c27", "on-error-container": "#93000a", "primary": "#096443", "primary-container": "#2e7d5a", "on-tertiary-fixed": "#2e1600", "on-secondary": "#ffffff", "surface-container-high": "#e3e8f9", "inverse-primary": "#88d7ad", "inverse-surface": "#2a303d", "error-container": "#ffdad6", "secondary-fixed": "#ffdad2", "surface-container-highest": "#dde2f3", "secondary-container": "#fd8367", "on-tertiary-fixed-variant": "#6c3a00", "on-secondary-fixed-variant": "#822714", "on-error": "#ffffff", "on-background": "#161c27", "error": "#ba1a1a", "surface-tint": "#176b4a", "on-primary": "#ffffff", "primary-fixed": "#a4f3c8", "secondary-fixed-dim": "#ffb4a3", "primary-fixed-dim": "#88d7ad", "secondary": "#a13e28", "on-secondary-fixed": "#3d0600", "on-primary-fixed-variant": "#005235", "surface-bright": "#f9f9ff", "surface-dim": "#d4daea", "surface": "#f9f9ff" }, borderRadius: { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" }, spacing: { "space-xs": "0.25rem", "space-xl": "2.25rem", "gutter-tablet": "1.5rem", "space-lg": "1.5rem", "gutter": "1rem", "space-sm": "0.5rem", "margin-tablet": "2rem", "space-md": "1rem", "margin": "1rem" }, fontFamily: { "body-md": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"], "label-md": ["Plus Jakarta Sans"], "headline-sm": ["Plus Jakarta Sans"], "label-lg": ["Plus Jakarta Sans"], "headline-lg": ["Newsreader"], "body-sm": ["Plus Jakarta Sans"], "label-sm": ["Plus Jakarta Sans"], "headline-xl-mobile": ["Newsreader"], "headline-xl": ["Newsreader"] }, fontSize: { "body-md": ["0.9375rem", { lineHeight: "1.4375rem", fontWeight: "400" }], "body-lg": ["1.0625rem", { lineHeight: "1.625rem", letterSpacing: "-0.005em", fontWeight: "400" }], "label-md": ["0.75rem", { lineHeight: "1rem", letterSpacing: "0.02em", fontWeight: "600" }], "headline-sm": ["1.25rem", { lineHeight: "1.625rem", letterSpacing: "-0.01em", fontWeight: "700" }], "label-lg": ["0.875rem", { lineHeight: "1.125rem", letterSpacing: "0.01em", fontWeight: "600" }], "headline-lg": ["1.75rem", { lineHeight: "2.125rem", letterSpacing: "-0.01em", fontWeight: "500" }], "body-sm": ["0.8125rem", { lineHeight: "1.1875rem", fontWeight: "400" }], "label-sm": ["0.6875rem", { lineHeight: "0.875rem", letterSpacing: "0.04em", fontWeight: "700" }], "headline-xl-mobile": ["2rem", { lineHeight: "2.375rem", letterSpacing: "-0.015em", fontWeight: "500" }], "headline-xl": ["2.5rem", { lineHeight: "2.875rem", letterSpacing: "-0.02em", fontWeight: "500" }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface font-body-md text-on-surface antialiased min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed"><header class="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 px-gutter flex items-center justify-between gap-space-sm"><div class="flex items-center gap-space-sm min-w-0"><img alt="SavorAI Logo" class="h-8 w-auto object-contain shrink-0" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXRbV8qf577Cpy9tC8Dsm5NgdEsKS73ma43wVwuBfdLZcDhaxufklEoNQnzeP7_HWOJLVngkZC-yNh21xDfPF9Dc9ikVJ0q6c0y9jo1p7aEyhUVIMryga_ZLDF5Z04efUbcAVEL7M-v6n7VjITQu4Ee1UNHiHLIkaLMnnt6CVsRIevt4ABu87XzO0f_FpDfESgPcJIZ6joDlORflLlheYDK44m9V5ooFmINfe4HMQ"/><div class="flex flex-col min-w-0"><span class="font-headline-sm text-headline-sm text-primary leading-tight tracking-tight">SavorAI</span><span class="font-label-sm text-label-sm text-on-surface-variant truncate">Recipes</span></div></div><div class="flex items-center gap-space-xs shrink-0"><div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-low text-primary text-label-sm font-label-sm shadow-[0_1px_2px_rgba(26,32,44,0.04)]"><span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span><span class="text-on-surface-variant">Home Kitchen • 2 Active</span></div><button aria-label="Search" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-[22px]">search</span></button><a aria-label="Profile" class="w-11 h-11 flex items-center justify-center rounded-full hover:opacity-90 transition-opacity" href="#"><img alt="Profile" class="w-8 h-8 rounded-full object-cover shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBSvsO-6V6N8k535EYvSaobARS8A6I8WYxoR3i-zj4W2O9Qpe8tqdWLPznNsuNzfIBzypdkJ0eueFaBi8K3jWD7Ii9tZIvhBPFhQuCdaY2J5KpbmBJNQoYddBktSkwDNnACPXE9CqiWDPXX28xu3d6d8vYygNdsy7QRtA8LcXsb3SG8uykaiOoh1UqZXEQCVqnwzNEGbRJe8ki5vKLoZJrIWl1wb6Dp6zHHbDyXVhc"/></a></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-surface"><div class="flex flex-col w-full pb-10">
+<!-- Recipe Hero Banner -->
+<div class="relative w-full h-72 overflow-hidden shadow-sm bg-surface-container">
+<div class="w-full h-full bg-cover bg-center" data-alt="Close-up gourmet food photography of crisp golden pan-seared salmon fillets resting in a lush creamy garlic lemon spinach reduction in a rustic cast iron pan. Warm afternoon sun spilling across an organic slate tabletop, garnished with fresh dill frills and cracked black peppercorns, warm botanical tones, soft natural lighting." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCXnpiCKBzdT2AzVP7j5Mr9NVFM8eNdBskpk_e8ujUj5uu9QYlY4cGeTV3t9f6Iz_xd9U4xVutC_Jvojl8_cd6Z3yF-1-dCRCcATIV2YUZjXAKXVfyfJhgyYTjeeauiDr-HWcp35paUDvuXji50xbRio6Gwcip9oDHblBoYJXrqmvEvSSJ5wFkijof4G1rTv_EMJ-41dTpUWC7GSP8Dtc3HZmVXpQz2L3XNGVk3wj0')">
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent"></div>
+</div>
+<!-- Top Action Badges -->
+<div class="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-auto">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface/90 backdrop-blur-md shadow-sm text-primary font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+        Clean Reader
+      </span>
+<div class="flex items-center gap-1.5">
+<button aria-label="Bookmark Recipe" class="w-10 h-10 rounded-full bg-surface/90 backdrop-blur-md flex items-center justify-center text-on-surface-variant hover:text-secondary transition-transform active:scale-95 shadow-sm" id="bookmark-btn" onclick="toggleBookmark(this)">
+<span class="material-symbols-outlined text-[20px]">bookmark_border</span>
+</button>
+<button aria-label="Open original page" class="w-10 h-10 rounded-full bg-surface/90 backdrop-blur-md flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-transform active:scale-95 shadow-sm">
+<span class="material-symbols-outlined text-[20px]">open_in_new</span>
+</button>
+</div>
+</div>
+<!-- Title & Source Overlay -->
+<div class="absolute bottom-3 left-4 right-4">
+<div class="flex items-center gap-2 mb-1.5">
+<span class="px-2.5 py-0.5 rounded-full bg-surface-container-high text-primary font-label-sm text-label-sm">
+          Bon Appétit
+        </span>
+<span class="text-on-surface-variant font-label-sm text-label-sm">
+          Clipped 2h ago
+        </span>
+</div>
+<h1 class="font-headline-xl-mobile text-headline-xl-mobile text-on-surface leading-tight font-normal">
+        Pan-Seared Tuscan Salmon with Creamy Garlic Lemon Spinach
+      </h1>
+</div>
+</div>
+<!-- Content Padding Area -->
+<div class="px-gutter flex flex-col gap-5 mt-2">
+<!-- Pantry Inventory Status Pill -->
+<div class="w-full p-3.5 rounded-2xl bg-surface-container-lowest shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-7 h-7 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-primary leading-tight">All 7 ingredients available</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant leading-none">In Home Pantry &amp; Refrigerator</span>
+</div>
+</div>
+<button class="px-3 py-1.5 rounded-full bg-surface-container-low text-primary font-label-sm text-label-sm active:bg-surface-container transition-colors">
+        View Match
+      </button>
+</div>
+<!-- Metadata Grid (Prep, Cook, Total, Calories) -->
+<div class="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-surface-container-low">
+<div class="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-container-lowest shadow-sm text-center">
+<span class="material-symbols-outlined text-primary text-[20px] mb-0.5">timer</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Prep</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">10 min</span>
+</div>
+<div class="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-container-lowest shadow-sm text-center">
+<span class="material-symbols-outlined text-secondary text-[20px] mb-0.5">skillet</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Cook</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">15 min</span>
+</div>
+<div class="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-container-lowest shadow-sm text-center">
+<span class="material-symbols-outlined text-tertiary-container text-[20px] mb-0.5">local_fire_department</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Energy</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">480 kcal</span>
+</div>
+</div>
+<!-- Primary Quick Actions Toolbar -->
+<div class="flex flex-col gap-2">
+<button class="w-full h-13 py-3 px-5 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center gap-2.5 font-label-lg text-label-lg shadow-sm hover:brightness-105 active:scale-[0.98] transition-all" onclick="launchCookMode()">
+<span class="material-symbols-outlined text-[22px]" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+<span>Start Step-by-Step Cook Mode</span>
+</button>
+<div class="grid grid-cols-2 gap-2">
+<button class="h-11 px-4 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center gap-2 font-label-md text-label-md active:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-primary text-[18px]">calendar_today</span>
+<span>Add to Wed Meal Plan</span>
+</button>
+<button class="h-11 px-4 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center gap-2 font-label-md text-label-md active:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-tertiary text-[18px]">group_add</span>
+<span>Share with Kitchen</span>
+</button>
+</div>
+</div>
+<!-- Servings & Scale Selector -->
+<div class="flex items-center justify-between p-3 rounded-2xl bg-surface-container-lowest shadow-sm">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">restaurant</span>
+<span class="font-label-lg text-label-lg text-on-surface">Yield Scale</span>
+</div>
+<div class="inline-flex p-1 rounded-full bg-surface-container-low" id="scale-controls">
+<button class="px-3 py-1 rounded-full text-on-surface-variant font-label-sm text-label-sm transition-colors" onclick="setScale(1, this)">1x</button>
+<button class="px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-sm text-label-sm shadow-sm transition-colors" onclick="setScale(2, this)">2x</button>
+<button class="px-3 py-1 rounded-full text-on-surface-variant font-label-sm text-label-sm transition-colors" onclick="setScale(4, this)">4x</button>
+<button class="px-3 py-1 rounded-full text-on-surface-variant font-label-sm text-label-sm transition-colors" onclick="setScale('custom', this)">Custom</button>
+</div>
+</div>
+<!-- Ingredients Checklist -->
+<div class="flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Ingredients</h2>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm" id="checked-count">0/7 checked</span>
+</div>
+<button class="text-primary font-label-md text-label-md active:opacity-70 transition-opacity" onclick="resetIngredients()">
+          Uncheck all
+        </button>
+</div>
+<div class="flex flex-col gap-2" id="ingredients-list">
+<!-- Item 1 -->
+<label class="group relative flex items-center justify-between p-3.5 rounded-2xl bg-surface-container-lowest shadow-sm cursor-pointer select-none active:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0 pr-2">
+<input class="w-5 h-5 rounded-md accent-primary text-on-primary shrink-0 cursor-pointer" onchange="toggleIngredient(this)" type="checkbox"/>
+<span class="ingredient-text font-body-md text-body-md text-on-surface transition-all">
+<span class="font-semibold text-primary ingredient-qty" data-base="2">2</span> Atlantic salmon fillets (6 oz each)
+            </span>
+</div>
+<span class="shrink-0 px-2 py-0.5 rounded-full bg-surface-container-low text-primary font-label-sm text-label-sm">
+            In Pantry ✓
+          </span>
+</label>
+<!-- Item 2 -->
+<label class="group relative flex items-center justify-between p-3.5 rounded-2xl bg-surface-container-lowest shadow-sm cursor-pointer select-none active:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0 pr-2">
+<input class="w-5 h-5 rounded-md accent-primary text-on-primary shrink-0 cursor-pointer" onchange="toggleIngredient(this)" type="checkbox"/>
+<span class="ingredient-text font-body-md text-body-md text-on-surface transition-all">
+<span class="font-semibold text-primary ingredient-qty" data-base="1">1</span> tbsp extra-virgin olive oil
+            </span>
+</div>
+<span class="shrink-0 px-2 py-0.5 rounded-full bg-surface-container-low text-primary font-label-sm text-label-sm">
+            In Pantry ✓
+          </span>
+</label>
+<!-- Item 3 -->
+<label class="group relative flex items-center justify-between p-3.5 rounded-2xl bg-surface-container-lowest shadow-sm cursor-pointer select-none active:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0 pr-2">
+<input class="w-5 h-5 rounded-md accent-primary text-on-primary shrink-0 cursor-pointer" onchange="toggleIngredient(this)" type="checkbox"/>
+<span class="ingredient-text font-body-md text-body-md text-on-surface transition-all">
+<span class="font-semibold text-primary ingredient-qty" data-base="3">3</span> cloves garlic, minced
+            </span>
+</div>
+<span class="shrink-0 px-2 py-0.5 rounded-full bg-surface-container-low text-primary font-label-sm text-label-sm">
+            In Pantry ✓
+          </span>
+</label>
+<!-- Item 4 -->
+<label class="group relative flex items-center justify-between p-3.5 rounded-2xl bg-surface-container-lowest shadow-sm cursor-pointer select-none active:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0 pr-2">
+<input class="w-5 h-5 rounded-md accent-primary text-on-primary shrink-0 cursor-pointer" onchange="toggleIngredient(this)" type="checkbox"/>
+<span class="ingredient-text font-body-md text-body-md text-on-surface transition-all">
+<span class="font-semibold text-primary ingredient-qty" data-base="4">4</span> cups fresh baby spinach, packed
+            </span>
+</div>
+<span class="shrink-0 px-2 py-0.5 rounded-full bg-surface-container-low text-primary font-label-sm text-label-sm">
+            In Pantry ✓
+          </span>
+</label>
+<!-- Item 5 -->
+<label class="group relative flex items-center justify-between p-3.5 rounded-2xl bg-surface-container-lowest shadow-sm cursor-pointer select-none active:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0 pr-2">
+<input class="w-5 h-5 rounded-md accent-primary text-on-primary shrink-0 cursor-pointer" onchange="toggleIngredient(this)" type="checkbox"/>
+<span class="ingredient-text font-body-md text-body-md text-on-surface transition-all">
+<span class="font-semibold text-primary ingredient-qty" data-base="0.33">1/3</span> cup heavy cream (or Greek yogurt)
+            </span>
+</div>
+<span class="shrink-0 px-2 py-0.5 rounded-full bg-surface-container-low text-primary font-label-sm text-label-sm">
+            In Pantry ✓
+          </span>
+</label>
+<!-- Item 6 -->
+<label class="group relative flex items-center justify-between p-3.5 rounded-2xl bg-surface-container-lowest shadow-sm cursor-pointer select-none active:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0 pr-2">
+<input class="w-5 h-5 rounded-md accent-primary text-on-primary shrink-0 cursor-pointer" onchange="toggleIngredient(this)" type="checkbox"/>
+<span class="ingredient-text font-body-md text-body-md text-on-surface transition-all">
+<span class="font-semibold text-primary ingredient-qty" data-base="0.5">1/2</span> fresh lemon, juiced &amp; zested
+            </span>
+</div>
+<span class="shrink-0 px-2 py-0.5 rounded-full bg-surface-container-low text-primary font-label-sm text-label-sm">
+            In Pantry ✓
+          </span>
+</label>
+<!-- Item 7 -->
+<label class="group relative flex items-center justify-between p-3.5 rounded-2xl bg-surface-container-lowest shadow-sm cursor-pointer select-none active:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0 pr-2">
+<input class="w-5 h-5 rounded-md accent-primary text-on-primary shrink-0 cursor-pointer" onchange="toggleIngredient(this)" type="checkbox"/>
+<span class="ingredient-text font-body-md text-body-md text-on-surface transition-all">
+<span class="font-semibold text-primary ingredient-qty" data-base="0.25">1/4</span> cup grated Parmesan cheese
+            </span>
+</div>
+<span class="shrink-0 px-2 py-0.5 rounded-full bg-surface-container-low text-primary font-label-sm text-label-sm">
+            In Pantry ✓
+          </span>
+</label>
+</div>
+</div>
+<!-- Instructions Section -->
+<div class="flex flex-col gap-4 mt-2">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Method &amp; Directions</h2>
+<span class="text-on-surface-variant font-label-sm text-label-sm">4 Steps</span>
+</div>
+<!-- Step 1 -->
+<div class="p-4 rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="font-label-lg text-label-lg text-primary">Step 1 • Preparation</span>
+<span class="material-symbols-outlined text-outline-variant text-[20px]">restaurant</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface leading-relaxed">
+          Pat salmon fillets completely dry with paper towels. Season both sides generously with flaky kosher salt and freshly cracked black pepper. Dry skin guarantees a golden, crackling sear.
+        </p>
+</div>
+<!-- Step 2 (With Interactive Timer) -->
+<div class="p-4 rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<span class="font-label-lg text-label-lg text-secondary">Step 2 • The Sear</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm">Skin crisping</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface leading-relaxed">
+          Heat olive oil in a heavy stainless steel or cast iron skillet over medium-high heat until shimmering. Add salmon skin-side down; press lightly with a spatula for 10 seconds, then cook undisturbed until 75% cooked through.
+        </p>
+<div class="flex items-center gap-2 pt-1">
+<button class="h-10 px-4 rounded-full bg-secondary-container text-on-secondary-container flex items-center gap-2 font-label-md text-label-md active:scale-95 transition-transform shadow-sm" id="timer-btn-1" onclick="toggleTimer('timer-btn-1', 240, 'timer-display-1')">
+<span class="material-symbols-outlined text-[18px]">timer</span>
+<span id="timer-display-1">Start Timer (4:00)</span>
+</button>
+<span class="text-on-surface-variant font-label-sm text-label-sm">Do not move fish while searing</span>
+</div>
+</div>
+<!-- Step 3 (With Interactive Timer) -->
+<div class="p-4 rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<span class="font-label-lg text-label-lg text-primary">Step 3 • Flip &amp; Rest</span>
+<span class="material-symbols-outlined text-outline-variant text-[20px]">swap_horiz</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface leading-relaxed">
+          Flip fillets gently using a fish spatula and cook for an additional 3 minutes for tender medium doneness. Transfer to a warm plate to rest while preparing the pan sauce.
+        </p>
+<div class="flex items-center gap-2 pt-1">
+<button class="h-10 px-4 rounded-full bg-surface-container-high text-on-surface flex items-center gap-2 font-label-md text-label-md active:scale-95 transition-transform" id="timer-btn-2" onclick="toggleTimer('timer-btn-2', 180, 'timer-display-2')">
+<span class="material-symbols-outlined text-primary text-[18px]">timer</span>
+<span id="timer-display-2">Start Timer (3:00)</span>
+</button>
+</div>
+</div>
+<!-- Step 4 -->
+<div class="p-4 rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="font-label-lg text-label-lg text-tertiary-container">Step 4 • Creamy Pan Sauce</span>
+<span class="material-symbols-outlined text-outline-variant text-[20px]">soup_kitchen</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface leading-relaxed">
+          Lower heat to medium. In the same pan, sauté minced garlic until aromatic (about 30 seconds). Fold in baby spinach in batches until wilted, then pour in heavy cream and lemon juice. Simmer for 2 minutes until glossy. Stir in parmesan and nestle salmon back in.
+        </p>
+</div>
+</div>
+<!-- Culinary Sommelier / AI Wine Pairing Card -->
+<div class="p-4 rounded-2xl bg-tertiary-fixed text-on-tertiary-fixed shadow-sm flex items-start gap-3">
+<div class="w-9 h-9 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">wine_bar</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-label-md text-label-md uppercase tracking-wider text-tertiary">Sous Chef Wine Pairing</span>
+<span class="font-body-md text-body-md leading-snug">
+          Crisp Italian Vermentino or unoaked Chardonnay cuts cleanly through the creamy lemon butter sauce.
+        </span>
+</div>
+</div>
+<!-- Chef's Interactive Notes Drawer Preview -->
+<div class="p-4 rounded-2xl bg-surface-container-low flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]">edit_note</span>
+<span class="font-label-md text-label-md text-on-surface">Kitchen Notes (1)</span>
+</div>
+<button class="text-primary font-label-sm text-label-sm active:opacity-75">Add Note</button>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant italic">
+        "Used Greek yogurt instead of heavy cream last time — reduced sauce slightly first to avoid curdling, turned out exceptionally light!"
+      </p>
+</div>
+</div>
+<!-- Floating Hands-Free Guided Voice Bar -->
+<div class="sticky bottom-4 mx-gutter mt-6 z-40">
+<div class="p-3.5 rounded-full bg-inverse-surface text-inverse-on-surface shadow-xl flex items-center justify-between backdrop-blur-xl">
+<div class="flex items-center gap-3 min-w-0 pl-1.5">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary shrink-0 animate-pulse">
+<span class="material-symbols-outlined text-[18px]">mic</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-inverse-on-surface truncate">Hands-free Voice Sous Chef</span>
+<span class="font-body-sm text-body-sm text-outline-variant truncate">Say "Next step" or "Set 4 min timer"</span>
+</div>
+</div>
+<button class="px-4 py-2 rounded-full bg-primary text-on-primary font-label-md text-label-md shrink-0 shadow-sm active:scale-95 transition-transform">
+        Start
+      </button>
+</div>
+</div>
+</div>
+<script>
+  let activeTimers = {};
+
+  function toggleTimer(btnId, durationSeconds, displayId) {
+    const btn = document.getElementById(btnId);
+    const display = document.getElementById(displayId);
+    
+    if (activeTimers[btnId]) {
+      // Pause/Stop
+      clearInterval(activeTimers[btnId].interval);
+      delete activeTimers[btnId];
+      display.textContent = 'Restart Timer';
+      btn.classList.remove('bg-error-container', 'text-on-error-container');
+      btn.classList.add('bg-secondary-container', 'text-on-secondary-container');
+      return;
+    }
+
+    let remaining = durationSeconds;
+    btn.classList.remove('bg-secondary-container', 'text-on-secondary-container');
+    btn.classList.add('bg-error-container', 'text-on-error-container');
+
+    activeTimers[btnId] = {
+      interval: setInterval(() => {
+        remaining--;
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        display.textContent = `Running: ${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        
+        if (remaining <= 0) {
+          clearInterval(activeTimers[btnId].interval);
+          delete activeTimers[btnId];
+          display.textContent = 'Done! 🔔';
+          btn.classList.remove('bg-error-container', 'text-on-error-container');
+          btn.classList.add('bg-primary-container', 'text-on-primary-container');
+        }
+      }, 1000)
+    };
+  }
+
+  function toggleIngredient(checkbox) {
+    const textSpan = checkbox.parentElement.querySelector('.ingredient-text');
+    if (checkbox.checked) {
+      textSpan.classList.add('line-through', 'opacity-50');
+    } else {
+      textSpan.classList.remove('line-through', 'opacity-50');
+    }
+    updateCheckCount();
+  }
+
+  function updateCheckCount() {
+    const all = document.querySelectorAll('#ingredients-list input[type="checkbox"]');
+    const checked = document.querySelectorAll('#ingredients-list input[type="checkbox"]:checked');
+    document.getElementById('checked-count').textContent = `${checked.length}/${all.length} checked`;
+  }
+
+  function resetIngredients() {
+    const all = document.querySelectorAll('#ingredients-list input[type="checkbox"]');
+    all.forEach(cb => {
+      cb.checked = false;
+      const textSpan = cb.parentElement.querySelector('.ingredient-text');
+      textSpan.classList.remove('line-through', 'opacity-50');
+    });
+    updateCheckCount();
+  }
+
+  function setScale(factor, btn) {
+    const controls = document.querySelectorAll('#scale-controls button');
+    controls.forEach(c => {
+      c.className = 'px-3 py-1 rounded-full text-on-surface-variant font-label-sm text-label-sm transition-colors';
+    });
+    btn.className = 'px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-sm text-label-sm shadow-sm transition-colors';
+
+    if (factor === 'custom') return;
+
+    const mult = factor / 2; // base is 2 servings
+    const qtys = document.querySelectorAll('.ingredient-qty');
+    qtys.forEach(q => {
+      const base = parseFloat(q.getAttribute('data-base'));
+      const val = base * mult;
+      q.textContent = val % 1 === 0 ? val : (val.toFixed(2).replace(/\.00$/, ''));
+    });
+  }
+
+  function toggleBookmark(btn) {
+    const icon = btn.querySelector('.material-symbols-outlined');
+    if (icon.textContent === 'bookmark_border') {
+      icon.textContent = 'bookmark';
+      icon.style.fontVariationSettings = "'FILL' 1";
+      btn.classList.add('text-secondary');
+    } else {
+      icon.textContent = 'bookmark_border';
+      icon.style.fontVariationSettings = "'FILL' 0";
+      btn.classList.remove('text-secondary');
+    }
+  }
+
+  function launchCookMode() {
+    const firstStep = document.querySelector('p');
+    if (firstStep) {
+      window.scrollTo({ top: 380, behavior: 'smooth' });
+    }
+  }
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-2px_12px_rgba(26,32,44,0.05)]" data-active-classes="text-primary font-bold"><div class="flex justify-around items-center h-16 px-space-xs"><a class="flex-1 flex flex-col items-center justify-center h-full min-h-[44px] min-w-[44px] gap-0.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="ai-assistant" href="#"><span class="material-symbols-outlined text-[24px]">auto_awesome</span><span class="font-label-sm text-label-sm">Ask AI</span></a><a class="flex-1 flex flex-col items-center justify-center h-full min-h-[44px] min-w-[44px] gap-0.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="pantry" href="#"><span class="material-symbols-outlined text-[24px]">kitchen</span><span class="font-label-sm text-label-sm">Pantry</span></a><a aria-current="page" class="flex-1 flex flex-col items-center justify-center h-full min-h-[44px] min-w-[44px] gap-0.5 transition-colors text-primary font-bold" data-path="recipes" href="#"><span class="material-symbols-outlined text-[24px]">menu_book</span><span class="font-label-sm text-label-sm">Recipes</span></a><a class="flex-1 flex flex-col items-center justify-center h-full min-h-[44px] min-w-[44px] gap-0.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="groceries" href="#"><span class="material-symbols-outlined text-[24px]">shopping_cart</span><span class="font-label-sm text-label-sm">Groceries</span></a></div></nav></body></html>

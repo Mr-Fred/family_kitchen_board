@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Framework window theme backing Jetpack Compose Material 3 Theme.FamilyKitchenBoard -->
+  <style name="Theme.FamilyKitchenBoard" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

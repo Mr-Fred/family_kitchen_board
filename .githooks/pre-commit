@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -e
+HOOK_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+if [ -f "$HOOK_DIR/../scripts/verify_clean_personal_repo.cjs" ]; then
+  exec node "$HOOK_DIR/../scripts/verify_clean_personal_repo.cjs"
+elif [ -f "$HOOK_DIR/../../scripts/verify_clean_personal_repo.cjs" ]; then
+  exec node "$HOOK_DIR/../../scripts/verify_clean_personal_repo.cjs"
+else
+  exec node "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/scripts/verify_clean_personal_repo.cjs"
+fi

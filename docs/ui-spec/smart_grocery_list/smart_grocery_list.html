@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base { html, body { width: 100vw; margin: 0; padding: 0; } body { overscroll-behavior: none; } .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } main > :first-child { margin-top: 0 !important; } main > :last-child { margin-bottom: 0 !important; } } ::-webkit-scrollbar { display: none; }</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "tertiary-container": "#a65d00", "surface-container-low": "#f1f3ff", "surface-container": "#e8eeff", "tertiary-fixed": "#ffdcc1", "outline": "#6f7a72", "on-primary-fixed": "#002113", "on-surface-variant": "#3f4943", "on-tertiary-container": "#fff1e9", "surface-variant": "#dde2f3", "tertiary-fixed-dim": "#ffb877", "surface-container-lowest": "#ffffff", "on-tertiary": "#ffffff", "on-secondary-container": "#721c09", "outline-variant": "#bec9c0", "tertiary": "#834800", "on-primary-container": "#d0ffe2", "inverse-on-surface": "#ecf0ff", "background": "#f9f9ff", "on-surface": "#161c27", "on-error-container": "#93000a", "primary": "#096443", "primary-container": "#2e7d5a", "on-tertiary-fixed": "#2e1600", "on-secondary": "#ffffff", "surface-container-high": "#e3e8f9", "inverse-primary": "#88d7ad", "inverse-surface": "#2a303d", "error-container": "#ffdad6", "secondary-fixed": "#ffdad2", "surface-container-highest": "#dde2f3", "secondary-container": "#fd8367", "on-tertiary-fixed-variant": "#6c3a00", "on-secondary-fixed-variant": "#822714", "on-error": "#ffffff", "on-background": "#161c27", "error": "#ba1a1a", "surface-tint": "#176b4a", "on-primary": "#ffffff", "primary-fixed": "#a4f3c8", "secondary-fixed-dim": "#ffb4a3", "primary-fixed-dim": "#88d7ad", "secondary": "#a13e28", "on-secondary-fixed": "#3d0600", "on-primary-fixed-variant": "#005235", "surface-bright": "#f9f9ff", "surface-dim": "#d4daea", "surface": "#f9f9ff" }, borderRadius: { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" }, spacing: { "space-xs": "0.25rem", "space-xl": "2.25rem", "gutter-tablet": "1.5rem", "space-lg": "1.5rem", "gutter": "1rem", "space-sm": "0.5rem", "margin-tablet": "2rem", "space-md": "1rem", "margin": "1rem" }, fontFamily: { "body-md": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"], "label-md": ["Plus Jakarta Sans"], "headline-sm": ["Plus Jakarta Sans"], "label-lg": ["Plus Jakarta Sans"], "headline-lg": ["Newsreader"], "body-sm": ["Plus Jakarta Sans"], "label-sm": ["Plus Jakarta Sans"], "headline-xl-mobile": ["Newsreader"], "headline-xl": ["Newsreader"] }, fontSize: { "body-md": ["0.9375rem", { lineHeight: "1.4375rem", fontWeight: "400" }], "body-lg": ["1.0625rem", { lineHeight: "1.625rem", letterSpacing: "-0.005em", fontWeight: "400" }], "label-md": ["0.75rem", { lineHeight: "1rem", letterSpacing: "0.02em", fontWeight: "600" }], "headline-sm": ["1.25rem", { lineHeight: "1.625rem", letterSpacing: "-0.01em", fontWeight: "700" }], "label-lg": ["0.875rem", { lineHeight: "1.125rem", letterSpacing: "0.01em", fontWeight: "600" }], "headline-lg": ["1.75rem", { lineHeight: "2.125rem", letterSpacing: "-0.01em", fontWeight: "500" }], "body-sm": ["0.8125rem", { lineHeight: "1.1875rem", fontWeight: "400" }], "label-sm": ["0.6875rem", { lineHeight: "0.875rem", letterSpacing: "0.04em", fontWeight: "700" }], "headline-xl-mobile": ["2rem", { lineHeight: "2.375rem", letterSpacing: "-0.015em", fontWeight: "500" }], "headline-xl": ["2.5rem", { lineHeight: "2.875rem", letterSpacing: "-0.02em", fontWeight: "500" }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface font-body-md text-on-surface antialiased min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed"><header class="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 px-gutter flex items-center justify-between gap-space-sm"><div class="flex items-center gap-space-sm min-w-0"><img alt="SavorAI Logo" class="h-8 w-auto object-contain shrink-0" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXRbV8qf577Cpy9tC8Dsm5NgdEsKS73ma43wVwuBfdLZcDhaxufklEoNQnzeP7_HWOJLVngkZC-yNh21xDfPF9Dc9ikVJ0q6c0y9jo1p7aEyhUVIMryga_ZLDF5Z04efUbcAVEL7M-v6n7VjITQu4Ee1UNHiHLIkaLMnnt6CVsRIevt4ABu87XzO0f_FpDfESgPcJIZ6joDlORflLlheYDK44m9V5ooFmINfe4HMQ"/><div class="flex flex-col min-w-0"><span class="font-headline-sm text-headline-sm text-primary leading-tight tracking-tight">SavorAI</span><span class="font-label-sm text-label-sm text-on-surface-variant truncate">Groceries</span></div></div><div class="flex items-center gap-space-xs shrink-0"><div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-low text-primary text-label-sm font-label-sm shadow-[0_1px_2px_rgba(26,32,44,0.04)]"><span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span><span class="text-on-surface-variant">Home Kitchen • 2 Active</span></div><button aria-label="Search" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-[22px]">search</span></button><a aria-label="Profile" class="w-11 h-11 flex items-center justify-center rounded-full hover:opacity-90 transition-opacity" href="#"><img alt="Profile" class="w-8 h-8 rounded-full object-cover shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBSvsO-6V6N8k535EYvSaobARS8A6I8WYxoR3i-zj4W2O9Qpe8tqdWLPznNsuNzfIBzypdkJ0eueFaBi8K3jWD7Ii9tZIvhBPFhQuCdaY2J5KpbmBJNQoYddBktSkwDNnACPXE9CqiWDPXX28xu3d6d8vYygNdsy7QRtA8LcXsb3SG8uykaiOoh1UqZXEQCVqnwzNEGbRJe8ki5vKLoZJrIWl1wb6Dp6zHHbDyXVhc"/></a></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-surface"><div class="flex flex-col w-full px-margin pb-space-xl">
+<!-- Sub-Nav Switcher (Segmented Control) -->
+<div class="w-full pt-space-xs pb-space-sm">
+<div class="flex p-1 bg-surface-container rounded-full shadow-sm">
+<button class="flex-1 py-2 px-3 rounded-full bg-surface-container-lowest text-primary font-label-md text-label-md shadow-sm transition-all flex items-center justify-center gap-1.5" id="tab-grocery" onclick="switchMainTab('grocery')" type="button">
+<span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+<span>Grocery List (8)</span>
+</button>
+<button class="flex-1 py-2 px-3 rounded-full text-on-surface-variant font-label-md text-label-md hover:text-on-surface transition-all flex items-center justify-center gap-1.5" id="tab-plan" onclick="switchMainTab('plan')" type="button">
+<span class="material-symbols-outlined text-[18px]">calendar_today</span>
+<span>Weekly Meal Plan</span>
+</button>
+</div>
+</div>
+<!-- Household Sync Pill -->
+<div class="flex items-center justify-between py-2 px-3 bg-surface-container-low rounded-2xl mb-space-sm shadow-sm">
+<div class="flex items-center gap-2 min-w-0">
+<div class="flex -space-x-1.5 shrink-0">
+<img class="w-6 h-6 rounded-full object-cover shadow-xs" data-alt="Close up warm profile portrait of a smiling young woman cooking in a natural light kitchen setting with warm tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGm3YXIdn9nCpzhZIl8Y0Z0R7UMmrok3YqcpmUf3d4QqM4fIxAQRD6RdfHyiEXVz2np4iUBFHP_PT02xNXKmuMBzRjSvsqHtl_th3IpX31DdNwL3abzmbdfGEtP4zt5Cr-BSV8zR_5czbb6hMaffxSknrY-u_rgLsqr-yPWUqXEgfqlUhMRAOaWCWq5g2pdTGCHbhco8Uafb7XuplbNoCoA-ka0YG4CkZUbqm6K_s"/>
+<img class="w-6 h-6 rounded-full object-cover shadow-xs" data-alt="Close up portrait of a smiling young man in a minimalist cozy home kitchen with warm lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDd6ILt7AXIO_cNEL2e938IJ7J2oiwe4zx2I6KDQv-1A0zs9RhSPBx9In-T2-IUDDQBgwYdKDE7bITkVdLpxQfkLcJA_nni1ZQt3I0jsxmQvkiLKBnc7-OP0QF3-_PAr_t66o_fcVXJH0OQWKsJyray4RzDfxlQr_HrJKEyRUrzAH2uM1bYlAjS-At-F0eEOvWzGGJ_UreBHbI_neTC4ONstj5DDsP_72JuvKmzngE"/>
+</div>
+<div class="flex items-center gap-1 min-w-0 truncate">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container shrink-0 animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-on-surface-variant truncate">Shared with Sarah's iPhone</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-outline shrink-0 ml-2">Synced 2m ago</span>
+</div>
+<!-- AI Smart Optimization Banner -->
+<div class="p-3.5 bg-surface-container-low rounded-2xl mb-space-md shadow-sm relative overflow-hidden">
+<div class="flex items-start gap-2.5">
+<div class="w-7 h-7 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed shrink-0 mt-0.5 shadow-xs">
+<span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center justify-between">
+<p class="font-label-md text-label-md text-primary font-bold">Pantry Deduplication Active</p>
+<span class="font-label-sm text-label-sm text-primary-container px-2 py-0.5 rounded-full bg-surface-container-lowest">Saved $18.20</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5 leading-snug">
+          SavorAI automatically skipped <strong class="text-on-surface font-semibold">8 pantry staples</strong> already stocked at home for your 4 planned meals.
+        </p>
+</div>
+</div>
+</div>
+<!-- Quick Action Strip -->
+<div class="flex flex-col gap-2 mb-space-md">
+<!-- Store Mode selector -->
+<div class="flex items-center justify-between p-2.5 bg-surface-container rounded-2xl shadow-sm">
+<div class="flex items-center gap-2 min-w-0">
+<span class="material-symbols-outlined text-[20px] text-tertiary">storefront</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm text-on-surface-variant leading-none">Store Optimization</span>
+<span class="font-label-md text-label-md text-on-surface truncate font-semibold">Whole Foods (Aisle Sorted)</span>
+</div>
+</div>
+<button class="px-2.5 py-1 rounded-full bg-surface-container-lowest text-primary font-label-sm text-label-sm shadow-xs flex items-center gap-0.5 hover:bg-surface-bright active:scale-95 transition-all">
+<span>Change</span>
+<span class="material-symbols-outlined text-[16px]">expand_more</span>
+</button>
+</div>
+<!-- Add Item Bar & Action Chips -->
+<div class="flex items-center gap-2">
+<button class="flex-1 flex items-center justify-between py-2.5 px-3.5 bg-surface-container-lowest rounded-full shadow-sm text-on-surface-variant hover:text-on-surface active:scale-[0.99] transition-all" onclick="triggerVoiceModal()">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">add_circle</span>
+<span class="font-body-sm text-body-sm">Add item or dictate...</span>
+</div>
+<div class="w-6 h-6 rounded-full bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed">
+<span class="material-symbols-outlined text-[15px]">mic</span>
+</div>
+</button>
+<button class="h-10 px-3 rounded-full bg-surface-container text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm flex items-center gap-1 shrink-0 active:scale-95 transition-all shadow-xs" onclick="clearCheckedItems()">
+<span class="material-symbols-outlined text-[16px]">clear_all</span>
+<span>Clear (3)</span>
+</button>
+</div>
+</div>
+<!-- Aisle 1: Produce & Herbs -->
+<div class="flex flex-col gap-1.5 mb-space-md">
+<div class="flex items-center justify-between px-1 mb-0.5">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">Aisle 1: Produce &amp; Herbs</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline">3 items</span>
+</div>
+<!-- Item Card 1 -->
+<div class="p-3 bg-surface-container-lowest rounded-2xl shadow-sm flex items-center justify-between gap-3 active:bg-surface-container-low transition-colors" data-item-id="prod-1">
+<div class="flex items-center gap-3 min-w-0">
+<button aria-label="Mark Purchased" class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center shrink-0 transition-transform active:scale-90" onclick="toggleCheck(this)">
+<span class="material-symbols-outlined text-[16px] text-surface-container-lowest opacity-0 checkmark">check</span>
+</button>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-semibold leading-tight truncate item-title">Fresh Basil</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant">1 bunch</span>
+<span class="font-label-sm text-label-sm text-tertiary bg-tertiary-fixed/60 px-2 py-0.2 rounded-full truncate">for Margherita Flatbread</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+<!-- Item Card 2 -->
+<div class="p-3 bg-surface-container-lowest rounded-2xl shadow-sm flex items-center justify-between gap-3 active:bg-surface-container-low transition-colors" data-item-id="prod-2">
+<div class="flex items-center gap-3 min-w-0">
+<button aria-label="Mark Purchased" class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center shrink-0 transition-transform active:scale-90" onclick="toggleCheck(this)">
+<span class="material-symbols-outlined text-[16px] text-surface-container-lowest opacity-0 checkmark">check</span>
+</button>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-semibold leading-tight truncate item-title">Hass Avocados</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant">3 count • Semi-ripe</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+<!-- Item Card 3 -->
+<div class="p-3 bg-surface-container-lowest rounded-2xl shadow-sm flex items-center justify-between gap-3 active:bg-surface-container-low transition-colors" data-item-id="prod-3">
+<div class="flex items-center gap-3 min-w-0">
+<button aria-label="Mark Purchased" class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center shrink-0 transition-transform active:scale-90" onclick="toggleCheck(this)">
+<span class="material-symbols-outlined text-[16px] text-surface-container-lowest opacity-0 checkmark">check</span>
+</button>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-semibold leading-tight truncate item-title">Shallots</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant">2 medium</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Aisle 2: Dairy & Refrigerated -->
+<div class="flex flex-col gap-1.5 mb-space-md">
+<div class="flex items-center justify-between px-1 mb-0.5">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-secondary-container"></span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">Aisle 2: Dairy &amp; Refrigerated</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline">2 items</span>
+</div>
+<!-- Item Card 4 -->
+<div class="p-3 bg-surface-container-lowest rounded-2xl shadow-sm flex items-center justify-between gap-3 active:bg-surface-container-low transition-colors" data-item-id="dairy-1">
+<div class="flex items-center gap-3 min-w-0">
+<button aria-label="Mark Purchased" class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center shrink-0 transition-transform active:scale-90" onclick="toggleCheck(this)">
+<span class="material-symbols-outlined text-[16px] text-surface-container-lowest opacity-0 checkmark">check</span>
+</button>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-semibold leading-tight truncate item-title">Kerrygold Unsalted Butter</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant">8 oz block • Pure Irish</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+<!-- Item Card 5 -->
+<div class="p-3 bg-surface-container-lowest rounded-2xl shadow-sm flex items-center justify-between gap-3 active:bg-surface-container-low transition-colors" data-item-id="dairy-2">
+<div class="flex items-center gap-3 min-w-0">
+<button aria-label="Mark Purchased" class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center shrink-0 transition-transform active:scale-90" onclick="toggleCheck(this)">
+<span class="material-symbols-outlined text-[16px] text-surface-container-lowest opacity-0 checkmark">check</span>
+</button>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-semibold leading-tight truncate item-title">Oat Milk (Barista Edition)</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant">32 fl oz • Minor Figures</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Aisle 4: Meat & Seafood -->
+<div class="flex flex-col gap-1.5 mb-space-md">
+<div class="flex items-center justify-between px-1 mb-0.5">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">Aisle 4: Meat &amp; Seafood</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline">1 item</span>
+</div>
+<!-- Item Card 6 -->
+<div class="p-3 bg-surface-container-lowest rounded-2xl shadow-sm flex items-center justify-between gap-3 active:bg-surface-container-low transition-colors" data-item-id="meat-1">
+<div class="flex items-center gap-3 min-w-0">
+<button aria-label="Mark Purchased" class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center shrink-0 transition-transform active:scale-90" onclick="toggleCheck(this)">
+<span class="material-symbols-outlined text-[16px] text-surface-container-lowest opacity-0 checkmark">check</span>
+</button>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-semibold leading-tight truncate item-title">Organic Chicken Breasts</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant">1.5 lbs</span>
+<span class="font-label-sm text-label-sm text-secondary bg-secondary-fixed/60 px-2 py-0.2 rounded-full truncate">for Thursday Dinner</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Aisle 7: Pantry & Baking -->
+<div class="flex flex-col gap-1.5 mb-space-md">
+<div class="flex items-center justify-between px-1 mb-0.5">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">Aisle 7: Pantry &amp; Baking</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline">2 items</span>
+</div>
+<!-- Item Card 7 -->
+<div class="p-3 bg-surface-container-lowest rounded-2xl shadow-sm flex items-center justify-between gap-3 active:bg-surface-container-low transition-colors" data-item-id="pantry-1">
+<div class="flex items-center gap-3 min-w-0">
+<button aria-label="Mark Purchased" class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center shrink-0 transition-transform active:scale-90" onclick="toggleCheck(this)">
+<span class="material-symbols-outlined text-[16px] text-surface-container-lowest opacity-0 checkmark">check</span>
+</button>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-semibold leading-tight truncate item-title">Dijon Mustard</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Edmond Fallot preferred</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+<!-- Item Card 8 -->
+<div class="p-3 bg-surface-container-lowest rounded-2xl shadow-sm flex items-center justify-between gap-3 active:bg-surface-container-low transition-colors" data-item-id="pantry-2">
+<div class="flex items-center gap-3 min-w-0">
+<button aria-label="Mark Purchased" class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center shrink-0 transition-transform active:scale-90" onclick="toggleCheck(this)">
+<span class="material-symbols-outlined text-[16px] text-surface-container-lowest opacity-0 checkmark">check</span>
+</button>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-semibold leading-tight truncate item-title">Arborio Rice</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant">1 lb pouch</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Collapsible Recently Checked Accordion -->
+<div class="flex flex-col bg-surface-container-low rounded-2xl p-3 shadow-xs mb-space-md">
+<button class="flex items-center justify-between w-full text-left" id="checked-toggle" onclick="toggleCheckedSection()">
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed">
+<span class="material-symbols-outlined text-[14px]">done_all</span>
+</span>
+<span class="font-label-md text-label-md text-on-surface font-semibold">Recently Checked in Kitchen</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm">3 items</span>
+</div>
+<span class="material-symbols-outlined text-[20px] text-outline transition-transform duration-200" id="checked-chevron">expand_less</span>
+</button>
+<div class="flex flex-col gap-2 mt-3" id="checked-items-container">
+<!-- Checked Item 1 -->
+<div class="flex items-center justify-between py-1.5 px-2 bg-surface-container-lowest/60 rounded-xl">
+<div class="flex items-center gap-3">
+<button class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-on-primary" onclick="uncheckItem(this)">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</button>
+<span class="font-body-sm text-body-sm text-outline line-through">Garlic bulbs (3 heads)</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline">Pantry checked</span>
+</div>
+<!-- Checked Item 2 -->
+<div class="flex items-center justify-between py-1.5 px-2 bg-surface-container-lowest/60 rounded-xl">
+<div class="flex items-center gap-3">
+<button class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-on-primary" onclick="uncheckItem(this)">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</button>
+<span class="font-body-sm text-body-sm text-outline line-through">Diamond Crystal Kosher Salt</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline">Verified full</span>
+</div>
+<!-- Checked Item 3 -->
+<div class="flex items-center justify-between py-1.5 px-2 bg-surface-container-lowest/60 rounded-xl">
+<div class="flex items-center gap-3">
+<button class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-on-primary" onclick="uncheckItem(this)">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</button>
+<span class="font-body-sm text-body-sm text-outline line-through">Extra virgin olive oil (Cold-pressed)</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline">75% remaining</span>
+</div>
+</div>
+</div>
+<!-- Weekly Meal Plan Preview (Collapsible / Teaser tab) -->
+<div class="p-3.5 bg-surface-container rounded-2xl shadow-sm flex items-center justify-between" id="meal-plan-card">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-primary-fixed flex items-center justify-center text-primary shadow-xs">
+<span class="material-symbols-outlined text-[22px]">restaurant_menu</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface font-semibold">4 Meals Scheduled</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Tonight: Margherita Flatbread + Salad</span>
+</div>
+</div>
+<button class="px-3 py-1.5 rounded-full bg-surface-container-lowest text-primary font-label-sm text-label-sm shadow-xs hover:bg-surface-bright active:scale-95 transition-all">
+      View Plan
+    </button>
+</div>
+<!-- Bottom Floating Summary Bar -->
+<div class="sticky bottom-2 mt-space-md z-40">
+<div class="p-3 bg-inverse-surface text-inverse-on-surface rounded-2xl shadow-xl flex items-center justify-between gap-3">
+<div class="flex flex-col min-w-0 pl-1">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary-fixed"></span>
+<span class="font-label-md text-label-md text-primary-fixed" id="remaining-count">8 items remaining</span>
+</div>
+<span class="font-body-sm text-body-sm text-inverse-on-surface/80">Est. ~$32.40 • Ready to shop</span>
+</div>
+<button class="py-2.5 px-4 rounded-full bg-primary text-on-primary font-label-md text-label-md shadow-md flex items-center gap-1.5 active:scale-95 transition-all shrink-0">
+<span class="material-symbols-outlined text-[18px]">shopping_bag</span>
+<span>In-Store Mode</span>
+</button>
+</div>
+</div>
+</div>
+<script>
+  function toggleCheck(btn) {
+    const card = btn.closest('[data-item-id]');
+    const checkmark = btn.querySelector('.checkmark');
+    const title = card.querySelector('.item-title');
+    const isChecked = btn.classList.contains('bg-primary');
+
+    if (!isChecked) {
+      btn.classList.remove('bg-surface-container');
+      btn.classList.add('bg-primary');
+      checkmark.classList.remove('opacity-0');
+      title.classList.add('line-through', 'text-outline');
+      card.classList.add('opacity-60');
+      
+      // Update count
+      updateRemainingCount(-1);
+    } else {
+      btn.classList.remove('bg-primary');
+      btn.classList.add('bg-surface-container');
+      checkmark.classList.add('opacity-0');
+      title.classList.remove('line-through', 'text-outline');
+      card.classList.remove('opacity-60');
+
+      updateRemainingCount(1);
+    }
+  }
+
+  function uncheckItem(btn) {
+    const row = btn.closest('.flex');
+    row.classList.add('opacity-40');
+    setTimeout(() => {
+      row.remove();
+      updateRemainingCount(1);
+    }, 200);
+  }
+
+  let count = 8;
+  function updateRemainingCount(delta) {
+    count = Math.max(0, count + delta);
+    const counterEl = document.getElementById('remaining-count');
+    if (counterEl) {
+      counterEl.textContent = count + ' items remaining';
+    }
+  }
+
+  function toggleCheckedSection() {
+    const container = document.getElementById('checked-items-container');
+    const chevron = document.getElementById('checked-chevron');
+    if (container.classList.contains('hidden')) {
+      container.classList.remove('hidden');
+      chevron.textContent = 'expand_less';
+    } else {
+      container.classList.add('hidden');
+      chevron.textContent = 'expand_more';
+    }
+  }
+
+  function clearCheckedItems() {
+    const container = document.getElementById('checked-items-container');
+    if (container) {
+      container.innerHTML = '<p class="font-body-sm text-body-sm text-outline py-2 text-center">No completed items left in log.</p>';
+    }
+  }
+
+  function switchMainTab(tab) {
+    const gTab = document.getElementById('tab-grocery');
+    const pTab = document.getElementById('tab-plan');
+    if (tab === 'grocery') {
+      gTab.className = 'flex-1 py-2 px-3 rounded-full bg-surface-container-lowest text-primary font-label-md text-label-md shadow-sm transition-all flex items-center justify-center gap-1.5';
+      pTab.className = 'flex-1 py-2 px-3 rounded-full text-on-surface-variant font-label-md text-label-md hover:text-on-surface transition-all flex items-center justify-center gap-1.5';
+    } else {
+      pTab.className = 'flex-1 py-2 px-3 rounded-full bg-surface-container-lowest text-primary font-label-md text-label-md shadow-sm transition-all flex items-center justify-center gap-1.5';
+      gTab.className = 'flex-1 py-2 px-3 rounded-full text-on-surface-variant font-label-md text-label-md hover:text-on-surface transition-all flex items-center justify-center gap-1.5';
+    }
+  }
+
+  function triggerVoiceModal() {
+    const dictText = prompt("Dictate ingredient or say 'Add 2 lemons, fresh dill'");
+    if (dictText && dictText.trim() !== '') {
+      alert("Added '" + dictText + "' to your categorized list!");
+    }
+  }
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-2px_12px_rgba(26,32,44,0.05)]" data-active-classes="text-primary font-bold"><div class="flex justify-around items-center h-16 px-space-xs"><a class="flex-1 flex flex-col items-center justify-center h-full min-h-[44px] min-w-[44px] gap-0.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="ai-assistant" href="#"><span class="material-symbols-outlined text-[24px]">auto_awesome</span><span class="font-label-sm text-label-sm">Ask AI</span></a><a class="flex-1 flex flex-col items-center justify-center h-full min-h-[44px] min-w-[44px] gap-0.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="pantry" href="#"><span class="material-symbols-outlined text-[24px]">kitchen</span><span class="font-label-sm text-label-sm">Pantry</span></a><a class="flex-1 flex flex-col items-center justify-center h-full min-h-[44px] min-w-[44px] gap-0.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="recipes" href="#"><span class="material-symbols-outlined text-[24px]">menu_book</span><span class="font-label-sm text-label-sm">Recipes</span></a><a aria-current="page" class="flex-1 flex flex-col items-center justify-center h-full min-h-[44px] min-w-[44px] gap-0.5 transition-colors text-primary font-bold" data-path="groceries" href="#"><span class="material-symbols-outlined text-[24px]">shopping_cart</span><span class="font-label-sm text-label-sm">Groceries</span></a></div></nav></body></html>
