@@ -113,6 +113,15 @@ internal class KitchenAiAndCookDelegate(
     cloudVaultPort = cloudVaultPort,
   )
 
+  // Dedicated approval-gated Gemma 4 (.litertlm) download & cancellation delegate.
+  private val modelDownloadDelegate = KitchenModelDownloadDelegate(
+    scope = scope,
+    mutableUiState = mutableUiState,
+    aiEdgePort = aiEdgePort,
+    cloudVaultPort = cloudVaultPort,
+    modelTransferDispatched = modelImportDispatched,
+  )
+
   /** Launches full-screen `StepByStepCookModeScreen` for [recipe] with optional hands-free mic. */
   fun startCookMode(
     recipe: Recipe,
@@ -483,6 +492,18 @@ internal class KitchenAiAndCookDelegate(
 
       AiChefAction.RefreshCloudModels ->
         cloudConfigDelegate.refreshCloudModels()
+
+      is AiChefAction.RequestModelDownloadApproval ->
+        modelDownloadDelegate.requestApproval(action.preset)
+
+      is AiChefAction.ConfirmApprovedModelDownload ->
+        modelDownloadDelegate.confirmApprovedDownload(action.preset)
+
+      AiChefAction.DismissModelDownloadApproval ->
+        modelDownloadDelegate.dismissApproval()
+
+      AiChefAction.CancelActiveModelDownload ->
+        modelDownloadDelegate.cancelActiveDownload()
     }
   }
 

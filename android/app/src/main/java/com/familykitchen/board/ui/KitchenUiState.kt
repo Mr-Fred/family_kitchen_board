@@ -9,6 +9,7 @@ import com.familykitchen.board.domain.GroceryDiffEngine
 import com.familykitchen.board.domain.MealSlotStatus
 import com.familykitchen.board.domain.MealSlotType
 import com.familykitchen.board.domain.MenuPlannerEngine
+import com.familykitchen.board.domain.ModelDownloadApprovalSpec
 import com.familykitchen.board.domain.PantryExpiryDashboard
 import com.familykitchen.board.domain.PantryExpiryEngine
 import com.familykitchen.board.domain.PrepStationType
@@ -150,6 +151,7 @@ enum class VoiceCaptureTarget {
  * @property isVerifyingCloudKey `true` while a lightweight Cloud LLM API key health probe is active.
  * @property isRefreshingCloudModels `true` while syncing live `/models` for the active provider.
  * @property isOnboardingReplayOpen `true` when the user manually relaunches guided first-run setup.
+ * @property pendingModelDownloadApproval Non-null when `ModelDownloadApprovalDialog` is open.
  */
 @Immutable
 data class KitchenUiState(
@@ -205,6 +207,7 @@ data class KitchenUiState(
   val isVerifyingCloudKey: Boolean = false,
   val isRefreshingCloudModels: Boolean = false,
   val isOnboardingReplayOpen: Boolean = false,
+  val pendingModelDownloadApproval: ModelDownloadApprovalSpec? = null,
 ) {
   // Derived flags keep top-bar, banner, and composer spinners synchronized across all tabs.
   /** `true` whenever a brand-new install has not yet finished setup or the user replays onboarding. */

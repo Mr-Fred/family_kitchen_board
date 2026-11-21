@@ -3,7 +3,9 @@ package com.familykitchen.board.ai
 import android.content.Context
 import android.net.Uri
 import com.familykitchen.board.domain.AiMenuAdvisorEngine
+import com.familykitchen.board.domain.DownloadableGemmaPreset
 import com.familykitchen.board.domain.KitchenBoardException
+import com.familykitchen.board.domain.ModelDownloadApprovalSpec
 import com.familykitchen.board.domain.ModelNotReadyException
 import com.familykitchen.board.domain.ValidationException
 import com.familykitchen.board.domain.VisionNotSupportedException
@@ -22,6 +24,7 @@ import com.google.ai.edge.litertlm.InputData
 import com.google.ai.edge.litertlm.Session
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -55,12 +58,17 @@ import kotlinx.coroutines.withContext
  * @param modelDiscovery Scoped model file discovery and atomic `*.part` SAF importer.
  * @param ioDispatcher Dispatcher used for filesystem model discovery and SAF stream copies.
  * @param inferenceDispatcher Dispatcher used for CPU/GPU JNI inference execution.
+ * @param modelDownloader Approval-gated Hugging Face `.litertlm` downloader with `.part` resume.
  */
 class LiteRtMultimodalEngine(
   context: Context,
   private val modelDiscovery: ModelFileDiscovery = ModelFileDiscovery(context),
   private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
   private val inferenceDispatcher: CoroutineDispatcher = Dispatchers.Default,
+  private val modelDownloader: OnDeviceModelDownloader = OnDeviceModelDownloader(
+    context = context,
+    ioDispatcher = ioDispatcher,
+  ),
 ) : AiEdgePort {
 
   // Retain applicationContext so native shader caches never hold a destroyed Activity reference.
@@ -193,6 +201,82 @@ class LiteRtMultimodalEngine(
       importInFlight.set(false)
       flushDeferredCloseIfNeeded()
     }
+  }
+
+  /**
+   * Inspects local free storage, Wi-Fi vs metered cellular status, and any resumable `.part` bytes
+   * for [preset] via [modelDownloader] without opening any network connection.
+   */
+  override suspend fun inspectDownloadPreconditions(
+    preset: DownloadableGemmaPreset,
+  ): ModelDownloadApprovalSpec =
+    modelDownloader.inspectPreconditions(preset)
+
+  /**
+   * Streams (or resumes via HTTP `Range`) the approved [preset] from Hugging Face CDN into
+   * `filesDir/models/<fileName>.part` (publishing `AiRuntimeState.Importing(..., isNetworkDownload = true)`)
+   * and initializes native LiteRT-LM weights under [engineMutex].
+   */
+  override suspend fun downloadAndLoadPresetModel(
+    preset: DownloadableGemmaPreset,
+  ): AiRuntimeState {
+    // Share importInFlight single-flight guard so SAF imports and network downloads never collide.
+    if (!importInFlight.compareAndSet(false, true)) {
+      return mutableRuntimeState.value
+    }
+    return try {
+      mutableRuntimeState.value = AiRuntimeState.Importing(
+        fileName = preset.fileName,
+        progressFraction = 0f,
+        copiedBytes = 0L,
+        totalBytes = preset.approxSizeBytes,
+        isNetworkDownload = true,
+      )
+      val downloadedInfo = modelDownloader.downloadPresetModel(preset) { copied, total, fraction ->
+        val safeFraction = if (fraction.isFinite()) fraction.coerceIn(0f, 1f) else 0f
+        mutableRuntimeState.value = AiRuntimeState.Importing(
+          fileName = preset.fileName,
+          progressFraction = safeFraction,
+          copiedBytes = copied,
+          totalBytes = total,
+          isNetworkDownload = true,
+        )
+      }
+      engineMutex.withLock {
+        closeRequested = false
+        initializeModelLocked(downloadedInfo)
+      }
+    } catch (cancel: CancellationException) {
+      mutableRuntimeState.value = AiRuntimeState.Error(
+        "Cancelled Gemma model download and cleaned up temporary file.",
+      )
+      throw cancel
+    } catch (domainError: KitchenBoardException) {
+      val errState = AiRuntimeState.Error(domainError.message)
+      mutableRuntimeState.value = errState
+      errState
+    } catch (ioError: IOException) {
+      val cleanReason = sanitizeNativeErrorMessage(ioError)
+      val errState = AiRuntimeState.Error(
+        "Network interrupted while downloading '${preset.fileName}' ($cleanReason). " +
+          "Partial download was saved — tap Download again to resume.",
+      )
+      mutableRuntimeState.value = errState
+      errState
+    } catch (unexpected: Throwable) {
+      val cleanReason = sanitizeNativeErrorMessage(unexpected)
+      val errState = AiRuntimeState.Error("Failed to download '${preset.fileName}': $cleanReason")
+      mutableRuntimeState.value = errState
+      errState
+    } finally {
+      importInFlight.set(false)
+      flushDeferredCloseIfNeeded()
+    }
+  }
+
+  /** Cancels any active preset model download and cleans up its incomplete `.part` staging file. */
+  override fun cancelActiveDownload() {
+    modelDownloader.cancelActiveDownload()
   }
 
   /**
@@ -367,7 +451,8 @@ class LiteRtMultimodalEngine(
    * critical section exits.
    */
   override fun close() {
-    // Non-blocking teardown safe for ViewModel.onCleared(): lock immediately or defer until unlock.
+    // Non-blocking teardown safe for ViewModel.onCleared(): cancel active downloads & release JNI.
+    modelDownloader.cancelActiveDownload()
     closeRequested = true
     if (engineMutex.tryLock()) {
       try {

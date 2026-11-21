@@ -268,7 +268,7 @@ fun AiChefScreen(
           )
         }
 
-        // Non-silent multimodal Vision Gate blocks Send until a Cloud Vision key or .litertlm loads.
+        // Non-silent multimodal Vision Gate blocks Send until Gemma 4, Cloud Vision, or .litertlm loads.
         if (blockedByVisionGate) {
           VisionUnsupportedGateBanner(
             runtimeState = runtimeState,
@@ -284,12 +284,17 @@ fun AiChefScreen(
               if (!setupExpanded) toggleSetup()
               scrollToSetupTrigger += 1
             },
+            onDownloadVisionModel = { onAction(AiChefAction.RequestModelDownloadApproval()) },
+            onCancelDownload = { onAction(AiChefAction.CancelActiveModelDownload) },
           )
         }
 
-        // Keep SAF model copy or OpenCL shader progress visible above composer during setup.
+        // Keep Gemma download, SAF copy, or OpenCL shader progress visible above composer.
         if (!blockedByVisionGate && (runtimeState is AiRuntimeState.Importing || runtimeState is AiRuntimeState.Loading)) {
-          ModelOperationProgressBanner(runtimeState = runtimeState)
+          ModelOperationProgressBanner(
+            runtimeState = runtimeState,
+            onCancelDownload = { onAction(AiChefAction.CancelActiveModelDownload) },
+          )
         }
 
         if (isPreprocessingImage) ImagePreprocessingBanner(imageLabel = preprocessingImageLabel)

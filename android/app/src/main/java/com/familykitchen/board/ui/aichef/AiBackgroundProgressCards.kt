@@ -48,55 +48,65 @@ private const val BYTES_PER_KIB: Long = 1024L
 private const val BYTES_PER_MIB: Long = 1024L * 1024L
 
 /**
- * Formats byte-level model copy progress into a concise human-readable label for `SavorAI` banners.
+ * Formats byte-level model copy or HTTPS `.part` download progress into a concise human-readable
+ * label for `SavorAI` banners.
  *
  * Examples:
- * - `"640 MB / 1,540 MB (42%)"` when `totalBytes > 0` and `copiedBytes > 0`
- * - `"640 MB copied..."` when `totalBytes <= 0` and `copiedBytes > 0` (SAF size omitted)
- * - `"Starting file copy..."` when `copiedBytes <= 0`
+ * - `"640 MB / 2,050 MB (31%)"` when `totalBytes > 0` and `copiedBytes > 0`
+ * - `"640 MB downloaded..."` / `"640 MB copied..."` when `totalBytes <= 0` and `copiedBytes > 0`
+ * - `"Connecting to Hugging Face CDN..."` / `"Starting file copy..."` when `copiedBytes <= 0`
  *
  * @param copiedBytes Verified byte count written to the `<name>.part` staging file so far.
- * @param totalBytes Expected total byte length from `OpenableColumns.SIZE`, or `<= 0` if unknown.
+ * @param totalBytes Expected total byte length, or `<= 0` if unknown.
+ * @param isNetworkDownload `true` when streaming an approved Hugging Face `.litertlm` download.
  * @return Human-readable transfer status string.
  */
-fun formatByteProgressLabel(copiedBytes: Long, totalBytes: Long): String =
+fun formatByteProgressLabel(
+  copiedBytes: Long,
+  totalBytes: Long,
+  isNetworkDownload: Boolean = false,
+): String =
   when {
-    // Before the first buffer flushes to disk, reassure the user that SAF streaming has started.
+    // Reassure the user while HTTPS redirect negotiation or initial SAF read buffer starts.
+    copiedBytes <= 0L && isNetworkDownload -> "Connecting to Hugging Face CDN..."
     copiedBytes <= 0L -> "Starting file copy..."
-    // Determinate copy when SAF provider supplied OpenableColumns.SIZE.
+    // Determinate transfer when Content-Length or OpenableColumns.SIZE is known.
     totalBytes > 0L -> {
       val pct = ((copiedBytes.toDouble() / totalBytes.toDouble()) * 100.0)
         .roundToInt()
         .coerceIn(0, 100)
       "${formatStorageSizeLabel(copiedBytes)} / ${formatStorageSizeLabel(totalBytes)} ($pct%)"
     }
-    // Indeterminate stream when SAF provider omitted stream length: show live MB copied.
+    // Indeterminate stream when total length was omitted: show live MB downloaded or copied.
+    isNetworkDownload -> "${formatStorageSizeLabel(copiedBytes)} downloaded..."
     else -> "${formatStorageSizeLabel(copiedBytes)} copied..."
   }
 
 /**
- * Formats a compact live status label rendered inside disabled model-import buttons while
- * [runtimeState] is busy (`"Importing 42%..."`, `"Loading GPU..."`, `"Scanning..."`).
+ * Formats a compact live status label rendered inside disabled model-import or download buttons
+ * while [runtimeState] is busy (`"Downloading 42%..."`, `"Importing 42%..."`, `"Loading GPU..."`,
+ * `"Scanning..."`).
  *
  * @param runtimeState Active [AiRuntimeState].
  * @param idleLabel Default button label displayed when no model background operation is running.
  * @return Status label matching the current background phase.
  */
 fun formatBusyImportButtonLabel(runtimeState: AiRuntimeState, idleLabel: String): String =
-  // Reflect real-time SAF transfer percentage or GPU shader initialization right inside CTAs.
+  // Reflect real-time CDN/SAF transfer percentage or GPU shader initialization right inside CTAs.
   when (runtimeState) {
     is AiRuntimeState.Importing -> {
       val clamped = runtimeState.progressFraction.coerceIn(0f, 1f)
-      // Prefer percentage when stream total is known; fall back to live MB copied when omitted.
+      val actionVerb = if (runtimeState.isNetworkDownload) "Downloading" else "Importing"
+      // Prefer percentage when stream total is known; fall back to live MB transferred otherwise.
       when {
         runtimeState.totalBytes > 0L && runtimeState.copiedBytes > 0L ->
-          "Importing ${(clamped * 100f).roundToInt()}%..."
+          "$actionVerb ${(clamped * 100f).roundToInt()}%..."
         clamped > 0f && runtimeState.totalBytes <= 0L && runtimeState.copiedBytes <= 0L ->
-          "Importing ${(clamped * 100f).roundToInt()}%..."
+          "$actionVerb ${(clamped * 100f).roundToInt()}%..."
         runtimeState.copiedBytes > 0L ->
-          "Importing (${formatStorageSizeLabel(runtimeState.copiedBytes)})..."
+          "$actionVerb (${formatStorageSizeLabel(runtimeState.copiedBytes)})..."
         else ->
-          "Importing 0%..."
+          "$actionVerb 0%..."
       }
     }
     is AiRuntimeState.Loading -> "Loading GPU..."
@@ -109,16 +119,18 @@ fun formatBusyImportButtonLabel(runtimeState: AiRuntimeState, idleLabel: String)
 
 /**
  * Unmistakable background progress card displaying a `22.dp` [CircularProgressIndicator], phase
- * headline, byte or OpenCL shader subtitle, and Material 3 [LinearProgressIndicator] whenever
- * [runtimeState] is `Importing`, `Loading`, or `Discovering`.
+ * headline, byte or OpenCL shader subtitle, optional `48.dp` `"Cancel"` button for active network
+ * downloads, and Material 3 [LinearProgressIndicator] whenever [runtimeState] is busy.
  *
  * @param runtimeState Current [AiRuntimeState] driving spinner and progress bar mode.
  * @param modifier Optional Compose [Modifier].
+ * @param onCancelDownload Optional callback cancelling an active network `.litertlm` download.
  */
 @Composable
 fun ModelOperationProgressBanner(
   runtimeState: AiRuntimeState,
   modifier: Modifier = Modifier,
+  onCancelDownload: (() -> Unit)? = null,
 ) {
   // Collapse completely when the runtime is idle, Ready, or resting on an Error notice.
   if (!runtimeState.isBackgroundBusy) return
@@ -126,16 +138,25 @@ fun ModelOperationProgressBanner(
   val extendedColors = KitchenTheme.extendedColors
   val headline: String
   val subtitle: String
+  // Map active network download, local SAF copy, GPU shader init, and storage scan copy cleanly.
   when (runtimeState) {
     is AiRuntimeState.Importing -> {
-      headline = "Importing ${runtimeState.fileName}…"
-      subtitle = formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes)
+      // Differentiate Hugging Face HTTPS downloads from local SAF .litertlm file copies.
+      val verb = if (runtimeState.isNetworkDownload) "Downloading" else "Importing"
+      headline = "$verb ${runtimeState.fileName}…"
+      subtitle = formatByteProgressLabel(
+        copiedBytes = runtimeState.copiedBytes,
+        totalBytes = runtimeState.totalBytes,
+        isNetworkDownload = runtimeState.isNetworkDownload,
+      )
     }
     is AiRuntimeState.Loading -> {
+      // Reassure Galaxy S22 users while OpenCL shaders compile during first model load.
       headline = "Initializing ${runtimeState.modelName} on Galaxy GPU…"
       subtitle = "Mapping weights & compiling OpenCL shaders (typically 10–25s)."
     }
     AiRuntimeState.Discovering -> {
+      // Zero-permission startup discovery checks filesDir/models and externalFilesDir/models.
       headline = "Scanning local storage for models…"
       subtitle = "Checking app-scoped model folders with zero storage permissions."
     }
@@ -185,6 +206,24 @@ fun ModelOperationProgressBanner(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
+        }
+        // Surface a 48.dp Cancel action right in the banner row during active network downloads.
+        if (runtimeState is AiRuntimeState.Importing && runtimeState.isNetworkDownload && onCancelDownload != null) {
+          Spacer(modifier = Modifier.width(6.dp))
+          TextButton(
+            onClick = onCancelDownload,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
+          ) {
+            Text(
+              text = "Cancel",
+              style = MaterialTheme.typography.labelMedium,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.error,
+              maxLines = 1,
+              softWrap = false,
+            )
+          }
         }
       }
 
@@ -448,11 +487,13 @@ private fun AgencyPillsAndImportProgressPreview() {
       )
       ModelOperationProgressBanner(
         runtimeState = AiRuntimeState.Importing(
-          fileName = "gemma-4-e2b-it-vision-int4.litertlm",
+          fileName = "gemma-4-E2B-it.litertlm",
           progressFraction = 0.42f,
-          copiedBytes = 640L * BYTES_PER_MIB,
-          totalBytes = 1540L * BYTES_PER_MIB,
+          copiedBytes = 860L * BYTES_PER_MIB,
+          totalBytes = 2050L * BYTES_PER_MIB,
+          isNetworkDownload = true,
         ),
+        onCancelDownload = {},
       )
     }
   }

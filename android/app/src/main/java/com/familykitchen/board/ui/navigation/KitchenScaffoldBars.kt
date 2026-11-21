@@ -331,7 +331,7 @@ internal fun SavorDismissibleToastBanner(
 
 /**
  * Cross-tab live progress strip displayed directly beneath [SavorTopAppBar] whenever the user
- * switches away from `Chef` while a Gemma model SAF import or GPU weight load is running.
+ * switches away from `Chef` while a Gemma model download, SAF import, or GPU weight load is running.
  *
  * @param runtimeState Active [AiRuntimeState] (`Importing` or `Loading`).
  * @param onOpenAiTab Callback returning the user to `Chef` to view full setup details.
@@ -347,10 +347,17 @@ fun SavorGlobalModelProgressStrip(
   if (runtimeState !is AiRuntimeState.Importing && runtimeState !is AiRuntimeState.Loading) return
 
   val extendedColors = KitchenTheme.extendedColors
-  // Build concise single-line transfer or GPU shader label for cross-tab visibility.
+  // Build concise single-line download, SAF transfer, or GPU shader label for cross-tab visibility.
   val summaryText = when (runtimeState) {
-    is AiRuntimeState.Importing ->
-      "Importing ${runtimeState.fileName} • ${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes)}"
+    is AiRuntimeState.Importing -> {
+      val verb = if (runtimeState.isNetworkDownload) "Downloading" else "Importing"
+      val progressDetail = formatByteProgressLabel(
+        copiedBytes = runtimeState.copiedBytes,
+        totalBytes = runtimeState.totalBytes,
+        isNetworkDownload = runtimeState.isNetworkDownload,
+      )
+      "$verb ${runtimeState.fileName} • $progressDetail"
+    }
     is AiRuntimeState.Loading ->
       "Initializing ${runtimeState.modelName} on Galaxy GPU…"
     else -> return

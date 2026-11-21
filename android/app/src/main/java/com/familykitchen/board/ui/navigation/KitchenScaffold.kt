@@ -56,6 +56,7 @@ import com.familykitchen.board.ui.KitchenUiState
 import com.familykitchen.board.ui.TopLevelDestination
 import com.familykitchen.board.ui.aichef.AiChefActivityHost
 import com.familykitchen.board.ui.aichef.AiChefScreen
+import com.familykitchen.board.ui.aichef.ModelDownloadApprovalDialog
 import com.familykitchen.board.ui.board.CookedOverrideSheet
 import com.familykitchen.board.ui.board.TodayAndWeekScreen
 import com.familykitchen.board.ui.cookmode.StepByStepCookModeScreen
@@ -300,406 +301,372 @@ fun KitchenScaffoldContent(
   var isAiModelSetupExpanded by rememberSaveable { mutableStateOf(false) }
 
   Box(modifier = modifier.fillMaxSize()) {
-    // Render serene full-screen First-Run Onboarding instead of 5-tab chrome when setup is active.
-    if (uiState.isOnboardingActive) {
-      val replay = uiState.isOnboardingReplayOpen && uiState.snapshot.hasCompletedOnboarding
-      when {
-        isInspectionPreview -> FirstRunOnboardingScreen(
-          currentStep = 0,
-          draft = FirstRunOnboardingDraft.fromHouseholdProfile(profile, isFreshInstall = !replay),
-          isReplayMode = replay,
-          runtimeState = uiState.aiRuntimeState, activeDeviceProfile = uiState.activeDeviceProfile,
-          cloudConfig = uiState.cloudLlmConfig, isVerifyingCloudKey = uiState.isVerifyingCloudKey,
-          isRefreshingCloudModels = uiState.isRefreshingCloudModels, isSavingBatch = uiState.isSavingBatch,
-          toastMessage = uiState.toastMessage, onDismissToast = onDismissToast, onAiChefAction = onAiChefAction,
-          onCompleteOnboarding = onCompleteFirstRunOnboarding, onSkipWithDemoKitchen = onSkipFirstRunOnboarding,
-          onDismissReplay = onDismissOnboardingReplay,
-        )
-        else -> FirstRunOnboardingHost(
-          initialProfile = profile, isReplayMode = replay, runtimeState = uiState.aiRuntimeState,
-          activeDeviceProfile = uiState.activeDeviceProfile, cloudConfig = uiState.cloudLlmConfig,
-          isVerifyingCloudKey = uiState.isVerifyingCloudKey, isRefreshingCloudModels = uiState.isRefreshingCloudModels,
-          isSavingBatch = uiState.isSavingBatch, toastMessage = uiState.toastMessage, onDismissToast = onDismissToast,
-          onAiChefAction = onAiChefAction, onCompleteOnboarding = onCompleteFirstRunOnboarding,
-          onSkipWithDemoKitchen = onSkipFirstRunOnboarding, onDismissReplay = onDismissOnboardingReplay,
-        )
+    when {
+      // Render serene full-screen First-Run Onboarding instead of 5-tab chrome when setup is active.
+      uiState.isOnboardingActive -> {
+        val replay = uiState.isOnboardingReplayOpen && uiState.snapshot.hasCompletedOnboarding
+        when {
+          isInspectionPreview -> FirstRunOnboardingScreen(
+            currentStep = 0,
+            draft = FirstRunOnboardingDraft.fromHouseholdProfile(profile, isFreshInstall = !replay),
+            isReplayMode = replay, runtimeState = uiState.aiRuntimeState,
+            activeDeviceProfile = uiState.activeDeviceProfile, cloudConfig = uiState.cloudLlmConfig,
+            isVerifyingCloudKey = uiState.isVerifyingCloudKey,
+            isRefreshingCloudModels = uiState.isRefreshingCloudModels, isSavingBatch = uiState.isSavingBatch,
+            toastMessage = uiState.toastMessage, onDismissToast = onDismissToast,
+            onAiChefAction = onAiChefAction, onCompleteOnboarding = onCompleteFirstRunOnboarding,
+            onSkipWithDemoKitchen = onSkipFirstRunOnboarding, onDismissReplay = onDismissOnboardingReplay,
+          )
+          else -> FirstRunOnboardingHost(
+            initialProfile = profile, isReplayMode = replay, runtimeState = uiState.aiRuntimeState,
+            activeDeviceProfile = uiState.activeDeviceProfile, cloudConfig = uiState.cloudLlmConfig,
+            isVerifyingCloudKey = uiState.isVerifyingCloudKey,
+            isRefreshingCloudModels = uiState.isRefreshingCloudModels, isSavingBatch = uiState.isSavingBatch,
+            toastMessage = uiState.toastMessage, onDismissToast = onDismissToast,
+            onAiChefAction = onAiChefAction, onCompleteOnboarding = onCompleteFirstRunOnboarding,
+            onSkipWithDemoKitchen = onSkipFirstRunOnboarding, onDismissReplay = onDismissOnboardingReplay,
+          )
+        }
       }
-      return@Box
-    }
 
-    // Primary Material 3 Scaffold switching cleanly between 5-tab bottom bar and wide counter rail.
-    Scaffold(
-      containerColor = MaterialTheme.colorScheme.background,
-      topBar = {
-        Column {
-          SavorTopAppBar(
-            activeDestination = uiState.activeDestination, householdName = profile.householdName,
-            marketRegionLabel = profile.marketRegionLabel, isSearchExpanded = uiState.isSearchBarExpanded,
-            isDarkTheme = uiState.isDarkCounterTheme, isWideLayout = isWideScreen,
-            isBackgroundBusy = uiState.isAnyBackgroundWorkActive || uiState.isVerifyingCloudKey,
-            isAiSetupExpanded = isAiModelSetupExpanded, onOpenQaLab = onOpenQaLab,
-            onToggleSearch = onToggleSearch, onToggleDarkTheme = onToggleDarkTheme,
-            onToggleWideLayout = onToggleWideLayout,
-            onToggleAiSetup = { isAiModelSetupExpanded = !isAiModelSetupExpanded },
-            onOpenFamilyProfile = onOpenFamilyProfile,
-          )
-          // Keep live Gemma SAF copy or GPU shader load visible across Plan, Pantry, Recipes, & Shop.
-          if (
-            uiState.activeDestination != TopLevelDestination.ASK_AI &&
-            (uiState.aiRuntimeState is AiRuntimeState.Importing || uiState.aiRuntimeState is AiRuntimeState.Loading)
-          ) {
-            SavorGlobalModelProgressStrip(
-              runtimeState = uiState.aiRuntimeState,
-              onOpenAiTab = { onSelectDestination(TopLevelDestination.ASK_AI) },
-            )
-          }
-          // Optional global search bar filtering Pantry items and Clean Recipe Reader dishes.
-          if (uiState.isSearchBarExpanded) {
-            SavorExpandableSearchBar(
-              query = uiState.searchQuery,
-              onQueryChange = onSearchQueryChange,
-              onClearAndClose = onToggleSearch,
-            )
-          }
-          // Sticky dismissible toast confirming O(1) batch commits and EC-01..EC-13 gates.
-          val toast = uiState.toastMessage
-          if (!toast.isNullOrBlank()) {
-            SavorDismissibleToastBanner(message = toast, onDismiss = onDismissToast)
-          }
-        }
-      },
-      bottomBar = {
-        // Render flat warm-linen 5-tab NavigationBar on portrait phones when keyboard is closed.
-        if (!isWideScreen && !isImeVisible) {
-          SavorBottomNavigationBar(
-            activeDestination = uiState.activeDestination,
-            groceryBadgeCount = uiState.groceryBadgeCount,
-            expiringSoonCount = expiringCount,
-            onSelectDestination = onSelectDestination,
-          )
-        }
-      },
-    ) { innerPadding ->
-      // Chain consumeWindowInsets(innerPadding).imePadding() so soft keyboards lift composers flush.
-      Row(
-        modifier = Modifier
-          .fillMaxSize()
-          .padding(innerPadding)
-          .consumeWindowInsets(innerPadding)
-          .imePadding(),
-      ) {
-        // Render leading 5-tab NavigationRail in landscape or wide kitchen-counter mode.
-        if (isWideScreen) {
-          SavorWideNavigationRail(
-            activeDestination = uiState.activeDestination,
-            groceryBadgeCount = uiState.groceryBadgeCount,
-            expiringSoonCount = expiringCount,
-            onSelectDestination = onSelectDestination,
-          )
-        }
-
-        // Route all 5 first-class SavorAI destinations (or cold-start vault loader) inside main pane.
-        Box(modifier = Modifier.weight(1f).fillMaxSize()) {
-          when {
-            uiState.isLoading -> SavorVaultLoadingView()
-            else -> when (uiState.activeDestination) {
-              TopLevelDestination.ASK_AI -> {
-                // Tab 1: SavorAI Sous-Chef with persistent 2-tier composer and 1-tap Undo/Adjust.
-                val navBoard = { onSelectDestination(TopLevelDestination.PLAN) }
-                val navGrocery = { onSelectDestination(TopLevelDestination.GROCERIES) }
-                val adjustTarget = uiState.lastAgentActionAdjustTarget
-                val onAdjustLastAction: (() -> Unit)? = adjustTarget?.let { target ->
-                  { onSelectDestination(target) }
-                }
-                when {
-                  isInspectionPreview -> AiChefScreen(
-                    turnHistory = uiState.snapshot.aiTurnHistory, runtimeState = uiState.aiRuntimeState,
-                    voiceState = uiState.voiceInputState, activeDeviceProfile = uiState.activeDeviceProfile,
-                    attachedImagePath = uiState.attachedImagePath, attachedImageLabel = uiState.attachedImageLabel,
-                    onAction = onAiChefAction, onLaunchGalleryPicker = {}, onLaunchCameraCapture = {},
-                    onRequestVoiceInput = {}, onLaunchModelPicker = {}, expiringSoonCount = expiringCount,
-                    plannedDinnerCount = uiState.plannedDinnerCount, savedRecipeIds = uiState.snapshot.savedRecipeIds,
-                    isContextBannerDismissed = uiState.isAiContextBannerDismissed, isGenerating = uiState.isAiGenerating,
-                    isPreprocessingImage = uiState.isPreprocessingImage, preprocessingImageLabel = uiState.preprocessingImageLabel,
-                    isGeneratingVisionTurn = uiState.isGeneratingVisionTurn,
-                    appliedSwapProposalIds = uiState.appliedSwapProposalIds,
-                    queuedIngredientProposalIds = uiState.queuedIngredientProposalIds,
-                    confirmedVisualTurnIds = uiState.confirmedVisualTurnIds,
-                    onOpenFamilyGoals = onOpenFamilyProfile, onNavigateToBoard = navBoard,
-                    onNavigateToGroceryList = navGrocery, currencySymbol = currencySymbol,
-                    canUndoLastAgentAction = uiState.canUndoLastAgentAction,
-                    lastAgentActionSummary = uiState.lastAgentActionSummary,
-                    onUndoLastAgentAction = onUndoLastAgentAction,
-                    onDismissAgentActionBanner = onDismissAgentActionBanner,
-                    onAdjustLastAgentAction = onAdjustLastAction, isModelSetupExpanded = isAiModelSetupExpanded,
-                    onToggleModelSetup = { isAiModelSetupExpanded = !isAiModelSetupExpanded },
-                    cloudConfig = uiState.cloudLlmConfig, isVerifyingCloudKey = uiState.isVerifyingCloudKey,
-                    isRefreshingCloudModels = uiState.isRefreshingCloudModels,
-                  )
-
-                  else -> AiChefActivityHost(
-                    turnHistory = uiState.snapshot.aiTurnHistory, runtimeState = uiState.aiRuntimeState,
-                    voiceState = uiState.voiceInputState, activeDeviceProfile = uiState.activeDeviceProfile,
-                    attachedImagePath = uiState.attachedImagePath, attachedImageLabel = uiState.attachedImageLabel,
-                    onAction = onAiChefAction, expiringSoonCount = expiringCount,
-                    plannedDinnerCount = uiState.plannedDinnerCount, savedRecipeIds = uiState.snapshot.savedRecipeIds,
-                    isContextBannerDismissed = uiState.isAiContextBannerDismissed, isGenerating = uiState.isAiGenerating,
-                    isPreprocessingImage = uiState.isPreprocessingImage, preprocessingImageLabel = uiState.preprocessingImageLabel,
-                    isGeneratingVisionTurn = uiState.isGeneratingVisionTurn,
-                    appliedSwapProposalIds = uiState.appliedSwapProposalIds,
-                    queuedIngredientProposalIds = uiState.queuedIngredientProposalIds,
-                    confirmedVisualTurnIds = uiState.confirmedVisualTurnIds,
-                    onOpenFamilyGoals = onOpenFamilyProfile, onNavigateToBoard = navBoard,
-                    onNavigateToGroceryList = navGrocery, currencySymbol = currencySymbol,
-                    canUndoLastAgentAction = uiState.canUndoLastAgentAction,
-                    lastAgentActionSummary = uiState.lastAgentActionSummary,
-                    onUndoLastAgentAction = onUndoLastAgentAction,
-                    onDismissAgentActionBanner = onDismissAgentActionBanner,
-                    onAdjustLastAgentAction = onAdjustLastAction, isModelSetupExpanded = isAiModelSetupExpanded,
-                    onToggleModelSetup = { isAiModelSetupExpanded = !isAiModelSetupExpanded },
-                    cloudConfig = uiState.cloudLlmConfig, isVerifyingCloudKey = uiState.isVerifyingCloudKey,
-                    isRefreshingCloudModels = uiState.isRefreshingCloudModels,
-                  )
-                }
+      // Primary Material 3 Scaffold switching cleanly between 5-tab bottom bar and wide counter rail.
+      else -> {
+        Scaffold(
+          containerColor = MaterialTheme.colorScheme.background,
+          topBar = {
+            Column {
+              SavorTopAppBar(
+                activeDestination = uiState.activeDestination, householdName = profile.householdName,
+                marketRegionLabel = profile.marketRegionLabel, isSearchExpanded = uiState.isSearchBarExpanded,
+                isDarkTheme = uiState.isDarkCounterTheme, isWideLayout = isWideScreen,
+                isBackgroundBusy = uiState.isAnyBackgroundWorkActive || uiState.isVerifyingCloudKey,
+                isAiSetupExpanded = isAiModelSetupExpanded, onOpenQaLab = onOpenQaLab,
+                onToggleSearch = onToggleSearch, onToggleDarkTheme = onToggleDarkTheme,
+                onToggleWideLayout = onToggleWideLayout,
+                onToggleAiSetup = { isAiModelSetupExpanded = !isAiModelSetupExpanded },
+                onOpenFamilyProfile = onOpenFamilyProfile,
+              )
+              // Keep live Gemma download, SAF copy, or GPU shader load visible across non-Chef tabs.
+              if (
+                uiState.activeDestination != TopLevelDestination.ASK_AI &&
+                (uiState.aiRuntimeState is AiRuntimeState.Importing || uiState.aiRuntimeState is AiRuntimeState.Loading)
+              ) {
+                SavorGlobalModelProgressStrip(
+                  runtimeState = uiState.aiRuntimeState,
+                  onOpenAiTab = { onSelectDestination(TopLevelDestination.ASK_AI) },
+                )
               }
+              // Optional global search bar filtering Pantry items and Clean Recipe Reader dishes.
+              if (uiState.isSearchBarExpanded) {
+                SavorExpandableSearchBar(
+                  query = uiState.searchQuery, onQueryChange = onSearchQueryChange,
+                  onClearAndClose = onToggleSearch,
+                )
+              }
+              // Sticky dismissible toast confirming O(1) batch commits and EC-01..EC-13 gates.
+              val toast = uiState.toastMessage
+              if (!toast.isNullOrBlank()) {
+                SavorDismissibleToastBanner(message = toast, onDismiss = onDismissToast)
+              }
+            }
+          },
+          bottomBar = {
+            // Render flat warm-linen 5-tab NavigationBar on portrait phones when keyboard is closed.
+            if (!isWideScreen && !isImeVisible) {
+              SavorBottomNavigationBar(
+                activeDestination = uiState.activeDestination,
+                groceryBadgeCount = uiState.groceryBadgeCount, expiringSoonCount = expiringCount,
+                onSelectDestination = onSelectDestination,
+              )
+            }
+          },
+        ) { innerPadding ->
+          // Chain consumeWindowInsets(innerPadding).imePadding() so soft keyboards lift composers flush.
+          Row(
+            modifier = Modifier.fillMaxSize().padding(innerPadding)
+              .consumeWindowInsets(innerPadding).imePadding(),
+          ) {
+            // Render leading 5-tab NavigationRail in landscape or wide kitchen-counter mode.
+            if (isWideScreen) {
+              SavorWideNavigationRail(
+                activeDestination = uiState.activeDestination,
+                groceryBadgeCount = uiState.groceryBadgeCount, expiringSoonCount = expiringCount,
+                onSelectDestination = onSelectDestination,
+              )
+            }
 
-              TopLevelDestination.PLAN -> {
-                // Tab 2: First-class Meal Plan workspace switching cleanly between Daily Plan & Batch Prep.
-                Column(modifier = Modifier.fillMaxSize()) {
-                  // Top 2-pill mode switcher keeps both 21-slot Daily Plan and 4-station Prep 1 tap apart.
-                  PlanModeSwitcherBar(
-                    activeMode = uiState.activePacerMode,
-                    batchTaskCount = uiState.weeklyPrepSessionPlan.tasks.size,
-                    onSelectMode = onSetPacerMode,
-                  )
-                  Box(modifier = Modifier.weight(1f).fillMaxSize()) {
-                    // Render 7-day Family-of-4 board by default; pivot to Weekly Prep when selected.
-                    when (uiState.activePacerMode) {
-                      PacerMode.DAILY_PACER -> TodayAndWeekScreen(
-                        weeklyBoard = uiState.snapshot.weeklyBoard,
-                        dayMealCards = uiState.dayMealCards,
-                        activeDayIndex = uiState.activeDayIndex,
-                        todayDayIndex = uiState.todayDayIndex,
-                        currentHour24 = uiState.currentSimulatedHour24,
-                        isWideLayout = isWideScreen,
-                        householdProfile = profile,
-                        catalog = uiState.snapshot.ingredients,
-                        weeklyPrepPlan = uiState.weeklyPrepSessionPlan,
-                        instantSwapsBySlotId = uiState.instantSwapsBySlotId,
-                        tomorrowBreakfastRecipe = uiState.tomorrowBreakfastRecipe,
-                        onSelectDay = onSelectDay,
-                        onOpenCustomMealSheet = { onOpenCustomMealSheet(null) },
-                        onOpenWeeklyPrep = {
-                          // Synchronize local Plan switcher and ViewModel pacer mode together.
-                          onSetPacerMode(PacerMode.WEEKLY_PREP)
-                          onOpenWeeklyPrep()
-                        },
-                        onOpenFamilyGoalsSheet = onOpenFamilyProfile,
-                        onOpenAiChefTab = { onSelectDestination(TopLevelDestination.ASK_AI) },
-                        onStartCookingSlot = onStartCookingSlot,
-                        onQuickCookSlot = onQuickCookSlot,
-                        onOpenAdjustSlot = onOpenAdjustSlot,
-                        onQuickSwapSlotRecipe = onQuickSwapSlotRecipe,
-                        onOpenRecipeReader = onOpenRecipeInReader,
+            // Route all 5 first-class SavorAI destinations (or cold-start vault loader) inside main pane.
+            Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+              when {
+                uiState.isLoading -> SavorVaultLoadingView()
+                else -> when (uiState.activeDestination) {
+                  TopLevelDestination.ASK_AI -> {
+                    // Tab 1: SavorAI Sous-Chef with persistent 2-tier composer and 1-tap Undo/Adjust.
+                    val navBoard = { onSelectDestination(TopLevelDestination.PLAN) }
+                    val navGrocery = { onSelectDestination(TopLevelDestination.GROCERIES) }
+                    val onAdjustLastAction = uiState.lastAgentActionAdjustTarget?.let { target ->
+                      { onSelectDestination(target) }
+                    }
+                    when {
+                      isInspectionPreview -> AiChefScreen(
+                        turnHistory = uiState.snapshot.aiTurnHistory, runtimeState = uiState.aiRuntimeState,
+                        voiceState = uiState.voiceInputState, activeDeviceProfile = uiState.activeDeviceProfile,
+                        attachedImagePath = uiState.attachedImagePath, attachedImageLabel = uiState.attachedImageLabel,
+                        onAction = onAiChefAction, onLaunchGalleryPicker = {}, onLaunchCameraCapture = {},
+                        onRequestVoiceInput = {}, onLaunchModelPicker = {}, expiringSoonCount = expiringCount,
+                        plannedDinnerCount = uiState.plannedDinnerCount, savedRecipeIds = uiState.snapshot.savedRecipeIds,
+                        isContextBannerDismissed = uiState.isAiContextBannerDismissed, isGenerating = uiState.isAiGenerating,
+                        isPreprocessingImage = uiState.isPreprocessingImage, preprocessingImageLabel = uiState.preprocessingImageLabel,
+                        isGeneratingVisionTurn = uiState.isGeneratingVisionTurn,
+                        appliedSwapProposalIds = uiState.appliedSwapProposalIds,
+                        queuedIngredientProposalIds = uiState.queuedIngredientProposalIds,
+                        confirmedVisualTurnIds = uiState.confirmedVisualTurnIds,
+                        onOpenFamilyGoals = onOpenFamilyProfile, onNavigateToBoard = navBoard,
+                        onNavigateToGroceryList = navGrocery, currencySymbol = currencySymbol,
+                        canUndoLastAgentAction = uiState.canUndoLastAgentAction,
+                        lastAgentActionSummary = uiState.lastAgentActionSummary,
+                        onUndoLastAgentAction = onUndoLastAgentAction,
+                        onDismissAgentActionBanner = onDismissAgentActionBanner,
+                        onAdjustLastAgentAction = onAdjustLastAction, isModelSetupExpanded = isAiModelSetupExpanded,
+                        onToggleModelSetup = { isAiModelSetupExpanded = !isAiModelSetupExpanded },
+                        cloudConfig = uiState.cloudLlmConfig, isVerifyingCloudKey = uiState.isVerifyingCloudKey,
+                        isRefreshingCloudModels = uiState.isRefreshingCloudModels,
                       )
 
-                      // Station-grouped Weekly Batch Prep session committing in 1 O(1) snapshot write.
-                      PacerMode.WEEKLY_PREP -> MorningPacerScreen(
-                        activeMealCard = uiState.activePacerMealCard,
-                        weeklyPrepPlan = uiState.weeklyPrepSessionPlan,
-                        householdProfile = profile,
-                        catalog = uiState.snapshot.ingredients,
-                        recipes = uiState.snapshot.recipes,
-                        completedPrepTaskIds = uiState.snapshot.completedPrepTaskIds,
-                        initialMode = PacerMode.WEEKLY_PREP,
-                        onModeChanged = onSetPacerMode,
-                        onFinishAndDeductPantry = onQuickCookSlot,
-                        onTogglePrepStationTask = onTogglePrepStationTask,
-                        onCommitWeeklyPrepSession = onCommitWeeklyPrep,
+                      else -> AiChefActivityHost(
+                        turnHistory = uiState.snapshot.aiTurnHistory, runtimeState = uiState.aiRuntimeState,
+                        voiceState = uiState.voiceInputState, activeDeviceProfile = uiState.activeDeviceProfile,
+                        attachedImagePath = uiState.attachedImagePath, attachedImageLabel = uiState.attachedImageLabel,
+                        onAction = onAiChefAction, expiringSoonCount = expiringCount,
+                        plannedDinnerCount = uiState.plannedDinnerCount, savedRecipeIds = uiState.snapshot.savedRecipeIds,
+                        isContextBannerDismissed = uiState.isAiContextBannerDismissed, isGenerating = uiState.isAiGenerating,
+                        isPreprocessingImage = uiState.isPreprocessingImage, preprocessingImageLabel = uiState.preprocessingImageLabel,
+                        isGeneratingVisionTurn = uiState.isGeneratingVisionTurn,
+                        appliedSwapProposalIds = uiState.appliedSwapProposalIds,
+                        queuedIngredientProposalIds = uiState.queuedIngredientProposalIds,
+                        confirmedVisualTurnIds = uiState.confirmedVisualTurnIds,
+                        onOpenFamilyGoals = onOpenFamilyProfile, onNavigateToBoard = navBoard,
+                        onNavigateToGroceryList = navGrocery, currencySymbol = currencySymbol,
+                        canUndoLastAgentAction = uiState.canUndoLastAgentAction,
+                        lastAgentActionSummary = uiState.lastAgentActionSummary,
+                        onUndoLastAgentAction = onUndoLastAgentAction,
+                        onDismissAgentActionBanner = onDismissAgentActionBanner,
+                        onAdjustLastAgentAction = onAdjustLastAction, isModelSetupExpanded = isAiModelSetupExpanded,
+                        onToggleModelSetup = { isAiModelSetupExpanded = !isAiModelSetupExpanded },
+                        cloudConfig = uiState.cloudLlmConfig, isVerifyingCloudKey = uiState.isVerifyingCloudKey,
+                        isRefreshingCloudModels = uiState.isRefreshingCloudModels,
                       )
                     }
                   }
-                }
-              }
 
-              TopLevelDestination.PANTRY -> {
-                // Tab 3: Smart Pantry & 48h Expiry Rescue Dashboard priced in PHP ₱.
-                val cleanSearch = uiState.searchQuery.trim().lowercase()
-                val visiblePantry = when {
-                  cleanSearch.isEmpty() -> uiState.snapshot.pantryEntries
-                  else -> uiState.snapshot.pantryEntries.filter { entry ->
-                    val name = uiState.snapshot.catalogById[entry.ingredientId]?.displayName.orEmpty().lowercase()
-                    name.contains(cleanSearch) || entry.ingredientId.lowercase().contains(cleanSearch)
+                  TopLevelDestination.PLAN -> {
+                    // Tab 2: First-class Meal Plan workspace switching cleanly between Daily Plan & Batch Prep.
+                    Column(modifier = Modifier.fillMaxSize()) {
+                      PlanModeSwitcherBar(
+                        activeMode = uiState.activePacerMode,
+                        batchTaskCount = uiState.weeklyPrepSessionPlan.tasks.size, onSelectMode = onSetPacerMode,
+                      )
+                      Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                        // Render 7-day Family-of-4 board by default; pivot to Weekly Prep when selected.
+                        when (uiState.activePacerMode) {
+                          PacerMode.DAILY_PACER -> TodayAndWeekScreen(
+                            weeklyBoard = uiState.snapshot.weeklyBoard, dayMealCards = uiState.dayMealCards,
+                            activeDayIndex = uiState.activeDayIndex, todayDayIndex = uiState.todayDayIndex,
+                            currentHour24 = uiState.currentSimulatedHour24, isWideLayout = isWideScreen,
+                            householdProfile = profile, catalog = uiState.snapshot.ingredients,
+                            weeklyPrepPlan = uiState.weeklyPrepSessionPlan,
+                            instantSwapsBySlotId = uiState.instantSwapsBySlotId,
+                            tomorrowBreakfastRecipe = uiState.tomorrowBreakfastRecipe,
+                            onSelectDay = onSelectDay, onOpenCustomMealSheet = { onOpenCustomMealSheet(null) },
+                            onOpenWeeklyPrep = {
+                              // Synchronize local Plan switcher and ViewModel pacer mode together.
+                              onSetPacerMode(PacerMode.WEEKLY_PREP)
+                              onOpenWeeklyPrep()
+                            },
+                            onOpenFamilyGoalsSheet = onOpenFamilyProfile,
+                            onOpenAiChefTab = { onSelectDestination(TopLevelDestination.ASK_AI) },
+                            onStartCookingSlot = onStartCookingSlot, onQuickCookSlot = onQuickCookSlot,
+                            onOpenAdjustSlot = onOpenAdjustSlot, onQuickSwapSlotRecipe = onQuickSwapSlotRecipe,
+                            onOpenRecipeReader = onOpenRecipeInReader,
+                          )
+
+                          // Station-grouped Weekly Batch Prep session committing in 1 O(1) snapshot write.
+                          PacerMode.WEEKLY_PREP -> MorningPacerScreen(
+                            activeMealCard = uiState.activePacerMealCard,
+                            weeklyPrepPlan = uiState.weeklyPrepSessionPlan, householdProfile = profile,
+                            catalog = uiState.snapshot.ingredients, recipes = uiState.snapshot.recipes,
+                            completedPrepTaskIds = uiState.snapshot.completedPrepTaskIds,
+                            initialMode = PacerMode.WEEKLY_PREP, onModeChanged = onSetPacerMode,
+                            onFinishAndDeductPantry = onQuickCookSlot,
+                            onTogglePrepStationTask = onTogglePrepStationTask,
+                            onCommitWeeklyPrepSession = onCommitWeeklyPrep,
+                          )
+                        }
+                      }
+                    }
+                  }
+
+                  TopLevelDestination.PANTRY -> {
+                    // Tab 3: Smart Pantry & 48h Expiry Rescue Dashboard priced in household currency.
+                    val cleanSearch = uiState.searchQuery.trim().lowercase()
+                    val visiblePantry = when {
+                      cleanSearch.isEmpty() -> uiState.snapshot.pantryEntries
+                      else -> uiState.snapshot.pantryEntries.filter { entry ->
+                        val name = uiState.snapshot.catalogById[entry.ingredientId]?.displayName.orEmpty().lowercase()
+                        name.contains(cleanSearch) || entry.ingredientId.lowercase().contains(cleanSearch)
+                      }
+                    }
+                    SmartPantryScreen(
+                      catalog = uiState.snapshot.ingredients, pantryEntries = visiblePantry,
+                      recipes = uiState.snapshot.recipes, householdAllergens = profile.householdAllergens,
+                      rescuedMealsCount = uiState.snapshot.rescuedExpiringMealsCount,
+                      precomputedDashboard = if (cleanSearch.isEmpty()) uiState.pantryExpiryDashboard else null,
+                      queuedGroceryIds = uiState.snapshot.aiAddedGroceryIds,
+                      onAdjustPantryQuantity = onAdjustPantryQuantity, onSetStapleStatus = onSetStapleStatus,
+                      onToggleLocalAvailability = onToggleLocalAvailability,
+                      onToggleManualGroceryQueue = onToggleManualGroceryQueue,
+                      onAddIngredientToGrocery = onAddIngredientToGrocery,
+                      onAddIngredientToPantry = onAddIngredientToPantry,
+                      onAddIngredientToPantryWithExpiry = onAddIngredientToPantryWithExpiry,
+                      onScanReceiptAi = onScanReceiptFromPantry, onRunAiAudit = onRunAiAuditFromPantry,
+                      onFindRescueRecipes = onFindRescueRecipesFromPantry,
+                      onPairExpiringIngredients = onPairExpiringFromPantry,
+                      onViewTonightRescuePlan = onViewTonightRescueFromPantry,
+                      currencySymbol = currencySymbol,
+                    )
+                  }
+
+                  TopLevelDestination.RECIPES -> {
+                    // Tab 4: Cookbook Filter Browser + Clean Recipe Reader + Offline ACTION_SEND Share.
+                    CleanRecipeReaderScreen(
+                      recipes = uiState.schedulableRecipes.ifEmpty { uiState.snapshot.recipes },
+                      catalog = uiState.snapshot.ingredients, pantryEntries = uiState.snapshot.pantryEntries,
+                      householdProfile = profile, selectedRecipeId = uiState.selectedRecipeId,
+                      savedRecipeIds = uiState.snapshot.savedRecipeIds,
+                      checkedIngredientsByRecipeId = uiState.snapshot.checkedReaderIngredientsByRecipeId,
+                      recipeNotesByRecipeId = uiState.snapshot.recipeNotesByRecipeId,
+                      searchQuery = uiState.searchQuery, defaultPlanDayIndex = uiState.activeDayIndex,
+                      onSelectRecipe = onSelectRecipeInReader, onToggleSavedRecipe = onToggleSavedRecipe,
+                      onToggleIngredientChecked = onToggleReaderIngredientChecked,
+                      onResetCheckedIngredients = onResetReaderCheckedIngredients,
+                      onQueueMissingIngredients = onQueueMissingRecipeIngredients,
+                      onAddKitchenNote = onAddRecipeKitchenNote,
+                      onScheduleRecipeToPlan = onScheduleRecipeToPlan,
+                      onStartCookMode = onStartCookModeFromReader,
+                      onOpenCustomMealBuilder = { onOpenCustomMealSheet(null) },
+                      onEditFamilyGoals = onOpenFamilyProfile, onShareRecipe = onShareRecipe,
+                    )
+                  }
+
+                  TopLevelDestination.GROCERIES -> {
+                    // Tab 5: First-class Smart Grocery List rendered directly with zero sub-tab bar.
+                    SmartGroceryScreen(
+                      groceryDiff = uiState.weeklyGroceryDiff,
+                      checkedGroceryItemIds = uiState.snapshot.checkedGroceryItemIds,
+                      customGroceryItems = uiState.snapshot.customGroceryItems,
+                      sortMode = uiState.snapshot.grocerySortMode, householdProfile = profile,
+                      batchWriteCallCount = uiState.batchWriteCallCount,
+                      tonightMealSummary = uiState.tonightMealSummary, showPlanSwitcher = false,
+                      existingCatalogIds = uiState.snapshot.ingredients.map { it.ingredientId }.toSet(),
+                      onToggleItemChecked = onToggleGroceryChecked,
+                      onRestockCheckedItems = onRestockCheckedGrocery,
+                      onSelectSortMode = onSelectGrocerySortMode,
+                      onAddCustomGroceryItem = onAddCustomGroceryItem,
+                      onAddCatalogItemToGrocery = onAddIngredientToGrocery,
+                      onAddCatalogItemToPantry = onAddIngredientToPantry,
+                      onRemoveManualQueue = onRemoveManualGroceryQueue,
+                      onClearCheckedItems = onClearCheckedGrocery,
+                      onStartVoiceDictation = onStartGroceryVoiceDictation,
+                      onOpenWeeklyMealPlan = {
+                        onSelectDestination(TopLevelDestination.PLAN)
+                        onSelectGroceriesSubDestination(GroceriesSubDestination.WEEKLY_MEAL_PLAN)
+                      },
+                      onOpenQaLab = onOpenQaLab, currencySymbol = currencySymbol,
+                      marketRegionLabel = profile.marketRegionLabel,
+                    )
                   }
                 }
-                SmartPantryScreen(
-                  catalog = uiState.snapshot.ingredients,
-                  pantryEntries = visiblePantry,
-                  recipes = uiState.snapshot.recipes,
-                  householdAllergens = profile.householdAllergens,
-                  rescuedMealsCount = uiState.snapshot.rescuedExpiringMealsCount,
-                  precomputedDashboard = if (cleanSearch.isEmpty()) uiState.pantryExpiryDashboard else null,
-                  queuedGroceryIds = uiState.snapshot.aiAddedGroceryIds,
-                  onAdjustPantryQuantity = onAdjustPantryQuantity,
-                  onSetStapleStatus = onSetStapleStatus,
-                  onToggleLocalAvailability = onToggleLocalAvailability,
-                  onToggleManualGroceryQueue = onToggleManualGroceryQueue,
-                  onAddIngredientToGrocery = onAddIngredientToGrocery,
-                  onAddIngredientToPantry = onAddIngredientToPantry,
-                  onAddIngredientToPantryWithExpiry = onAddIngredientToPantryWithExpiry,
-                  onScanReceiptAi = onScanReceiptFromPantry,
-                  onRunAiAudit = onRunAiAuditFromPantry,
-                  onFindRescueRecipes = onFindRescueRecipesFromPantry,
-                  onPairExpiringIngredients = onPairExpiringFromPantry,
-                  onViewTonightRescuePlan = onViewTonightRescueFromPantry,
-                  currencySymbol = currencySymbol,
-                )
-              }
-
-              TopLevelDestination.RECIPES -> {
-                // Tab 4: Cookbook Filter Browser + Clean Recipe Reader + Offline ACTION_SEND Share.
-                CleanRecipeReaderScreen(
-                  recipes = uiState.schedulableRecipes.ifEmpty { uiState.snapshot.recipes },
-                  catalog = uiState.snapshot.ingredients,
-                  pantryEntries = uiState.snapshot.pantryEntries,
-                  householdProfile = profile,
-                  selectedRecipeId = uiState.selectedRecipeId,
-                  savedRecipeIds = uiState.snapshot.savedRecipeIds,
-                  checkedIngredientsByRecipeId = uiState.snapshot.checkedReaderIngredientsByRecipeId,
-                  recipeNotesByRecipeId = uiState.snapshot.recipeNotesByRecipeId,
-                  searchQuery = uiState.searchQuery,
-                  defaultPlanDayIndex = uiState.activeDayIndex,
-                  onSelectRecipe = onSelectRecipeInReader,
-                  onToggleSavedRecipe = onToggleSavedRecipe,
-                  onToggleIngredientChecked = onToggleReaderIngredientChecked,
-                  onResetCheckedIngredients = onResetReaderCheckedIngredients,
-                  onQueueMissingIngredients = onQueueMissingRecipeIngredients,
-                  onAddKitchenNote = onAddRecipeKitchenNote,
-                  onScheduleRecipeToPlan = onScheduleRecipeToPlan,
-                  onStartCookMode = onStartCookModeFromReader,
-                  onOpenCustomMealBuilder = { onOpenCustomMealSheet(null) },
-                  onEditFamilyGoals = onOpenFamilyProfile,
-                  onShareRecipe = onShareRecipe,
-                )
-              }
-
-              TopLevelDestination.GROCERIES -> {
-                // Tab 5: First-class Smart Grocery List rendered directly with zero sub-tab bar.
-                SmartGroceryScreen(
-                  groceryDiff = uiState.weeklyGroceryDiff,
-                  checkedGroceryItemIds = uiState.snapshot.checkedGroceryItemIds,
-                  customGroceryItems = uiState.snapshot.customGroceryItems,
-                  sortMode = uiState.snapshot.grocerySortMode,
-                  householdProfile = profile,
-                  batchWriteCallCount = uiState.batchWriteCallCount,
-                  tonightMealSummary = uiState.tonightMealSummary,
-                  showPlanSwitcher = false,
-                  existingCatalogIds = uiState.snapshot.ingredients.map { it.ingredientId }.toSet(),
-                  onToggleItemChecked = onToggleGroceryChecked,
-                  onRestockCheckedItems = onRestockCheckedGrocery,
-                  onSelectSortMode = onSelectGrocerySortMode,
-                  onAddCustomGroceryItem = onAddCustomGroceryItem,
-                  onAddCatalogItemToGrocery = onAddIngredientToGrocery,
-                  onAddCatalogItemToPantry = onAddIngredientToPantry,
-                  onRemoveManualQueue = onRemoveManualGroceryQueue,
-                  onClearCheckedItems = onClearCheckedGrocery,
-                  onStartVoiceDictation = onStartGroceryVoiceDictation,
-                  onOpenWeeklyMealPlan = {
-                    onSelectDestination(TopLevelDestination.PLAN)
-                    onSelectGroceriesSubDestination(GroceriesSubDestination.WEEKLY_MEAL_PLAN)
-                  },
-                  onOpenQaLab = onOpenQaLab,
-                  currencySymbol = currencySymbol,
-                  marketRegionLabel = profile.marketRegionLabel,
-                )
               }
             }
           }
         }
+
+        // Full-screen Step-by-Step Cook Mode modal overlay (`step_by_step_cook_mode` spec).
+        // Holds FLAG_KEEP_SCREEN_ON wake lock and ticks concurrent step timers once per second.
+        val cookSession = uiState.activeCookModeSession
+        if (cookSession != null) {
+          StepByStepCookModeScreen(
+            sessionState = cookSession, catalog = uiState.snapshot.ingredients,
+            pantryEntries = uiState.snapshot.pantryEntries, householdProfile = profile,
+            onSessionStateChange = onUpdateCookModeSession,
+            onToggleHandsFreeMic = onToggleCookModeHandsFreeMic,
+            onOpenPantryAdjuster = onOpenCookModePantryAdjuster,
+            onCompleteAndDeductPantry = onCompleteCookModeAndDeduct, onExitCookMode = onExitCookMode,
+          )
+        }
+
+        // Modal Bottom Sheet 1: Cooked Override & Meal Adjuster (`EC-04`–`EC-07`, `EC-12`, `EC-13`).
+        val adjustingCard = uiState.adjustingMealCard
+        if (adjustingCard != null) {
+          CookedOverrideSheet(
+            card = adjustingCard, catalog = uiState.snapshot.ingredients,
+            instantSwapCandidates = uiState.instantSwapsBySlotId[adjustingCard.slot.slotId].orEmpty(),
+            onDismiss = onDismissAdjustSlot, onConfirmCookedDeduction = onConfirmCookedOverride,
+            onSelectWorkoutModifier = onSelectWorkoutModifier,
+            onSwapToInStockMeal = onQuickSwapSlotRecipe,
+            onMarkSkippedOrLeftovers = onMarkSkippedOrLeftovers,
+            onReplaceWithCustomMeal = { slotId -> onOpenCustomMealSheet(slotId) },
+          )
+        }
+
+        // Modal Bottom Sheet 2: Add / Schedule Custom Family Meal (`Single Day` or `Mon–Fri`).
+        if (uiState.isCustomMealSheetOpen) {
+          CustomMealSheet(
+            catalog = uiState.snapshot.ingredients, schedulableRecipes = uiState.schedulableRecipes,
+            householdProfile = profile, initialDayIndex = uiState.activeDayIndex,
+            initialSlotType = uiState.customMealInitialSlotType,
+            onSelectPresetRecipe = onSchedulePresetRecipe, onSaveCustomMeal = onSaveCustomMeal,
+            onAddLocalCatalogItem = onAddIngredientToPantry, onDismiss = onDismissCustomMealSheet,
+          )
+        }
+
+        // Modal Bottom Sheet 3: Family Profile, Consumer Templates, Display Modes, & Currency.
+        if (uiState.isFamilyProfileSheetOpen) {
+          FamilyProfileSheet(
+            householdProfile = profile, onSaveProfile = onSaveHouseholdProfile,
+            onSelectConsumerTemplate = onSelectConsumerTemplate,
+            onSelectCurrencyAndRegion = onSelectCurrencyAndRegion,
+            isDarkCounterTheme = uiState.isDarkCounterTheme,
+            isWideCounterLayout = uiState.isWideCounterLayout,
+            onToggleDarkTheme = onToggleDarkTheme, onToggleWideLayout = onToggleWideLayout,
+            onRelaunchOnboarding = onRelaunchFirstRunOnboarding, onDismiss = onDismissFamilyProfile,
+          )
+        }
+
+        // Modal Bottom Sheet 4: QA & Scenario Verification Lab (`EC-01`–`EC-13` + O(1) Batch Counter).
+        if (uiState.isQaLabSheetOpen) {
+          QaScenarioLabSheet(
+            batchWriteCallCount = uiState.batchWriteCallCount,
+            schedulableRecipeCount = uiState.schedulableRecipes.size,
+            totalRecipeCount = uiState.snapshot.recipes.size,
+            currentSimulatedHour24 = uiState.currentSimulatedHour24,
+            lastScenarioStatusMessage = uiState.lastQaScenarioStatusMessage,
+            onSelectClockHour = onSelectClockHour, onResetHouseholdState = onResetHouseholdToSeed,
+            onTriggerScenario = onTriggerQaScenario,
+            onSimulateFreshInstall = onRelaunchFirstRunOnboarding, onDismiss = onDismissQaLab,
+          )
+        }
       }
     }
 
-    // Full-screen Step-by-Step Cook Mode modal overlay (`step_by_step_cook_mode` spec).
-    // Holds FLAG_KEEP_SCREEN_ON wake lock and ticks concurrent step timers once per second.
-    val cookSession = uiState.activeCookModeSession
-    if (cookSession != null) {
-      StepByStepCookModeScreen(
-        sessionState = cookSession,
-        catalog = uiState.snapshot.ingredients,
-        pantryEntries = uiState.snapshot.pantryEntries,
-        householdProfile = profile,
-        onSessionStateChange = onUpdateCookModeSession,
-        onToggleHandsFreeMic = onToggleCookModeHandsFreeMic,
-        onOpenPantryAdjuster = onOpenCookModePantryAdjuster,
-        onCompleteAndDeductPantry = onCompleteCookModeAndDeduct,
-        onExitCookMode = onExitCookMode,
-      )
-    }
-
-    // Modal Bottom Sheet 1: Cooked Override & Meal Adjuster (`EC-04`–`EC-07`, `EC-12`, `EC-13`).
-    // Commits overrides, learned family defaults, and ad-hoc extras in 1 O(1) batch write.
-    val adjustingCard = uiState.adjustingMealCard
-    if (adjustingCard != null) {
-      CookedOverrideSheet(
-        card = adjustingCard,
-        catalog = uiState.snapshot.ingredients,
-        instantSwapCandidates = uiState.instantSwapsBySlotId[adjustingCard.slot.slotId].orEmpty(),
-        onDismiss = onDismissAdjustSlot,
-        onConfirmCookedDeduction = onConfirmCookedOverride,
-        onSelectWorkoutModifier = onSelectWorkoutModifier,
-        onSwapToInStockMeal = onQuickSwapSlotRecipe,
-        onMarkSkippedOrLeftovers = onMarkSkippedOrLeftovers,
-        onReplaceWithCustomMeal = { slotId -> onOpenCustomMealSheet(slotId) },
-      )
-    }
-
-    // Modal Bottom Sheet 2: Add / Schedule Custom Family Meal (`Single Day` or `Mon–Fri`).
-    // Enforces EC-01 <= 25m morning cap on Breakfasts and EC-02 local market availability.
-    if (uiState.isCustomMealSheetOpen) {
-      CustomMealSheet(
-        catalog = uiState.snapshot.ingredients,
-        schedulableRecipes = uiState.schedulableRecipes,
-        householdProfile = profile,
-        initialDayIndex = uiState.activeDayIndex,
-        initialSlotType = uiState.customMealInitialSlotType,
-        onSelectPresetRecipe = onSchedulePresetRecipe,
-        onSaveCustomMeal = onSaveCustomMeal,
-        onAddLocalCatalogItem = onAddIngredientToPantry,
-        onDismiss = onDismissCustomMealSheet,
-      )
-    }
-
-    // Modal Bottom Sheet 3: Family Profile, Consumer Templates, Display Modes, & PHP ₱ Currency.
-    // Rescales PLANNED slots automatically when postpartum (+1) or visiting guests (+2) toggle.
-    if (uiState.isFamilyProfileSheetOpen) {
-      FamilyProfileSheet(
-        householdProfile = profile,
-        onSaveProfile = onSaveHouseholdProfile,
-        onSelectConsumerTemplate = onSelectConsumerTemplate,
-        onSelectCurrencyAndRegion = onSelectCurrencyAndRegion,
-        isDarkCounterTheme = uiState.isDarkCounterTheme,
-        isWideCounterLayout = uiState.isWideCounterLayout,
-        onToggleDarkTheme = onToggleDarkTheme,
-        onToggleWideLayout = onToggleWideLayout,
-        onRelaunchOnboarding = onRelaunchFirstRunOnboarding,
-        onDismiss = onDismissFamilyProfile,
-      )
-    }
-
-    // Modal Bottom Sheet 4: QA & Scenario Verification Lab (`EC-01`–`EC-13` + O(1) Batch Counter).
-    // Exposes 7:00 AM / 8:30 PM clock toggle, seed state reset, and 1-tap scenario runners.
-    if (uiState.isQaLabSheetOpen) {
-      QaScenarioLabSheet(
-        batchWriteCallCount = uiState.batchWriteCallCount,
-        schedulableRecipeCount = uiState.schedulableRecipes.size,
-        totalRecipeCount = uiState.snapshot.recipes.size,
-        currentSimulatedHour24 = uiState.currentSimulatedHour24,
-        lastScenarioStatusMessage = uiState.lastQaScenarioStatusMessage,
-        onSelectClockHour = onSelectClockHour,
-        onResetHouseholdState = onResetHouseholdToSeed,
-        onTriggerScenario = onTriggerQaScenario,
-        onSimulateFreshInstall = onRelaunchFirstRunOnboarding,
-        onDismiss = onDismissQaLab,
+    // Approval-gated Gemma 4 download dialog rendered over both First-Run Onboarding and 5-tab shell.
+    val approvalSpec = uiState.pendingModelDownloadApproval
+    if (approvalSpec != null) {
+      ModelDownloadApprovalDialog(
+        approvalSpec = approvalSpec,
+        onSelectPreset = { preset -> onAiChefAction(AiChefAction.RequestModelDownloadApproval(preset)) },
+        onApproveDownload = { preset -> onAiChefAction(AiChefAction.ConfirmApprovedModelDownload(preset)) },
+        onDismiss = { onAiChefAction(AiChefAction.DismissModelDownloadApproval) },
       )
     }
   }

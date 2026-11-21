@@ -3,6 +3,8 @@ package com.familykitchen.board.ai
 import com.familykitchen.board.domain.AiExecutionMode
 import com.familykitchen.board.domain.AiMenuAdvisorEngine
 import com.familykitchen.board.domain.CloudLlmConfig
+import com.familykitchen.board.domain.DownloadableGemmaPreset
+import com.familykitchen.board.domain.ModelDownloadApprovalSpec
 import com.familykitchen.board.domain.ModelNotReadyException
 import com.familykitchen.board.domain.VisionNotSupportedException
 import com.familykitchen.board.ports.AiEdgePort
@@ -143,6 +145,44 @@ class HybridAiInferenceRouter(
   }
 
   /**
+   * Delegates pre-flight storage, network-metering, and `.part` resume inspection for [preset] to
+   * [onDevicePort].
+   */
+  override suspend fun inspectDownloadPreconditions(
+    preset: DownloadableGemmaPreset,
+  ): ModelDownloadApprovalSpec =
+    onDevicePort.inspectDownloadPreconditions(preset)
+
+  /**
+   * Downloads and initializes [preset] on [onDevicePort], automatically switching [vaultPort] to
+   * [AiExecutionMode.ON_DEVICE] whenever the downloaded local model transitions to `Ready` so
+   * freshly downloaded Gemma 4 weights activate immediately.
+   */
+  override suspend fun downloadAndLoadPresetModel(
+    preset: DownloadableGemmaPreset,
+  ): AiRuntimeState {
+    val downloadedState = onDevicePort.downloadAndLoadPresetModel(preset)
+    // Activate ON_DEVICE automatically when downloaded Gemma 4 weights initialize to Ready.
+    if (
+      downloadedState is AiRuntimeState.Ready &&
+      vaultPort.configFlow.value.executionMode != AiExecutionMode.ON_DEVICE
+    ) {
+      vaultPort.setExecutionMode(AiExecutionMode.ON_DEVICE)
+    }
+    val synced = refreshRuntimeState()
+    return when (vaultPort.configFlow.value.executionMode) {
+      AiExecutionMode.ON_DEVICE -> downloadedState
+      AiExecutionMode.CLOUD_API -> synced
+    }
+  }
+
+  /** Cancels any active [onDevicePort] preset download and refreshes synchronized [runtimeState]. */
+  override fun cancelActiveDownload() {
+    onDevicePort.cancelActiveDownload()
+    refreshRuntimeState()
+  }
+
+  /**
    * Routes text generation strictly to [onDevicePort] in `ON_DEVICE` mode or to [cloudClient] in
    * `CLOUD_API` mode, stripping Markdown code fences and control tokens before returning.
    */
@@ -267,21 +307,21 @@ class HybridAiInferenceRouter(
     config: CloudLlmConfig,
     onDeviceState: AiRuntimeState,
   ): AiRuntimeState =
-    when (config.executionMode) {
-      AiExecutionMode.ON_DEVICE -> onDeviceState
-      AiExecutionMode.CLOUD_API -> when {
-        config.hasStoredApiKey -> AiRuntimeState.Ready(
-          capabilities = RuntimeCapabilities(
-            supportsText = true,
-            supportsVision = config.provider.supportsVision,
-            backendLabel = "Cloud · ${config.provider.shortLabel}",
-            modelName = config.modelId,
-          ),
-        )
-        else -> AiRuntimeState.Error(
-          message = "Add your ${config.provider.displayName} key in Model Setup, or switch to On-Device mode.",
-        )
-      }
+    when {
+      // Surface live network model download progress across tabs even prior to Ready mode flip.
+      onDeviceState is AiRuntimeState.Importing && onDeviceState.isNetworkDownload -> onDeviceState
+      config.executionMode == AiExecutionMode.ON_DEVICE -> onDeviceState
+      config.hasStoredApiKey -> AiRuntimeState.Ready(
+        capabilities = RuntimeCapabilities(
+          supportsText = true,
+          supportsVision = config.provider.supportsVision,
+          backendLabel = "Cloud · ${config.provider.shortLabel}",
+          modelName = config.modelId,
+        ),
+      )
+      else -> AiRuntimeState.Error(
+        message = "Add your ${config.provider.displayName} key in Model Setup, or switch to On-Device mode.",
+      )
     }
 
   companion object {

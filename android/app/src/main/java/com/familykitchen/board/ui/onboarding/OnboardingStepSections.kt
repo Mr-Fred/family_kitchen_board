@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -66,8 +65,8 @@ import com.familykitchen.board.ports.AiRuntimeState
 import com.familykitchen.board.ui.aichef.AiModeSegmentedToggle
 import com.familykitchen.board.ui.aichef.CloudApiKeySetupContent
 import com.familykitchen.board.ui.aichef.ModelOperationProgressBanner
+import com.familykitchen.board.ui.aichef.OnDeviceModelDownloadCtaRow
 import com.familykitchen.board.ui.aichef.formatAiRuntimeBadgeLabel
-import com.familykitchen.board.ui.aichef.formatBusyImportButtonLabel
 import com.familykitchen.board.ui.theme.KitchenTheme
 
 // Stateless, tactile 4-step First-Run Onboarding section cards calibrated for Warm Linen daylight,
@@ -637,8 +636,13 @@ fun OnboardingAiSetupStepSection(
               )
             }
           }
-          // Surface live byte/shader progress banner whenever SAF copy or GPU load is running.
-          if (runtimeState.isBackgroundBusy) AiBackgroundProgressCard(runtimeState = runtimeState)
+          // Surface live download/SAF byte counter, GPU progress, and Cancel CTA while busy.
+          if (runtimeState.isBackgroundBusy) {
+            AiBackgroundProgressCard(
+              runtimeState = runtimeState,
+              onCancelDownload = { onAiChefAction(AiChefAction.CancelActiveModelDownload) },
+            )
+          }
           if (!importNotice.isNullOrBlank()) {
             Surface(shape = KitchenTheme.shapes.inputDefault, color = extendedColors.secondaryFixed, border = BorderStroke(1.dp, extendedColors.borderSubtle), modifier = Modifier.fillMaxWidth()) {
               Row(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -649,17 +653,13 @@ fun OnboardingAiSetupStepSection(
               }
             }
           }
-          // 48.dp SAF OpenDocument launcher button importing local .litertlm packages atomically.
-          OutlinedButton(
-            onClick = onLaunchModelPicker, enabled = !runtimeState.isBackgroundBusy, shape = CircleShape,
-            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
-          ) {
-            if (runtimeState.isBackgroundBusy) {
-              CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-              Spacer(modifier = Modifier.width(8.dp))
-            }
-            Text(formatBusyImportButtonLabel(runtimeState, "Import On-Device Gemma (.litertlm)"), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-          }
+          // 1-tap approval-gated Gemma 4 download + Cancel + SAF local .litertlm picker.
+          OnDeviceModelDownloadCtaRow(
+            runtimeState = runtimeState,
+            onRequestDownloadApproval = { onAiChefAction(AiChefAction.RequestModelDownloadApproval()) },
+            onPickLocalFile = onLaunchModelPicker,
+            onCancelDownload = { onAiChefAction(AiChefAction.CancelActiveModelDownload) },
+          )
         }
       }
     }
@@ -667,16 +667,25 @@ fun OnboardingAiSetupStepSection(
 }
 
 /**
- * Onboarding background progress card delegating SAF `.part` transfer and OpenCL shader loading
- * telemetry to [ModelOperationProgressBanner].
+ * Onboarding background progress card delegating `.part` transfer, OpenCL shader loading, and
+ * active download cancellation to [ModelOperationProgressBanner].
  *
  * @param runtimeState Active [AiRuntimeState] driving determinate or indeterminate progress UI.
  * @param modifier Optional Compose [Modifier].
+ * @param onCancelDownload Optional callback cancelling an active network `.litertlm` download.
  */
 @Composable
-fun AiBackgroundProgressCard(runtimeState: AiRuntimeState, modifier: Modifier = Modifier) {
-  // Reuse the tested ModelOperationProgressBanner lambda determinate progress bar.
-  ModelOperationProgressBanner(runtimeState = runtimeState, modifier = modifier)
+fun AiBackgroundProgressCard(
+  runtimeState: AiRuntimeState,
+  modifier: Modifier = Modifier,
+  onCancelDownload: (() -> Unit)? = null,
+) {
+  // Reuse the tested ModelOperationProgressBanner lambda determinate progress bar and Cancel CTA.
+  ModelOperationProgressBanner(
+    runtimeState = runtimeState,
+    modifier = modifier,
+    onCancelDownload = onCancelDownload,
+  )
 }
 
 @Composable

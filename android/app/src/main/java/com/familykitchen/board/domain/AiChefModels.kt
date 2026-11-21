@@ -454,6 +454,32 @@ sealed interface AiChefAction {
 
   /** Fetches the live non-deprecated `/models` catalog for the active [CloudLlmProvider]. */
   data object RefreshCloudModels : AiChefAction
+
+  // Approval-gated Hugging Face Gemma 4 (.litertlm) download & cancellation intents.
+  /**
+   * Inspects free storage, network metering, and resumable `.part` state for [preset] to populate
+   * `ModelDownloadApprovalDialog` before any network connection is opened.
+   *
+   * @property preset Candidate Gemma 4 `.litertlm` preset (`GEMMA_4_E2B_VISION` default).
+   */
+  data class RequestModelDownloadApproval(
+    val preset: DownloadableGemmaPreset = DownloadableGemmaPreset.GEMMA_4_E2B_VISION,
+  ) : AiChefAction
+
+  /**
+   * Confirms user approval and starts (or resumes via HTTP `Range`) downloading [preset].
+   *
+   * @property preset User-approved Gemma 4 `.litertlm` package preset.
+   */
+  data class ConfirmApprovedModelDownload(
+    val preset: DownloadableGemmaPreset,
+  ) : AiChefAction
+
+  /** Dismisses `ModelDownloadApprovalDialog` without opening any network connection. */
+  data object DismissModelDownloadApproval : AiChefAction
+
+  /** Cancels the active background Gemma 4 download and cleans up its incomplete `.part` file. */
+  data object CancelActiveModelDownload : AiChefAction
 }
 
 // Curated discovery items filtered against householdAllergens before surfacing in AI Chef cards.

@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Memory
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -92,12 +94,13 @@ fun formatAiRuntimeBadgeLabel(runtimeState: AiRuntimeState): String =
     AiRuntimeState.Uninitialized -> "Offline Chef Ready"
     AiRuntimeState.Discovering -> "Scanning Models…"
     is AiRuntimeState.Importing -> {
+      val verb = if (runtimeState.isNetworkDownload) "Downloading" else "Importing"
       when {
         runtimeState.copiedBytes > 0L ->
-          "Importing ${runtimeState.fileName} (${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes)})"
+          "$verb ${runtimeState.fileName} (${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes, runtimeState.isNetworkDownload)})"
         else -> {
           val pct = (runtimeState.progressFraction.coerceIn(0f, 1f) * 100f).roundToInt()
-          "Importing ${runtimeState.fileName} ($pct%)"
+          "$verb ${runtimeState.fileName} ($pct%)"
         }
       }
     }
@@ -319,7 +322,8 @@ fun EdgeAiRuntimeSetupPanel(
             else -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
           }
           val progressNote = when (runtimeState) {
-            is AiRuntimeState.Importing -> "${runtimeState.fileName} • ${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes)}"
+            is AiRuntimeState.Importing ->
+              "${runtimeState.fileName} • ${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes, runtimeState.isNetworkDownload)}"
             is AiRuntimeState.Loading -> "Initializing ${runtimeState.modelName} on Galaxy GPU (10–25s)…"
             AiRuntimeState.Discovering -> "Scanning local storage for Gemma models…"
             else -> ""
@@ -351,9 +355,9 @@ fun EdgeAiRuntimeSetupPanel(
               )
             }
 
-            // Render local Galaxy S22 / Gemma E2B profiles and scoped SAF .litertlm importer.
+            // Render local Galaxy S22 / Gemma E2B profiles, 1-tap Gemma 4 download, and SAF picker.
             AiExecutionMode.ON_DEVICE -> {
-              // Hardware profile chips enforce >= 44.dp touch height for comfortable single-hand selection.
+              // Hardware profile chips enforce >= 48.dp touch height for comfortable single-hand selection.
               FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 EdgeDeviceProfile.entries.forEach { profile ->
                   val modeTag = if (profile.supportsMultimodalVision) "Vision + Text" else "Text"
@@ -361,7 +365,7 @@ fun EdgeAiRuntimeSetupPanel(
                     selected = activeProfile == profile,
                     onClick = { onSelectProfile(profile) },
                     label = { Text("${profile.displayName} • $modeTag", style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.defaultMinSize(minHeight = 44.dp),
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp),
                   )
                 }
               }
@@ -384,25 +388,25 @@ fun EdgeAiRuntimeSetupPanel(
                     is AiRuntimeState.Error -> Text(runtimeState.message, style = MaterialTheme.typography.bodySmall)
                     is AiRuntimeState.Loading -> Text("Initializing GPU/CPU buffers for ${runtimeState.modelName}…", style = MaterialTheme.typography.bodySmall)
                     AiRuntimeState.Discovering -> Text("Scanning app-scoped model directories…", style = MaterialTheme.typography.bodySmall)
-                    is AiRuntimeState.Importing -> Text("Importing ${runtimeState.fileName} (${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes)})…", style = MaterialTheme.typography.bodySmall)
+                    is AiRuntimeState.Importing -> {
+                      val verb = if (runtimeState.isNetworkDownload) "Downloading" else "Importing"
+                      Text(
+                        text = "$verb ${runtimeState.fileName} (${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes, runtimeState.isNetworkDownload)})…",
+                        style = MaterialTheme.typography.bodySmall,
+                      )
+                    }
                     AiRuntimeState.Uninitialized -> Text("Recommended: ${activeProfile.recommendedModelFileName}", style = MaterialTheme.typography.bodySmall)
                   }
                 }
               }
 
-              // Scoped SAF document picker disabled with inline spinner while an import/load is active.
-              OutlinedButton(
-                onClick = onImportModelClick,
-                enabled = !runtimeState.isBackgroundBusy,
-                shape = CircleShape,
-                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
-              ) {
-                if (runtimeState.isBackgroundBusy) {
-                  CircularProgressIndicator(modifier = Modifier.size(15.dp), strokeWidth = 2.dp)
-                  Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text(formatBusyImportButtonLabel(runtimeState, "Import Local Model (.litertlm / .task / .bin)"))
-              }
+              // 1-tap approval-gated Gemma 4 Vision download paired with Cancel and SAF local picker.
+              OnDeviceModelDownloadCtaRow(
+                runtimeState = runtimeState,
+                onRequestDownloadApproval = { onAction(AiChefAction.RequestModelDownloadApproval()) },
+                onPickLocalFile = onImportModelClick,
+                onCancelDownload = { onAction(AiChefAction.CancelActiveModelDownload) },
+              )
             }
           }
         }
@@ -414,19 +418,27 @@ fun EdgeAiRuntimeSetupPanel(
 /**
  * Unmistakable Non-Silent Vision Gate warning card displayed whenever a photo is attached while
  * the active [AiRuntimeState] lacks multimodal vision (`supportsVision == false`). Lets users
- * switch to a Cloud Vision API key or import a local `.litertlm` vision package in 1 tap.
+ * download Gemma 4 Vision, connect a Cloud Vision API key, or pick a local `.litertlm` package.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun VisionUnsupportedGateBanner(
   runtimeState: AiRuntimeState,
   onImportVisionModel: () -> Unit,
   onRemovePhoto: () -> Unit,
   onUseCloudApiKey: () -> Unit = {},
+  onDownloadVisionModel: () -> Unit = {},
+  onCancelDownload: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
   val isBusy = runtimeState.isBackgroundBusy
-  // Switch banner headline and body copy immediately when Gemma model import or GPU init begins.
+  val isNetworkDownload = runtimeState is AiRuntimeState.Importing && runtimeState.isNetworkDownload
+  val sageButtonColors = ButtonDefaults.buttonColors(
+    containerColor = extendedColors.herbalSage,
+    contentColor = MaterialTheme.colorScheme.onPrimary,
+  )
+  // Switch banner headline and body copy immediately when Gemma download, import, or GPU init begins.
   val bannerTitle = when {
     isBusy -> "Setting Up Gemma Vision Model…"
     else -> "Vision Model Required to Inspect Photo"
@@ -439,10 +451,11 @@ fun VisionUnsupportedGateBanner(
         "is text-only and cannot inspect image pixels. Silent text-only fallback is disabled so " +
         "SavorAI never guesses unseen ingredients."
     runtimeState is AiRuntimeState.Error ->
-      "No multimodal vision model is active (${runtimeState.message}). Connect a Cloud API key or " +
-        "import a local .litertlm model so your attached photo is never ignored."
+      "No multimodal vision model is active (${runtimeState.message}). Download Gemma 4 Vision, " +
+        "connect a Cloud API key, or pick a local .litertlm model so your photo is never ignored."
     else ->
-      "No multimodal vision model is Ready yet. Use a Cloud Vision API key, import a local .litertlm package, or remove the photo."
+      "No multimodal vision model is Ready yet. Download Gemma 4 Vision (~2 GB), use a Cloud " +
+        "Vision API key, pick a local .litertlm package, or remove the photo."
   }
 
   Card(
@@ -460,43 +473,63 @@ fun VisionUnsupportedGateBanner(
         Text(bannerTitle, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = extendedColors.onChildSafety)
       }
       Text(reasonExplanation, style = MaterialTheme.typography.bodySmall, color = extendedColors.onChildSafety)
-      // Embed live spinner + byte counter + progress bar right inside the gate card while busy.
-      if (isBusy) ModelOperationProgressBanner(runtimeState = runtimeState)
-      // 1-tap Cloud Vision API key CTA alongside local .litertlm SAF import (both 48.dp targets).
-      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      // Embed live spinner, byte counter, progress bar, and 48.dp Cancel CTA while busy.
+      if (isBusy) ModelOperationProgressBanner(runtimeState = runtimeState, onCancelDownload = onCancelDownload)
+      // FlowRow wraps 48.dp actions cleanly across rows on 360dp S22 at 1.35x font scale.
+      FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
         Button(
+          onClick = onDownloadVisionModel,
+          enabled = !isBusy,
+          shape = CircleShape,
+          colors = sageButtonColors,
+          modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+        ) {
+          Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = if (isNetworkDownload) formatBusyImportButtonLabel(runtimeState, "Download Gemma 4") else "Download Gemma 4",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+          )
+        }
+        OutlinedButton(
           onClick = onUseCloudApiKey,
           enabled = !isBusy,
           shape = CircleShape,
-          modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp),
+          modifier = Modifier.defaultMinSize(minHeight = 48.dp),
         ) {
-          Text("Use Cloud API Key", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+          Text("Use Cloud API Key", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
         }
         OutlinedButton(
           onClick = onImportVisionModel,
           enabled = !isBusy,
           shape = CircleShape,
-          modifier = Modifier.weight(1.1f).defaultMinSize(minHeight = 48.dp),
+          modifier = Modifier.defaultMinSize(minHeight = 48.dp),
         ) {
-          if (isBusy) {
+          if (isBusy && !isNetworkDownload) {
             CircularProgressIndicator(modifier = Modifier.size(15.dp), strokeWidth = 2.dp)
             Spacer(modifier = Modifier.width(6.dp))
           }
           Text(
-            text = formatBusyImportButtonLabel(runtimeState, "Import Local .litertlm"),
-            style = MaterialTheme.typography.labelSmall,
+            text = if (!isNetworkDownload) formatBusyImportButtonLabel(runtimeState, "Pick Local .litertlm") else "Pick Local .litertlm",
+            style = MaterialTheme.typography.labelMedium,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            softWrap = false,
           )
         }
-      }
-      // Keep Remove Photo enabled across full width so users can pivot to text-only anytime.
-      OutlinedButton(
-        onClick = onRemovePhoto,
-        shape = CircleShape,
-        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
-      ) {
-        Text("Remove Photo", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+        OutlinedButton(
+          onClick = onRemovePhoto,
+          shape = CircleShape,
+          modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+        ) {
+          Text("Remove Photo", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
+        }
       }
     }
   }

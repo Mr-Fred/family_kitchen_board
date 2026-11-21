@@ -1,6 +1,8 @@
 package com.familykitchen.board.ports
 
+import com.familykitchen.board.domain.DownloadableGemmaPreset
 import com.familykitchen.board.domain.EdgeDeviceProfile
+import com.familykitchen.board.domain.ModelDownloadApprovalSpec
 import kotlinx.coroutines.flow.StateFlow
 
 // Pure coroutine boundary port for on-device LiteRT-LM (0.16.1) and MediaPipe GenAI (0.10.22).
@@ -33,20 +35,23 @@ sealed interface AiRuntimeState {
   /** Scanning `filesDir/models` and `getExternalFilesDir("models")` for valid model packages. */
   data object Discovering : AiRuntimeState
 
-  // Atomic SAF copy state: streams to <name>.part first so interrupted copies never corrupt cache.
+  // Atomic .part transfer state: covers both local SAF copies and approved Hugging Face downloads.
   /**
-   * Streaming a user-selected SAF model into `filesDir/models/<name>.part` prior to atomic rename.
+   * Streaming a user-selected SAF model or approved Hugging Face download into
+   * `filesDir/models/<name>.part` prior to atomic rename.
    *
-   * @property fileName Display filename being imported.
+   * @property fileName Display filename being imported or downloaded.
    * @property progressFraction Byte copy progress clamped in `0f..1f` (`0f` when stream size is unknown).
    * @property copiedBytes Verified byte count copied to staging storage so far (`0L` default).
-   * @property totalBytes Expected stream byte length from `OpenableColumns.SIZE`, or `-1L` when unknown.
+   * @property totalBytes Expected stream byte length, or `-1L` when unknown.
+   * @property isNetworkDownload `true` when streaming from Hugging Face CDN rather than local SAF.
    */
   data class Importing(
     val fileName: String,
     val progressFraction: Float,
     val copiedBytes: Long = 0L,
     val totalBytes: Long = -1L,
+    val isNetworkDownload: Boolean = false,
   ) : AiRuntimeState
 
   /**
@@ -163,6 +168,35 @@ interface AiEdgePort {
    * Resets any active on-device `Conversation` context without unloading model weights from RAM.
    */
   suspend fun resetConversation() = Unit
+
+  // Approval-gated Hugging Face Gemma 4 (.litertlm) inspection, resumable download, & cancellation.
+  /**
+   * Inspects local free storage, active network metering (`UNMETERED_WIFI`, `METERED_CELLULAR`,
+   * `OFFLINE_OR_UNKNOWN`), and any resumable `.part` bytes for [preset] without opening a socket.
+   *
+   * @param preset Candidate Gemma 4 `.litertlm` preset to inspect.
+   * @return Populated [ModelDownloadApprovalSpec] for user approval.
+   */
+  suspend fun inspectDownloadPreconditions(
+    preset: DownloadableGemmaPreset = DownloadableGemmaPreset.GEMMA_4_E2B_VISION,
+  ): ModelDownloadApprovalSpec = ModelDownloadApprovalSpec(preset = preset)
+
+  /**
+   * Downloads (or resumes via HTTP `Range`) the approved [preset] into `filesDir/models` via an
+   * atomic `.part` staging file and initializes the resulting `.litertlm` runtime.
+   *
+   * @param preset User-approved Gemma 4 `.litertlm` preset to download and load.
+   * @return Resulting [AiRuntimeState] (`Ready` on success, or `Error` on failure).
+   */
+  suspend fun downloadAndLoadPresetModel(
+    preset: DownloadableGemmaPreset = DownloadableGemmaPreset.GEMMA_4_E2B_VISION,
+  ): AiRuntimeState = runtimeState.value
+
+  /**
+   * Requests immediate cancellation of an active preset model download and cleans up its temporary
+   * `.part` staging file.
+   */
+  fun cancelActiveDownload() = Unit
 
   // Deterministic native cleanup invoked on model reload and ViewModel.onCleared().
   /**
