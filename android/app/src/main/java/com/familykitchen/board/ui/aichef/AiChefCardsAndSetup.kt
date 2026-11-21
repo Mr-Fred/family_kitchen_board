@@ -48,6 +48,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -67,12 +68,15 @@ import com.familykitchen.board.domain.EdgeDeviceProfile
 import com.familykitchen.board.ports.AiRuntimeState
 import com.familykitchen.board.ports.RuntimeCapabilities
 import com.familykitchen.board.ports.VoiceInputState
+import com.familykitchen.board.ui.PERMISSION_NOTICE_AUTO_DISMISS_MS
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
+import com.familykitchen.board.ui.theme.SavorBrandBadge
 import java.io.File
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 // Editorial SavorWelcomeBanner, Collapsible On-Device Edge AI Setup Panel, Non-Silent Vision Gate
@@ -152,11 +156,18 @@ internal fun SavorWelcomeBanner(
       modifier = Modifier.fillMaxWidth().padding(18.dp),
       verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-      Text(
-        text = "Good evening, Chef",
-        style = MaterialTheme.typography.headlineMedium,
-        color = MaterialTheme.colorScheme.onSurface,
-      )
+      // Pair the 36.dp SavorAI Dutch-oven cocotte emblem alongside the editorial greeting.
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+      ) {
+        SavorBrandBadge(badgeSize = 36.dp, logoSize = 22.dp, shape = RoundedCornerShape(11.dp))
+        Text(
+          text = "Good evening, Chef",
+          style = MaterialTheme.typography.headlineMedium,
+          color = MaterialTheme.colorScheme.onSurface,
+        )
+      }
       Text(
         text = "Ask about tonight's meals, scan your fridge or spice rack, or balance macros in one tap.",
         style = MaterialTheme.typography.bodyMedium,
@@ -640,11 +651,19 @@ private fun decodeSampledThumbnailOrNull(rawPath: String, targetEdgePx: Int): Im
 }
 
 /**
- * Dismissible permission or SAF model-picker feedback banner displayed inside `AiChefScreen`.
+ * Auto-dismissing (`5s`) permission or SAF model-picker feedback banner displayed inside
+ * `AiChefScreen` with a `48.dp` manual close action.
  */
 @Composable
 internal fun PermissionFeedbackBanner(message: String, onDismiss: () -> Unit) {
   val extendedColors = KitchenTheme.extendedColors
+  // Automatically retire transient camera/microphone/SAF guidance after 5 seconds.
+  LaunchedEffect(message) {
+    if (message.isNotBlank()) {
+      delay(PERMISSION_NOTICE_AUTO_DISMISS_MS)
+      onDismiss()
+    }
+  }
   // Soft coral secondaryFixed container surfaces non-blocking camera/microphone guidance.
   Surface(
     modifier = Modifier.fillMaxWidth(),

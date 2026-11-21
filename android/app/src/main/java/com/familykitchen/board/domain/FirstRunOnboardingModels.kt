@@ -30,11 +30,11 @@ enum class StartingPantryMode(
     "Begin with 0 stock so every item comes from your own scans and shopping.",
   ),
 
-  // Full 38-item demonstration kitchen including 3 expiring items for instant feature exploration.
-  /** Pre-stocks the canonical 38-item kitchen (with 3 expiring items) for immediate exploration. */
+  // Full 44-item demonstration kitchen including 3 expiring items for instant feature exploration.
+  /** Pre-stocks the canonical 44-item kitchen (with 3 expiring items) for immediate exploration. */
   SAMPLE_DEMO_KITCHEN(
     "Explore Sample Kitchen",
-    "Pre-stocked 38-item kitchen with 3 expiring items to try every feature immediately.",
+    "Pre-stocked 44-item kitchen with 3 expiring items to try every feature immediately.",
   ),
 }
 
@@ -217,7 +217,7 @@ data class FirstRunOnboardingOutcome(
  * pantry-aware substitute tie-breaking), `EC-08` (child growth-stage texture safety), and `EC-11`
  * (Tier-2 `PLENTY`/`OUT` staple status alignment).
  *
- * @param catalog Household ingredient catalog (`38` canonical items).
+ * @param catalog Household ingredient catalog (`44` canonical items).
  * @param recipes Household recipe library (`30` canonical recipes).
  * @param seedPantry Pre-stocked demo pantry ledger used for [StartingPantryMode.SAMPLE_DEMO_KITCHEN].
  * @param currentBoard Current weekly board providing stable `boardId`, `householdId`, and `weekStartDateIso`.

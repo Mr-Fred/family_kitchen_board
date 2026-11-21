@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+  <!-- Left & right cast-iron cocotte loop handles inside [27..81] x [48..76] -->
+  <path
+      android:fillColor="#00000000"
+      android:pathData="M33.5,52.5C27.5,52.5 27.5,60.5 34,60.5"
+      android:strokeColor="#2E7D5A"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:strokeWidth="3.2" />
+  <path
+      android:fillColor="#00000000"
+      android:pathData="M74.5,52.5C80.5,52.5 80.5,60.5 74,60.5"
+      android:strokeColor="#2E7D5A"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:strokeWidth="3.2" />
+
+  <!-- Artisanal Herbal Sage (#2E7D5A) Dutch-oven cocotte pot body ([31..77] x [49..76]) -->
+  <path
+      android:fillColor="#2E7D5A"
+      android:pathData="M31.5,49L76.5,49C77.3,49 78,49.7 78,50.5C78,51.3 77.3,52 76.5,52L75.4,52L74.4,62.6C73.7,70.2 67.3,76 59,76L49,76C40.7,76 34.3,70.2 33.6,62.6L32.6,52L31.5,52C30.7,52 30,51.3 30,50.5C30,49.7 30.7,49 31.5,49Z" />
+
+  <!-- Subtle warm sage-ceramic (#DCEFE5) lower bowl highlight curve -->
+  <path
+      android:fillColor="#00000000"
+      android:pathData="M39.5,63.2C40.8,68.6 45.4,71.4 52.2,71.4"
+      android:strokeColor="#DCEFE5"
+      android:strokeLineCap="round"
+      android:strokeWidth="2.4" />
+
+  <!-- Fitted Terracotta (#C85A32) domed cocotte lid ([31..77] x [40..47.6]) -->
+  <path
+      android:fillColor="#C85A32"
+      android:pathData="M31,47.6C31,46.2 32.1,45.2 33.5,45.2L35.2,45.2C38.8,41.5 45.6,40 54,40C62.4,40 69.2,41.5 72.8,45.2L74.5,45.2C75.9,45.2 77,46.2 77,47.6Z" />
+
+  <!-- Golden Honey (#D98A2B) lid knob centered at (54, 37) -->
+  <path
+      android:fillColor="#D98A2B"
+      android:pathData="M54,34.4C56,34.4 57.6,35.6 57.6,37C57.6,38.4 56,39.6 54,39.6C52,39.6 50.4,38.4 50.4,37C50.4,35.6 52,34.4 54,34.4Z" />
+
+  <!-- Fresh two-leaf botanical sage sprig (#2E7D5A & #40916C) rising inside [43..56] x [24..34.5] -->
+  <path
+      android:fillColor="#2E7D5A"
+      android:pathData="M50.8,34.2C46,33.6 43.4,30.2 43.4,26C47.6,26 50.8,29.2 50.8,34.2Z" />
+  <path
+      android:fillColor="#40916C"
+      android:pathData="M51.6,33.6C49.6,29.6 51.6,25.4 55.8,24.4C56.4,28.6 54.6,32.1 51.6,33.6Z" />
+
+  <!-- Soft rising Terracotta (#C85A32) culinary steam curl inside [58..64] x [25..34.5] -->
+  <path
+      android:fillColor="#00000000"
+      android:pathData="M60.2,34.4C58.2,32.1 63.4,29.4 61,25"
+      android:strokeColor="#C85A32"
+      android:strokeLineCap="round"
+      android:strokeWidth="2.4" />
+</vector>

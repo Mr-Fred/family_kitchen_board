@@ -1,5 +1,11 @@
 package com.familykitchen.board.ui.aichef
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,7 +37,6 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -89,6 +94,7 @@ import com.familykitchen.board.ports.VoiceInputPort
 import com.familykitchen.board.ports.VoiceInputState
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
+import com.familykitchen.board.ui.theme.SavorBrandBadge
 
 // SavorAI Sous-Chef Screen featuring a decluttered conversational viewport, editorial welcome
 // card, quiet single-line AgentStatusPill, interactive structured artifacts, 1-tap Undo bar,
@@ -260,10 +266,17 @@ fun AiChefScreen(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        // 1-tap Undo & View bar docked above composer whenever an agentic commit is reversible.
-        if (canUndoLastAgentAction && !lastAgentActionSummary.isNullOrBlank()) {
+        // 1-tap Undo & View bar with smooth fade/shrink exit docked above composer.
+        val isUndoVisible = canUndoLastAgentAction && !lastAgentActionSummary.isNullOrBlank()
+        var lastUndoSummary by remember { mutableStateOf(lastAgentActionSummary.orEmpty()) }
+        if (!lastAgentActionSummary.isNullOrBlank()) lastUndoSummary = lastAgentActionSummary
+        AnimatedVisibility(
+          visible = isUndoVisible,
+          enter = fadeIn(tween(180)) + expandVertically(tween(200)),
+          exit = fadeOut(tween(220)) + shrinkVertically(tween(220)),
+        ) {
           AgentCommitUndoBar(
-            summary = lastAgentActionSummary, onUndo = onUndoLastAgentAction,
+            summary = lastUndoSummary, onUndo = onUndoLastAgentAction,
             onViewOrAdjust = onAdjustLastAgentAction, onDismiss = onDismissAgentActionBanner,
           )
         }
@@ -565,11 +578,9 @@ private fun SavorChatTurnView(
     val headerLabel = if (sourceTag != null) "Sous-Chef · $sourceTag · $timeBadge" else "Sous-Chef · $timeBadge"
 
     Column(modifier = Modifier.fillMaxWidth().padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      // Warm sageContainer Sous-Chef avatar with Restaurant icon (zero sparkles, zero blue pills).
+      // 26.dp circular SavorAI cocotte Sous-Chef avatar (zero sparkles, zero cold blue pills).
       Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(extendedColors.sageContainer), contentAlignment = Alignment.Center) {
-          Icon(Icons.Filled.Restaurant, contentDescription = null, tint = extendedColors.onSageContainer, modifier = Modifier.size(13.dp))
-        }
+        SavorBrandBadge(badgeSize = 26.dp, logoSize = 16.dp, shape = CircleShape)
         Text(
           text = headerLabel, style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,

@@ -7,6 +7,12 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +41,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,8 +79,11 @@ import com.familykitchen.board.domain.HouseholdProfile
 import com.familykitchen.board.domain.StartingPantryMode
 import com.familykitchen.board.ports.AiRuntimeState
 import com.familykitchen.board.ports.RuntimeCapabilities
+import com.familykitchen.board.ui.computeToastAutoDismissMillis
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
+import com.familykitchen.board.ui.theme.SavorBrandBadge
+import kotlinx.coroutines.delay
 
 // Warm, serene 4-step SavorAI First-Run Onboarding Host (imperative SAF + BackHandler shell) and
 // pure stateless FirstRunOnboardingScreen Composable with Galaxy S22 1.35x font-scale resilience.
@@ -99,10 +107,11 @@ private val ALLOWED_ONBOARDING_MODEL_EXTENSIONS: Set<String> = setOf("litertlm",
  * @param isRefreshingCloudModels `true` while syncing live `/models` identifiers.
  * @param isSavingBatch `true` while committing the atomic `O(1)` onboarding snapshot batch.
  * @param toastMessage Optional transient feedback message (for example, Cloud API key verification).
+ * @param toastEventId Monotonic toast event counter restarting auto-dismiss on repeated notices.
  * @param onDismissToast Callback dismissing [toastMessage].
  * @param onAiChefAction Callback dispatching [AiChefAction] intents to `KitchenBoardViewModel`.
  * @param onCompleteOnboarding Commits the completed [FirstRunOnboardingDraft] in 1 `O(1)` batch write.
- * @param onSkipWithDemoKitchen Skips setup on fresh installs and loads the 38-item sample kitchen.
+ * @param onSkipWithDemoKitchen Skips setup on fresh installs and loads the 44-item sample kitchen.
  * @param onDismissReplay Closes the wizard without mutating state when [isReplayMode] is `true`.
  * @param modifier Optional Compose [Modifier].
  */
@@ -117,6 +126,7 @@ fun FirstRunOnboardingHost(
   isRefreshingCloudModels: Boolean = false,
   isSavingBatch: Boolean = false,
   toastMessage: String? = null,
+  toastEventId: Long = 0L,
   onDismissToast: () -> Unit = {},
   onAiChefAction: (AiChefAction) -> Unit = {},
   onCompleteOnboarding: (FirstRunOnboardingDraft) -> Unit = {},
@@ -196,6 +206,7 @@ fun FirstRunOnboardingHost(
     runtimeState = runtimeState, activeDeviceProfile = activeDeviceProfile, cloudConfig = cloudConfig,
     isVerifyingCloudKey = isVerifyingCloudKey, isRefreshingCloudModels = isRefreshingCloudModels,
     isSavingBatch = isSavingBatch, importNotice = importNotice, toastMessage = toastMessage,
+    toastEventId = toastEventId,
     onStepChange = { targetStep -> currentStep = targetStep.coerceIn(0, FINAL_ONBOARDING_STEP_INDEX) },
     onDraftChange = applyDraftUpdate, onAiChefAction = onAiChefAction,
     onLaunchModelPicker = launchModelPicker, onDismissImportNotice = { importNotice = null },
@@ -220,6 +231,7 @@ fun FirstRunOnboardingHost(
  * @param isSavingBatch `true` while committing the `O(1)` atomic onboarding batch write.
  * @param importNotice Optional SAF model picker validation notice.
  * @param toastMessage Optional status toast banner (such as Cloud API key connectivity feedback).
+ * @param toastEventId Monotonic toast event counter restarting auto-dismiss on repeated notices.
  * @param onStepChange Callback navigating to a target step index (`0..3`).
  * @param onDraftChange Callback emitting updated [FirstRunOnboardingDraft] edits.
  * @param onAiChefAction Callback dispatching [AiChefAction] intents on Step 4.
@@ -244,6 +256,7 @@ fun FirstRunOnboardingScreen(
   isSavingBatch: Boolean = false,
   importNotice: String? = null,
   toastMessage: String? = null,
+  toastEventId: Long = 0L,
   onStepChange: (Int) -> Unit = {},
   onDraftChange: (FirstRunOnboardingDraft) -> Unit = {},
   onAiChefAction: (AiChefAction) -> Unit = {},
@@ -269,10 +282,12 @@ fun FirstRunOnboardingScreen(
         safeStep = safeStep, isReplayMode = isReplayMode, isSavingBatch = isSavingBatch,
         onSkipWithDemoKitchen = onSkipWithDemoKitchen, onDismissReplay = onDismissReplay,
       )
-      // Surface Cloud API key verification or validation feedback right inside the setup flow.
-      if (!toastMessage.isNullOrBlank()) {
-        OnboardingFeedbackStrip(message = toastMessage, onDismiss = onDismissToast)
-      }
+      // Surface Cloud API key verification or validation feedback with smooth auto-dismiss.
+      OnboardingFeedbackStrip(
+        message = toastMessage,
+        toastEventId = toastEventId,
+        onDismiss = onDismissToast,
+      )
       HorizontalDivider(color = extendedColors.borderSubtle)
 
       // Center scrollable step body up to 640.dp for clean portrait S22 and wide counter parity.
@@ -326,12 +341,8 @@ private fun OnboardingProgressTopBar(
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
       Row(modifier = Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Grounded culinary Restaurant icon inside soft sage badge (zero generic AI sparkles).
-        Surface(shape = CircleShape, color = extendedColors.sageContainer, border = BorderStroke(1.dp, extendedColors.borderSubtle)) {
-          Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Restaurant, contentDescription = null, tint = extendedColors.onSageContainer, modifier = Modifier.size(18.dp))
-          }
-        }
+        // 36.dp circular SavorAI Dutch-oven cocotte brand badge (zero generic AI sparkles).
+        SavorBrandBadge(badgeSize = 36.dp, logoSize = 21.dp, shape = CircleShape)
         Column {
           Text("Step ${safeStep + 1} of $TOTAL_ONBOARDING_STEPS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
           Text(stepLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -420,17 +431,40 @@ private fun OnboardingBottomNavigationBar(
 }
 
 @Composable
-private fun OnboardingFeedbackStrip(message: String, onDismiss: () -> Unit) {
+private fun OnboardingFeedbackStrip(
+  message: String?,
+  toastEventId: Long = 0L,
+  onDismiss: () -> Unit,
+) {
   val extendedColors = KitchenTheme.extendedColors
-  Surface(
-    shape = RoundedCornerShape(12.dp), color = extendedColors.sageContainer,
-    border = BorderStroke(1.dp, extendedColors.herbalSage.copy(alpha = 0.45f)),
-    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+  val isVisible = !message.isNullOrBlank()
+  // Retain latest non-blank toast text so fade/shrink exit transitions render cleanly.
+  var lastNonBlankMessage by remember { mutableStateOf(message.orEmpty()) }
+  if (!message.isNullOrBlank()) {
+    lastNonBlankMessage = message
+  }
+  LaunchedEffect(toastEventId, message) {
+    if (!message.isNullOrBlank()) {
+      delay(computeToastAutoDismissMillis(message))
+      onDismiss()
+    }
+  }
+
+  AnimatedVisibility(
+    visible = isVisible,
+    enter = fadeIn(tween(180)) + expandVertically(tween(200)),
+    exit = fadeOut(tween(220)) + shrinkVertically(tween(220)),
   ) {
-    Row(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-      Text(message, style = MaterialTheme.typography.bodySmall, color = extendedColors.onSageContainer, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
-      IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-        Icon(Icons.Filled.Close, contentDescription = "Dismiss notification", tint = extendedColors.onSageContainer, modifier = Modifier.size(16.dp))
+    Surface(
+      shape = RoundedCornerShape(12.dp), color = extendedColors.sageContainer,
+      border = BorderStroke(1.dp, extendedColors.herbalSage.copy(alpha = 0.45f)),
+      modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+    ) {
+      Row(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(lastNonBlankMessage, style = MaterialTheme.typography.bodySmall, color = extendedColors.onSageContainer, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
+        IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+          Icon(Icons.Filled.Close, contentDescription = "Dismiss notification", tint = extendedColors.onSageContainer, modifier = Modifier.size(16.dp))
+        }
       }
     }
   }

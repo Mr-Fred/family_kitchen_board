@@ -17,7 +17,7 @@ import org.junit.Test
 
 /**
  * Hermetic JUnit 4 verification suite covering every locked domain invariant (`EC-01`–`EC-13`),
- * canonical offline seed catalog deserialization (`38` ingredients, `30` recipes, `38` pantry
+ * canonical offline seed catalog deserialization (`44` ingredients, `30` recipes, `44` pantry
  * entries), station-grouped Weekly Meal Prep batch commits, and Life-Event serving scaling.
  */
 class EdgeCasesEc01ToEc13Test {
@@ -33,7 +33,7 @@ class EdgeCasesEc01ToEc13Test {
     IngredientCatalogItem("ing_blueberry", "Fresh Blueberries", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 250.0, substituteGroupIds = listOf("FRUIT_TOPPING")),
     IngredientCatalogItem("ing_banana", "Sweet Ripe Bananas", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, substituteGroupIds = listOf("FRUIT_TOPPING")),
     IngredientCatalogItem("ing_mango", "Fresh Kent Mango", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, substituteGroupIds = listOf("FRUIT_TOPPING")),
-    IngredientCatalogItem("ing_spinach", "Fresh Baby Spinach & Amaranth Greens", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 300.0, substituteGroupIds = listOf("LEAFY_GREENS")),
+    IngredientCatalogItem("ing_spinach", "Fresh Baby Spinach", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 300.0, substituteGroupIds = listOf("LEAFY_GREENS")),
     IngredientCatalogItem("ing_peanut_butter", "Natural Peanut Butter", IngredientCategory.PANTRY_STAPLE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 500.0, substituteGroupIds = listOf("NUT_SEED_SPREAD"), allergens = listOf("PEANUTS")),
     IngredientCatalogItem("ing_sunflower_butter", "Creamy Sunflower Seed Butter", IngredientCategory.PANTRY_STAPLE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 500.0, substituteGroupIds = listOf("NUT_SEED_SPREAD")),
     IngredientCatalogItem("ing_olive_oil", "Extra-Virgin Olive Oil", IngredientCategory.PANTRY_STAPLE, IngredientTier.TIER_2_STAPLE, BaseUnit.MILLILITER, 500.0),
@@ -620,19 +620,24 @@ class EdgeCasesEc01ToEc13Test {
 
   /**
    * Verifies that canonical `android/app/src/main/assets/seed_catalog.json` deserializes cleanly
-   * via [SchemaValidator.decodeSeedCatalogDatasetJson] with `38` ingredients, `30` recipes, `38`
-   * initial pantry entries, and `0` calibrated morning math mismatches.
+   * via [SchemaValidator.decodeSeedCatalogDatasetJson] with `44` ingredients (`38` Tier-1 + `6`
+   * Tier-2), `30` recipes, `44` initial pantry entries, `FRUIT_TOPPING` / `LEAFY_GREENS` /
+   * `NUT_SEED_TOPPING` substitute groups, and `0` calibrated morning math mismatches.
    */
   @Test
   fun canonicalSeedCatalogAsset_deserializesCleanlyWithExactCountsAndZeroMathMismatches() {
     val dataset = SchemaValidator.decodeSeedCatalogDatasetJson(readCanonicalSeedCatalogJson())
 
     // Verify exact curated counts across Tier-1/Tier-2 catalog items, recipes, and initial pantry.
-    assertEquals(38, dataset.ingredients.size)
-    assertEquals(32, dataset.ingredients.count { it.tier == IngredientTier.TIER_1_QUANTITATIVE })
+    assertEquals(44, dataset.ingredients.size)
+    assertEquals(38, dataset.ingredients.count { it.tier == IngredientTier.TIER_1_QUANTITATIVE })
     assertEquals(6, dataset.ingredients.count { it.tier == IngredientTier.TIER_2_STAPLE })
     assertEquals(30, dataset.recipes.size)
-    assertEquals(38, dataset.initialPantry.size)
+    assertEquals(44, dataset.initialPantry.size)
+
+    // Confirm all three canonical substitute groups (including NUT_SEED_TOPPING) are enrolled.
+    val substituteGroups = dataset.ingredients.flatMap { it.substituteGroupIds }.toSet()
+    assertTrue(substituteGroups.containsAll(setOf("FRUIT_TOPPING", "LEAFY_GREENS", "NUT_SEED_TOPPING")))
 
     // Confirm 0 calibrated morning math mismatches, 100% toddler tips, and workout boost coverage.
     val mathMismatches = dataset.recipes.count {

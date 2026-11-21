@@ -313,7 +313,7 @@ fun KitchenScaffoldContent(
             activeDeviceProfile = uiState.activeDeviceProfile, cloudConfig = uiState.cloudLlmConfig,
             isVerifyingCloudKey = uiState.isVerifyingCloudKey,
             isRefreshingCloudModels = uiState.isRefreshingCloudModels, isSavingBatch = uiState.isSavingBatch,
-            toastMessage = uiState.toastMessage, onDismissToast = onDismissToast,
+            toastMessage = uiState.toastMessage, toastEventId = uiState.toastEventId, onDismissToast = onDismissToast,
             onAiChefAction = onAiChefAction, onCompleteOnboarding = onCompleteFirstRunOnboarding,
             onSkipWithDemoKitchen = onSkipFirstRunOnboarding, onDismissReplay = onDismissOnboardingReplay,
           )
@@ -322,7 +322,7 @@ fun KitchenScaffoldContent(
             activeDeviceProfile = uiState.activeDeviceProfile, cloudConfig = uiState.cloudLlmConfig,
             isVerifyingCloudKey = uiState.isVerifyingCloudKey,
             isRefreshingCloudModels = uiState.isRefreshingCloudModels, isSavingBatch = uiState.isSavingBatch,
-            toastMessage = uiState.toastMessage, onDismissToast = onDismissToast,
+            toastMessage = uiState.toastMessage, toastEventId = uiState.toastEventId, onDismissToast = onDismissToast,
             onAiChefAction = onAiChefAction, onCompleteOnboarding = onCompleteFirstRunOnboarding,
             onSkipWithDemoKitchen = onSkipFirstRunOnboarding, onDismissReplay = onDismissOnboardingReplay,
           )
@@ -363,11 +363,12 @@ fun KitchenScaffoldContent(
                   onClearAndClose = onToggleSearch,
                 )
               }
-              // Sticky dismissible toast confirming O(1) batch commits and EC-01..EC-13 gates.
-              val toast = uiState.toastMessage
-              if (!toast.isNullOrBlank()) {
-                SavorDismissibleToastBanner(message = toast, onDismiss = onDismissToast)
-              }
+              // Smoothly animated, auto-dismissing toast confirming O(1) commits and EC-01..EC-13 gates.
+              SavorDismissibleToastBanner(
+                message = uiState.toastMessage,
+                toastEventId = uiState.toastEventId,
+                onDismiss = onDismissToast,
+              )
             }
           },
           bottomBar = {

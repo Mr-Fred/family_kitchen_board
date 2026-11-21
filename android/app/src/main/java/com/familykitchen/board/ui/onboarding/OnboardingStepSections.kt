@@ -1,5 +1,11 @@
 package com.familykitchen.board.ui.onboarding
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +46,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,7 +78,10 @@ import com.familykitchen.board.ui.aichef.CloudApiKeySetupContent
 import com.familykitchen.board.ui.aichef.ModelOperationProgressBanner
 import com.familykitchen.board.ui.aichef.OnDeviceModelDownloadCtaRow
 import com.familykitchen.board.ui.aichef.formatAiRuntimeBadgeLabel
+import com.familykitchen.board.ui.computeToastAutoDismissMillis
 import com.familykitchen.board.ui.theme.KitchenTheme
+import com.familykitchen.board.ui.theme.SavorBrandBadge
+import kotlinx.coroutines.delay
 
 // Stateless, tactile 4-step First-Run Onboarding section cards calibrated for Warm Linen daylight,
 // Ambient Counter Dark OLED legibility, 48.dp+ touch targets, and Galaxy S22 1.35x font scaling.
@@ -161,9 +175,12 @@ fun OnboardingHouseholdStepSection(
   val wordImeDone = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done)
 
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-    // Editorial Newsreader welcome header establishing calm, non-clinical kitchen warmth.
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      Text("Welcome to SavorAI", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
+    // Editorial Newsreader welcome header paired with the 40.dp SavorAI culinary cocotte badge.
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        SavorBrandBadge(badgeSize = 40.dp, logoSize = 24.dp, shape = RoundedCornerShape(12.dp))
+        Text("Welcome to SavorAI", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
+      }
       Text(
         text = "Tell your sous-chef who you're cooking for so portions, prep timers, and safety tips fit from day one.",
         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -447,11 +464,11 @@ fun OnboardingPantryStepSection(
     // Render all 3 StartingPantryMode cards with crisp 1.dp warm stone / sage borders.
     StartingPantryMode.entries.forEach { mode ->
       val isSelected = draft.pantryMode == mode
-      // Explain exact 38-item pantry behavior so empty vs demo vs basics expectations stay clear.
+      // Explain exact 44-item pantry behavior so empty vs demo vs basics expectations stay clear.
       val modeDetail = when (mode) {
         StartingPantryMode.CURATED_BASICS -> "Check the basics you already have at home; everything else starts at 0 stock."
-        StartingPantryMode.EMPTY_KITCHEN -> "All 38 catalog items start at 0 stock — ready for receipt/fridge photo scans or manual additions."
-        StartingPantryMode.SAMPLE_DEMO_KITCHEN -> "Stocks all 38 demo items (including 3 expiring items: salmon, spinach, and Greek yogurt) immediately."
+        StartingPantryMode.EMPTY_KITCHEN -> "All 44 catalog items start at 0 stock — ready for receipt/fridge photo scans or manual additions."
+        StartingPantryMode.SAMPLE_DEMO_KITCHEN -> "Stocks all 44 demo items (including 3 expiring items: salmon, spinach, and Greek yogurt) immediately."
       }
 
       OnboardingSelectableCard(isSelected = isSelected, onClick = { onDraftChange(draft.copy(pantryMode = mode)) }) {
@@ -643,10 +660,25 @@ fun OnboardingAiSetupStepSection(
               onCancelDownload = { onAiChefAction(AiChefAction.CancelActiveModelDownload) },
             )
           }
+          // Auto-dismiss SAF model file-picker validation notices smoothly after reading delay.
+          var lastImportNotice by remember { mutableStateOf(importNotice.orEmpty()) }
           if (!importNotice.isNullOrBlank()) {
+            lastImportNotice = importNotice
+          }
+          LaunchedEffect(importNotice) {
+            if (!importNotice.isNullOrBlank()) {
+              delay(computeToastAutoDismissMillis(importNotice))
+              onDismissImportNotice()
+            }
+          }
+          AnimatedVisibility(
+            visible = !importNotice.isNullOrBlank(),
+            enter = fadeIn(tween(180)) + expandVertically(tween(200)),
+            exit = fadeOut(tween(220)) + shrinkVertically(tween(220)),
+          ) {
             Surface(shape = KitchenTheme.shapes.inputDefault, color = extendedColors.secondaryFixed, border = BorderStroke(1.dp, extendedColors.borderSubtle), modifier = Modifier.fillMaxWidth()) {
               Row(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(importNotice, style = MaterialTheme.typography.bodySmall, color = extendedColors.onSecondaryFixed, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
+                Text(lastImportNotice, style = MaterialTheme.typography.bodySmall, color = extendedColors.onSecondaryFixed, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
                 IconButton(onClick = onDismissImportNotice, modifier = Modifier.size(48.dp)) {
                   Icon(Icons.Filled.Close, contentDescription = "Dismiss model import notice", tint = extendedColors.onSecondaryFixed)
                 }

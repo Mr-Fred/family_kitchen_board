@@ -43,12 +43,12 @@ internal class KitchenCloudConfigDelegate(
           AiExecutionMode.ON_DEVICE -> "Switched to On-Device (Offline) mode."
           AiExecutionMode.CLOUD_API -> "Switched to Cloud API mode (${updated.provider.shortLabel})."
         }
-        mutableUiState.update { it.copy(cloudLlmConfig = updated, toastMessage = statusMsg) }
+        mutableUiState.update { it.copy(cloudLlmConfig = updated).withToast(statusMsg) }
       } catch (cancel: CancellationException) {
         throw cancel
       } catch (err: Throwable) {
         val safeMsg = redactApiSecrets(err.message ?: "Unable to switch AI execution mode.")
-        mutableUiState.update { it.copy(toastMessage = safeMsg) }
+        mutableUiState.update { it.withToast(safeMsg) }
       }
     }
   }
@@ -61,16 +61,14 @@ internal class KitchenCloudConfigDelegate(
         val updated = cloudVaultPort.selectProvider(provider)
         syncHybridRuntimeState()
         mutableUiState.update {
-          it.copy(
-            cloudLlmConfig = updated,
-            toastMessage = "Selected ${provider.displayName} (${updated.modelId}).",
-          )
+          it.copy(cloudLlmConfig = updated)
+            .withToast("Selected ${provider.displayName} (${updated.modelId}).")
         }
       } catch (cancel: CancellationException) {
         throw cancel
       } catch (err: Throwable) {
         val safeMsg = redactApiSecrets(err.message ?: "Unable to select cloud provider.")
-        mutableUiState.update { it.copy(toastMessage = safeMsg) }
+        mutableUiState.update { it.withToast(safeMsg) }
       }
     }
   }
@@ -87,7 +85,7 @@ internal class KitchenCloudConfigDelegate(
         throw cancel
       } catch (err: Throwable) {
         val safeMsg = redactApiSecrets(err.message ?: "Invalid cloud model ID.")
-        mutableUiState.update { it.copy(toastMessage = safeMsg) }
+        mutableUiState.update { it.withToast(safeMsg) }
       }
     }
   }
@@ -100,7 +98,7 @@ internal class KitchenCloudConfigDelegate(
     val trimmedKey = action.rawApiKey.trim()
     // Reject blank submissions early before touching Keystore or network transport.
     if (trimmedKey.isEmpty()) {
-      mutableUiState.update { it.copy(toastMessage = "Enter a valid API key before saving.") }
+      mutableUiState.update { it.withToast("Enter a valid API key before saving.") }
       return
     }
 
@@ -120,7 +118,7 @@ internal class KitchenCloudConfigDelegate(
         throw cancel
       } catch (err: Throwable) {
         val safeMsg = redactApiSecrets(err.message ?: "Invalid cloud API key configuration.", trimmedKey)
-        mutableUiState.update { it.copy(toastMessage = safeMsg) }
+        mutableUiState.update { it.withToast(safeMsg) }
         return@launch
       }
 
@@ -128,10 +126,8 @@ internal class KitchenCloudConfigDelegate(
       // Skip live network verification when caller explicitly sets verifyConnection = false.
       if (!action.verifyConnection) {
         mutableUiState.update {
-          it.copy(
-            cloudLlmConfig = savedConfig,
-            toastMessage = "Saved ${action.provider.displayName} key ($maskedBadge).",
-          )
+          it.copy(cloudLlmConfig = savedConfig)
+            .withToast("Saved ${action.provider.displayName} key ($maskedBadge).")
         }
         return@launch
       }
@@ -141,18 +137,14 @@ internal class KitchenCloudConfigDelegate(
       try {
         (aiEdgePort as? HybridAiInferenceRouter)?.verifyActiveCloudConnection()
         mutableUiState.update {
-          it.copy(
-            toastMessage = "Saved & connected ${action.provider.displayName} (${savedConfig.modelId})!",
-          )
+          it.withToast("Saved & connected ${action.provider.displayName} (${savedConfig.modelId})!")
         }
       } catch (cancel: CancellationException) {
         throw cancel
       } catch (err: Throwable) {
         val safeDetail = redactApiSecrets(err.message ?: "Connection check failed.", trimmedKey)
         mutableUiState.update {
-          it.copy(
-            toastMessage = "Saved ${action.provider.shortLabel} key ($maskedBadge); check failed: $safeDetail",
-          )
+          it.withToast("Saved ${action.provider.shortLabel} key ($maskedBadge); check failed: $safeDetail")
         }
       } finally {
         mutableUiState.update { it.copy(isVerifyingCloudKey = false) }
@@ -168,16 +160,14 @@ internal class KitchenCloudConfigDelegate(
         val cleared = cloudVaultPort.clearApiKey(provider)
         syncHybridRuntimeState()
         mutableUiState.update {
-          it.copy(
-            cloudLlmConfig = cleared,
-            toastMessage = "Removed ${provider.displayName} key from vault.",
-          )
+          it.copy(cloudLlmConfig = cleared)
+            .withToast("Removed ${provider.displayName} key from vault.")
         }
       } catch (cancel: CancellationException) {
         throw cancel
       } catch (err: Throwable) {
         val safeMsg = redactApiSecrets(err.message ?: "Unable to clear API key.")
-        mutableUiState.update { it.copy(toastMessage = safeMsg) }
+        mutableUiState.update { it.withToast(safeMsg) }
       }
     }
   }
@@ -195,7 +185,7 @@ internal class KitchenCloudConfigDelegate(
             router.verifyActiveCloudConnection()
             val cfg = cloudVaultPort.configFlow.value
             mutableUiState.update {
-              it.copy(toastMessage = "Verified ${cfg.provider.displayName} (${cfg.modelId}) connection — ready!")
+              it.withToast("Verified ${cfg.provider.displayName} (${cfg.modelId}) connection — ready!")
             }
           }
           else -> {
@@ -205,14 +195,14 @@ internal class KitchenCloudConfigDelegate(
               hasKey -> "Stored key present for ${cfg.provider.displayName} (${cfg.modelId})."
               else -> "Add your ${cfg.provider.displayName} key in Model Setup before verifying."
             }
-            mutableUiState.update { it.copy(toastMessage = msg) }
+            mutableUiState.update { it.withToast(msg) }
           }
         }
       } catch (cancel: CancellationException) {
         throw cancel
       } catch (err: Throwable) {
         val safeMsg = redactApiSecrets(err.message ?: "Cloud connection verification failed.")
-        mutableUiState.update { it.copy(toastMessage = safeMsg) }
+        mutableUiState.update { it.withToast(safeMsg) }
       } finally {
         mutableUiState.update { it.copy(isVerifyingCloudKey = false) }
       }
@@ -232,18 +222,14 @@ internal class KitchenCloudConfigDelegate(
             val syncedModels = router.refreshCloudModels()
             val updatedCfg = cloudVaultPort.configFlow.value
             mutableUiState.update {
-              it.copy(
-                cloudLlmConfig = updatedCfg,
-                toastMessage = "Synced ${syncedModels.size} live models for ${updatedCfg.provider.displayName}.",
-              )
+              it.copy(cloudLlmConfig = updatedCfg)
+                .withToast("Synced ${syncedModels.size} live models for ${updatedCfg.provider.displayName}.")
             }
           }
           else -> {
             val cfg = cloudVaultPort.configFlow.value
             mutableUiState.update {
-              it.copy(
-                toastMessage = "Showing ${cfg.availableModelIds.size} preset models for ${cfg.provider.displayName}.",
-              )
+              it.withToast("Showing ${cfg.availableModelIds.size} preset models for ${cfg.provider.displayName}.")
             }
           }
         }
@@ -251,7 +237,7 @@ internal class KitchenCloudConfigDelegate(
         throw cancel
       } catch (err: Throwable) {
         val safeMsg = redactApiSecrets(err.message ?: "Unable to sync live cloud models.")
-        mutableUiState.update { it.copy(toastMessage = safeMsg) }
+        mutableUiState.update { it.withToast(safeMsg) }
       } finally {
         mutableUiState.update { it.copy(isRefreshingCloudModels = false) }
       }

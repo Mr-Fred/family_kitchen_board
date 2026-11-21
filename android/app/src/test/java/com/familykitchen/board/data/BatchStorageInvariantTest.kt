@@ -334,7 +334,7 @@ class BatchStorageInvariantTest {
 
   /**
    * Verifies that [AssetSeedCatalogLoader.decodeFromStream] validates the canonical bundled
-   * `seed_catalog.json` (`38` ingredients, `30` recipes, `38` pantry records) and rejects polluted
+   * `seed_catalog.json` (`44` ingredients, `30` recipes, `44` pantry records) and rejects polluted
    * or failing streams with [ValidationException].
    */
   @Test
@@ -342,9 +342,9 @@ class BatchStorageInvariantTest {
     val canonicalBytes = readCanonicalSeedAssetText().toByteArray(Charsets.UTF_8)
     val dataset = AssetSeedCatalogLoader.decodeFromStream(ByteArrayInputStream(canonicalBytes))
 
-    assertEquals(38, dataset.ingredients.size)
+    assertEquals(44, dataset.ingredients.size)
     assertEquals(30, dataset.recipes.size)
-    assertEquals(38, dataset.initialPantry.size)
+    assertEquals(44, dataset.initialPantry.size)
 
     // Reject unknown injected JSON keys at the asset loader boundary.
     val pollutedBytes = """{"ingredients":[],"recipes":[],"initialPantry":[],"rogue":1}"""

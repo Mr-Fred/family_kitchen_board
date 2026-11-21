@@ -144,6 +144,7 @@ enum class VoiceCaptureTarget {
  * @property confirmedVisualTurnIds Set of `turnId`s whose photo scan restocks were confirmed.
  * @property batchWriteCallCount Monotonic `KitchenStoragePort.batchWriteCallCount` (`O(1)` proof).
  * @property toastMessage Dismissible confirmation or validation banner shown in `KitchenScaffold`.
+ * @property toastEventId Monotonic counter incremented on each non-blank toast so identical consecutive messages restart auto-dismiss timers.
  * @property canUndoLastAgentAction `true` when an undoable Sous-Chef snapshot is available.
  * @property lastAgentActionSummary Concise human summary for the inline Sous-Chef Undo/Adjust bar.
  * @property lastAgentActionAdjustTarget Destination tab opened when the user taps `Adjust`/`View`.
@@ -200,6 +201,7 @@ data class KitchenUiState(
   val confirmedVisualTurnIds: Set<String> = emptySet(),
   val batchWriteCallCount: Int = 0,
   val toastMessage: String? = null,
+  val toastEventId: Long = 0L,
   val canUndoLastAgentAction: Boolean = false,
   val lastAgentActionSummary: String? = null,
   val lastAgentActionAdjustTarget: TopLevelDestination? = null,
@@ -496,3 +498,53 @@ private fun emptyPrepPlan(): WeeklyPrepSessionPlan =
     totalTimeSavedMinutes = 0,
     coveredSlotIds = emptyList(),
   )
+
+// Auto-dismiss timing constants kept strictly in Compose UI effects so ViewModel JUnit tests
+// remain 100% deterministic without background viewModelScope delay() timers.
+
+/** Default auto-dismiss countdown (`4,000 ms`) for concise confirmation toasts. */
+const val DEFAULT_TOAST_AUTO_DISMISS_MS: Long = 4_000L
+
+/** Extended auto-dismiss countdown (`6,000 ms`) for long (`> 90` chars) or warning/error toasts. */
+const val EXTENDED_TOAST_AUTO_DISMISS_MS: Long = 6_000L
+
+/** Auto-dismiss countdown (`5,000 ms`) for camera, microphone, and SAF permission feedback strips. */
+const val PERMISSION_NOTICE_AUTO_DISMISS_MS: Long = 5_000L
+
+/** Auto-dismiss countdown (`8,000 ms`) for the post-commit Sous-Chef `Undo` / `View` bar. */
+const val UNDO_BAR_AUTO_DISMISS_MS: Long = 8_000L
+
+private val EXTENDED_TOAST_KEYWORDS: List<String> =
+  listOf("unable", "failed", "error", "blocked", "invalid", "warning")
+
+/**
+ * Computes the Compose auto-dismiss duration in milliseconds for [message], granting `6,000 ms`
+ * when the trimmed text exceeds `90` characters or contains diagnostic/error keywords, and
+ * `4,000 ms` for routine confirmations.
+ *
+ * @param message Non-blank toast message displayed to the user.
+ * @return Auto-dismiss delay in milliseconds (`4_000L` or `6_000L`).
+ */
+fun computeToastAutoDismissMillis(message: String): Long {
+  val trimmed = message.trim()
+  val lower = trimmed.lowercase()
+  return when {
+    trimmed.length > 90 || EXTENDED_TOAST_KEYWORDS.any { keyword -> lower.contains(keyword) } ->
+      EXTENDED_TOAST_AUTO_DISMISS_MS
+    else -> DEFAULT_TOAST_AUTO_DISMISS_MS
+  }
+}
+
+/**
+ * Updates [KitchenUiState.toastMessage] and increments [KitchenUiState.toastEventId] whenever
+ * [message] is non-blank so even two consecutive identical toast messages restart their Compose
+ * auto-dismiss countdown cleanly.
+ *
+ * @param message Toast banner copy to display, or `null` / blank to clear the active banner.
+ * @return Updated immutable [KitchenUiState].
+ */
+fun KitchenUiState.withToast(message: String?): KitchenUiState =
+  when {
+    message.isNullOrBlank() -> copy(toastMessage = null)
+    else -> copy(toastMessage = message, toastEventId = toastEventId + 1L)
+  }

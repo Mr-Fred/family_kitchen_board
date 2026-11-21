@@ -1,10 +1,15 @@
 package com.familykitchen.board.ui.navigation
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,7 +39,6 @@ import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FamilyRestroom
 import androidx.compose.material.icons.filled.Kitchen
-import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Timer
@@ -58,7 +62,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -74,16 +82,19 @@ import androidx.compose.ui.unit.dp
 import com.familykitchen.board.ports.AiRuntimeState
 import com.familykitchen.board.ui.TopLevelDestination
 import com.familykitchen.board.ui.aichef.formatByteProgressLabel
+import com.familykitchen.board.ui.computeToastAutoDismissMillis
 import com.familykitchen.board.ui.pacer.PacerMode
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
+import com.familykitchen.board.ui.theme.SavorBrandBadge
+import kotlinx.coroutines.delay
 
 // Decluttered SavorAI Top App Bar, Compact Region/Vault Pill, Toast Banner, Search Bar,
 // 5-Tab Bottom NavigationBar, Wide-Counter NavigationRail, and 2-Pill Plan Mode Switcher.
 
 /**
- * Shared `SavorAI` Top App Bar prioritizing the weighted left brand identity (`Icons.Filled.Restaurant`
- * in a `32.dp` rounded-10 `sageContainer` badge + non-wrapping `"SavorAI"` + `"· <subtitle>"`) and
+ * Shared `SavorAI` Top App Bar prioritizing the weighted left brand identity ([SavorBrandBadge]
+ * `34.dp` rounded-11 culinary cocotte mark + non-wrapping `"SavorAI"` + `"· <subtitle>"`) and
  * capping the right action cluster at `<= 3` `48.dp` touch controls so `SavorAI` is never crushed
  * to `0.dp` even at `1.35x` Galaxy S22 display/font scaling.
  */
@@ -140,13 +151,12 @@ fun SavorTopAppBar(
           horizontalArrangement = Arrangement.spacedBy(8.dp),
           modifier = Modifier.weight(1f),
         ) {
-          // 32.dp rounded-10 botanical sage badge hosting Restaurant icon (zero sparkles).
-          Box(
-            modifier = Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(extendedColors.sageContainer),
-            contentAlignment = Alignment.Center,
-          ) {
-            Icon(Icons.Filled.Restaurant, contentDescription = null, tint = extendedColors.onSageContainer, modifier = Modifier.size(18.dp))
-          }
+          // 34.dp rounded-11 SavorAI Dutch-oven cocotte emblem (zero sparkles, zero cold hues).
+          SavorBrandBadge(
+            badgeSize = 34.dp,
+            logoSize = 21.dp,
+            shape = RoundedCornerShape(11.dp),
+          )
           // Non-wrapping brand wordmark keeps SavorAI readable at 1.35x system font scale.
           Text(
             text = "SavorAI",
@@ -293,37 +303,60 @@ internal fun SavorExpandableSearchBar(
 }
 
 /**
- * Sticky dismissible status toast banner confirming `O(1)` atomic batch writes and domain gates.
+ * Smoothly animated, auto-dismissing status toast banner confirming `O(1)` atomic batch writes
+ * and domain gates while retaining a `48.dp` manual close action.
  */
 @Composable
 internal fun SavorDismissibleToastBanner(
-  message: String,
+  message: String?,
   onDismiss: () -> Unit,
   modifier: Modifier = Modifier,
+  toastEventId: Long = 0L,
 ) {
   val extendedColors = KitchenTheme.extendedColors
-  // Botanical sage container frames batch confirmations and non-silent vision gate notices.
-  Surface(
-    shape = RoundedCornerShape(16.dp),
-    color = extendedColors.sageContainer,
-    border = BorderStroke(1.dp, extendedColors.herbalSage.copy(alpha = 0.45f)),
-    shadowElevation = 0.dp,
-    modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+  val isVisible = !message.isNullOrBlank()
+  // Retain the latest non-blank copy so fade/shrink exit transitions never flash an empty strip.
+  var lastNonBlankMessage by remember { mutableStateOf(message.orEmpty()) }
+  if (!message.isNullOrBlank()) {
+    lastNonBlankMessage = message
+  }
+  // Restart auto-dismiss countdown whenever a fresh toastEventId or message arrives.
+  LaunchedEffect(toastEventId, message) {
+    if (!message.isNullOrBlank()) {
+      delay(computeToastAutoDismissMillis(message))
+      onDismiss()
+    }
+  }
+
+  AnimatedVisibility(
+    visible = isVisible,
+    enter = fadeIn(tween(180)) + expandVertically(tween(200)),
+    exit = fadeOut(tween(220)) + shrinkVertically(tween(220)),
+    modifier = modifier.fillMaxWidth(),
   ) {
-    Row(
-      modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.SpaceBetween,
+    // Botanical sage container frames batch confirmations and non-silent vision gate notices.
+    Surface(
+      shape = RoundedCornerShape(16.dp),
+      color = extendedColors.sageContainer,
+      border = BorderStroke(1.dp, extendedColors.herbalSage.copy(alpha = 0.45f)),
+      shadowElevation = 0.dp,
+      modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
-      Text(
-        text = message,
-        style = MaterialTheme.typography.bodySmall,
-        fontWeight = FontWeight.Medium,
-        color = extendedColors.onSageContainer,
-        modifier = Modifier.weight(1f).padding(vertical = 8.dp),
-      )
-      IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-        Icon(Icons.Filled.Close, contentDescription = "Dismiss notification", tint = extendedColors.onSageContainer, modifier = Modifier.size(18.dp))
+      Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+      ) {
+        Text(
+          text = lastNonBlankMessage,
+          style = MaterialTheme.typography.bodySmall,
+          fontWeight = FontWeight.Medium,
+          color = extendedColors.onSageContainer,
+          modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+        )
+        IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+          Icon(Icons.Filled.Close, contentDescription = "Dismiss notification", tint = extendedColors.onSageContainer, modifier = Modifier.size(18.dp))
+        }
       }
     }
   }
@@ -411,13 +444,14 @@ fun SavorGlobalModelProgressStrip(
  */
 @Composable
 fun SavorVaultLoadingView(modifier: Modifier = Modifier) {
-  // Center spinner and status copy so initial snapshot hydration feels calm and intentional.
+  // Center brand emblem, spinner, and status copy so initial snapshot hydration feels calm.
   Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
     Column(
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.spacedBy(12.dp),
       modifier = Modifier.padding(24.dp),
     ) {
+      SavorBrandBadge(badgeSize = 52.dp, logoSize = 32.dp, shape = RoundedCornerShape(16.dp))
       CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp, color = MaterialTheme.colorScheme.primary)
       Text("Loading your SavorAI kitchen vault…", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

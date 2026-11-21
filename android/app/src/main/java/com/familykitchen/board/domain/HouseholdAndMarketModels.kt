@@ -473,15 +473,15 @@ data class HouseholdProfile(
 }
 
 // Local market presets grounded in Antipolo Palengke, Marikina Public Market, SM Marikina, and
-// Robinsons Antipolo (PHP ₱ pricing). Preserves ing_kale in LEAFY_GREENS and g-unit FRUIT_TOPPING
-// parity so EC-03 unit tests remain 100% deterministic.
+// Robinsons Antipolo (PHP ₱ pricing). Every preset represents a single distinct culinary ingredient
+// while preserving ing_kale as the first non-spinach LEAFY_GREENS candidate for EC-03 parity.
 /**
- * Curated Antipolo–Marikina local wet-market & supermarket ingredient presets (`PHP` `₱` priced)
- * surfaced in Smart Pantry, Smart Grocery, and Custom Meal sheets.
+ * Curated Antipolo–Marikina local wet-market & supermarket single-ingredient presets (`PHP` `₱`
+ * priced) surfaced in Smart Pantry, Smart Grocery, and Custom Meal sheets.
  */
 val LOCAL_MARKET_PRESET_INGREDIENTS: List<IngredientCatalogItem> = listOf(
-  // 1. Lean turkey / choice poultry breast in 500g packs at SM Marikina / Robinsons Antipolo.
-  IngredientCatalogItem("ing_turkey_breast", "Turkey / Lean Poultry Breast", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 500.0, estimatedPackagePriceUsd = 265.0),
+  // 1. Lean turkey breast in 500g packs at SM Marikina / Robinsons Antipolo.
+  IngredientCatalogItem("ing_turkey_breast", "Lean Turkey Breast", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 500.0, estimatedPackagePriceUsd = 265.0),
   // 2. Sliced turkey ham in 400g deli packs (heated to 74C when pregnancy life events are active).
   IngredientCatalogItem("ing_turkey_ham", "Sliced Deli Turkey Ham", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 400.0, estimatedPackagePriceUsd = 215.0),
   // 3. Fresh Marikina Public Market Suahe / Hipon shrimp in 500g packs tagged SHELLFISH.
@@ -492,32 +492,212 @@ val LOCAL_MARKET_PRESET_INGREDIENTS: List<IngredientCatalogItem> = listOf(
   IngredientCatalogItem("ing_bangus", "Boneless Dagupan Bangus (Milkfish)", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 600.0, allergens = listOf("FISH"), estimatedPackagePriceUsd = 145.0),
   // 6. Fresh Marikina Tokwa (Firm Tofu) in 400g blocks tagged SOY.
   IngredientCatalogItem("ing_tofu", "Fresh Firm Tokwa (Tofu)", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 400.0, allergens = listOf("SOY"), estimatedPackagePriceUsd = 65.0),
-  // 7. Red & brown lentils / Monggo legumes in 1000g packs supporting folate & iron protocols.
-  IngredientCatalogItem("ing_lentils", "Red Lentils & Monggo Beans", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, estimatedPackagePriceUsd = 140.0),
-  // 8. Curly kale in 300g highland packs enrolled in LEAFY_GREENS for deterministic EC-03 swaps.
+  // 7. Split red lentils in 1000g packs supporting quick folate and iron stews.
+  IngredientCatalogItem("ing_lentils", "Red Lentils", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, defaultStorageLocation = StorageLocation.PANTRY, defaultShelfLifeDays = 365, estimatedPackagePriceUsd = 140.0),
+  // 8. Whole green monggo beans in 500g dry packs for Friday Ginisang Monggo.
+  IngredientCatalogItem("ing_monggo_beans", "Green Monggo Beans", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 500.0, defaultStorageLocation = StorageLocation.PANTRY, defaultShelfLifeDays = 365, estimatedPackagePriceUsd = 75.0),
+  // 9. Curly kale in 300g highland packs enrolled in LEAFY_GREENS for deterministic EC-03 swaps.
   IngredientCatalogItem("ing_kale", "Baguio Curly Kale", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 300.0, substituteGroupIds = listOf("LEAFY_GREENS"), estimatedPackagePriceUsd = 110.0),
-  // 9. Fresh Malunggay, Pechay & Kangkong bundles in 300g packs enrolled in LEAFY_GREENS.
-  IngredientCatalogItem("ing_malunggay_pechay", "Malunggay, Pechay & Kangkong Greens", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 300.0, substituteGroupIds = listOf("LEAFY_GREENS"), estimatedPackagePriceUsd = 45.0),
-  // 10. Baby spinach & kulitis/amaranth greens in 300g packs matching seed_catalog.json 1:1.
-  IngredientCatalogItem("ing_spinach", "Baby Spinach & Kulitis Greens", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 300.0, substituteGroupIds = listOf("LEAFY_GREENS"), estimatedPackagePriceUsd = 85.0),
-  // 11. Fresh Rizal Kamoteng Kahoy (Cassava Tuber) in 1000g packs.
+  // 10. Fresh Malunggay (moringa) leaves in 300g bundles enrolled in LEAFY_GREENS.
+  IngredientCatalogItem("ing_malunggay_pechay", "Fresh Malunggay Leaves", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 300.0, substituteGroupIds = listOf("LEAFY_GREENS"), estimatedPackagePriceUsd = 45.0),
+  // 11. Crisp white-stemmed Pechay Tagalog in 250g bundles enrolled in LEAFY_GREENS.
+  IngredientCatalogItem("ing_pechay", "Fresh Pechay", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 250.0, substituteGroupIds = listOf("LEAFY_GREENS"), defaultStorageLocation = StorageLocation.FRIDGE, defaultShelfLifeDays = 4, estimatedPackagePriceUsd = 50.0),
+  // 12. Tender Kangkong (water spinach) in 250g bundles enrolled in LEAFY_GREENS.
+  IngredientCatalogItem("ing_kangkong", "Fresh Kangkong", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 250.0, substituteGroupIds = listOf("LEAFY_GREENS"), defaultStorageLocation = StorageLocation.FRIDGE, defaultShelfLifeDays = 4, estimatedPackagePriceUsd = 45.0),
+  // 13. Fresh baby spinach in 300g washed packs matching seed_catalog.json 1:1.
+  IngredientCatalogItem("ing_spinach", "Fresh Baby Spinach", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 300.0, substituteGroupIds = listOf("LEAFY_GREENS"), estimatedPackagePriceUsd = 85.0),
+  // 14. Fresh Rizal Kamoteng Kahoy (Cassava Tuber) in 1000g packs.
   IngredientCatalogItem("ing_cassava", "Fresh Cassava (Kamoteng Kahoy)", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, estimatedPackagePriceUsd = 65.0),
-  // 12. Orange Kamote (Sweet Potatoes) in 1500g cool-pantry packs.
+  // 15. Orange Kamote (Sweet Potatoes) in 1500g cool-pantry packs.
   IngredientCatalogItem("ing_sweet_potato", "Orange Kamote (Sweet Potatoes)", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1500.0, defaultStorageLocation = StorageLocation.PANTRY, estimatedPackagePriceUsd = 120.0),
-  // 13. Ripe Saba / Cooking Plantains in 6-count bunches at Antipolo Palengke.
-  IngredientCatalogItem("ing_plantain", "Ripe Saba & Cooking Plantains", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 6.0, defaultStorageLocation = StorageLocation.PANTRY, estimatedPackagePriceUsd = 75.0),
-  // 14. Fresh Calamansi citrus in 12-count net bags for marinades and iron absorption.
+  // 16. Ripe Saba cooking bananas in 6-count bunches at Antipolo Palengke.
+  IngredientCatalogItem("ing_saba_banana", "Ripe Saba Bananas", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 6.0, defaultStorageLocation = StorageLocation.PANTRY, defaultShelfLifeDays = 6, estimatedPackagePriceUsd = 75.0),
+  // 17. Fresh Calamansi citrus in 12-count net bags for marinades and iron absorption.
   IngredientCatalogItem("ing_calamansi", "Fresh Calamansi Citrus", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 12.0, estimatedPackagePriceUsd = 35.0),
-  // 15. Fresh Gata (Pure Pressed Coconut Milk) in 400ml packs for stews and rice bowls.
+  // 18. Fresh Gata (Pure Pressed Coconut Milk) in 400ml packs for stews and rice bowls.
   IngredientCatalogItem("ing_gata", "Fresh Gata (Coconut Milk)", IngredientCategory.PANTRY_STAPLE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.MILLILITER, 400.0, defaultStorageLocation = StorageLocation.FRIDGE, defaultShelfLifeDays = 4, estimatedPackagePriceUsd = 75.0),
-  // 16. Sweet Carabao Mango in 1000g packs enrolled in FRUIT_TOPPING.
+  // 19. Sweet Carabao Mango in 1000g packs enrolled in FRUIT_TOPPING.
   IngredientCatalogItem("ing_carabao_mango", "Guimaras Carabao Mango", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, substituteGroupIds = listOf("FRUIT_TOPPING"), estimatedPackagePriceUsd = 175.0),
-  // 17. Sweet Valencia / Ponkan Oranges in 1000g bags enrolled in FRUIT_TOPPING.
-  IngredientCatalogItem("ing_orange", "Sweet Ponkan & Valencia Oranges", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, substituteGroupIds = listOf("FRUIT_TOPPING"), estimatedPackagePriceUsd = 140.0),
-  // 18. Fresh Dalandan & Kiambi Tangerines in 800g bags enrolled in FRUIT_TOPPING.
-  IngredientCatalogItem("ing_tangerine", "Fresh Dalandan & Tangerines", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 800.0, substituteGroupIds = listOf("FRUIT_TOPPING"), estimatedPackagePriceUsd = 110.0),
-  // 19. Tagaytay / Bukidnon Sweet Pineapple in 1000g units enrolled in FRUIT_TOPPING.
+  // 20. Juicy Valencia oranges in 1000g bags enrolled in FRUIT_TOPPING.
+  IngredientCatalogItem("ing_orange", "Sweet Valencia Oranges", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, substituteGroupIds = listOf("FRUIT_TOPPING"), estimatedPackagePriceUsd = 140.0),
+  // 21. Easy-peel Ponkan mandarins in 8-count bags enrolled in FRUIT_TOPPING.
+  IngredientCatalogItem("ing_ponkan", "Sweet Ponkan Mandarins", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 8.0, substituteGroupIds = listOf("FRUIT_TOPPING"), defaultStorageLocation = StorageLocation.PANTRY, defaultShelfLifeDays = 10, estimatedPackagePriceUsd = 135.0),
+  // 22. Aromatic local green Dalandan citrus in 800g bags enrolled in FRUIT_TOPPING.
+  IngredientCatalogItem("ing_dalandan", "Fresh Dalandan Citrus", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 800.0, substituteGroupIds = listOf("FRUIT_TOPPING"), defaultStorageLocation = StorageLocation.FRIDGE, defaultShelfLifeDays = 10, estimatedPackagePriceUsd = 110.0),
+  // 23. Sweet seedless tangerines in 8-count chilled packs enrolled in FRUIT_TOPPING.
+  IngredientCatalogItem("ing_tangerine", "Sweet Tangerines", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 8.0, substituteGroupIds = listOf("FRUIT_TOPPING"), defaultStorageLocation = StorageLocation.FRIDGE, defaultShelfLifeDays = 10, estimatedPackagePriceUsd = 140.0),
+  // 24. Tagaytay / Bukidnon Sweet Pineapple in 1000g units enrolled in FRUIT_TOPPING.
   IngredientCatalogItem("ing_pineapple", "Sweet Tagaytay Pineapple", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, substituteGroupIds = listOf("FRUIT_TOPPING"), estimatedPackagePriceUsd = 95.0),
-  // 20. Fresh Rizal Pitaya (Dragon Fruit) in 600g packs enrolled in FRUIT_TOPPING.
+  // 25. Fresh Rizal Pitaya (Dragon Fruit) in 600g packs enrolled in FRUIT_TOPPING.
   IngredientCatalogItem("ing_dragon_fruit", "Fresh Red Dragon Fruit", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 600.0, substituteGroupIds = listOf("FRUIT_TOPPING"), estimatedPackagePriceUsd = 130.0),
+  // 26. Nut-free roasted pumpkin seeds (pepitas) in 500g packs enrolled in NUT_SEED_TOPPING.
+  IngredientCatalogItem("ing_pumpkin_seeds", "Roasted Pumpkin Seeds", IngredientCategory.PANTRY_STAPLE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 500.0, substituteGroupIds = listOf("NUT_SEED_TOPPING"), defaultStorageLocation = StorageLocation.PANTRY, defaultShelfLifeDays = 180, estimatedPackagePriceUsd = 260.0),
+)
+
+/**
+ * Pure deterministic output of [migrateUntangledCatalogData] when upgrading a persisted
+ * `kitchen_snapshot_v1.json` from legacy bundled ingredient names to single-ingredient entries.
+ *
+ * @property ingredients Upgraded catalog list preserving custom items and `isLocallyAvailable` flags.
+ * @property pantryEntries Upgraded pantry ledger preserving user quantities and adding 0-stock seed partners.
+ * @property recipes Upgraded recipe list stamping `NUT_SEED_TOPPING` onto `rec_05_skillet_honey_oat_granola`.
+ * @property didMutate `true` if and only if at least one catalog, pantry, or recipe record changed.
+ */
+@Serializable
+data class UntangledCatalogMigration(
+  val ingredients: List<IngredientCatalogItem>,
+  val pantryEntries: List<PantryLedgerEntry>,
+  val recipes: List<Recipe>,
+  val didMutate: Boolean,
+)
+
+// Detect legacy compound display labels ("Comte & Cheddar", "Whole Fresh Tilapia / Snapper") while
+// leaving synthetic test fixtures ("Bulk Perishable 1") and custom user items untouched.
+private fun hasLegacyBundledDisplayName(displayName: String): Boolean =
+  displayName.contains(" & ") || displayName.contains(" / ")
+
+/**
+ * Pure domain migration upgrading persisted household snapshots from legacy bundled ingredient
+ * labels (`" & "` / `" / "`) to distinct single-ingredient catalog definitions without altering
+ * existing stock balances, `isLocallyAvailable` flags, or custom `ing_custom_*` / `ing_disc_*` items.
+ *
+ * Missing canonical [seedCatalog] partner items are appended at `0.0` (`OUT`) stock **only** when
+ * [ingredients] already contains canonical seed identifiers (`"ing_spinach"`), ensuring synthetic
+ * unit-test catalogs (`ing_bulk_*`) are never mutated on reload.
+ *
+ * @param ingredients Persisted catalog definitions from `KitchenSnapshot.ingredients`.
+ * @param pantryEntries Persisted stock records from `KitchenSnapshot.pantryEntries`.
+ * @param recipes Persisted recipe definitions from `KitchenSnapshot.recipes`.
+ * @param seedCatalog Current bundled `seed_catalog.json` dataset.
+ * @return Immutable [UntangledCatalogMigration] indicating whether an atomic disk rewrite is needed.
+ */
+fun migrateUntangledCatalogData(
+  ingredients: List<IngredientCatalogItem>,
+  pantryEntries: List<PantryLedgerEntry>,
+  recipes: List<Recipe>,
+  seedCatalog: SeedCatalogDataset,
+): UntangledCatalogMigration {
+  // Layer discovery presets, local market presets, and canonical seed items (seed takes top precedence).
+  val untangledById = LinkedHashMap<String, IngredientCatalogItem>()
+  for (candidate in CURATED_BRAIN_BOOSTER_CANDIDATES) {
+    untangledById[candidate.item.ingredientId] = candidate.item
+  }
+  // Support legacy pre-untangle AI discovery IDs if previously queued onto a persisted snapshot.
+  LEGACY_DISCOVERY_UNTANGLED_LABELS.forEach { (legacyId, cleanName) ->
+    val existing = ingredients.find { it.ingredientId == legacyId }
+    if (existing != null) {
+      untangledById[legacyId] = existing.copy(displayName = cleanName)
+    }
+  }
+  for (preset in LOCAL_MARKET_PRESET_INGREDIENTS) {
+    untangledById[preset.ingredientId] = preset
+  }
+  for (seedItem in seedCatalog.ingredients) {
+    untangledById[seedItem.ingredientId] = seedItem
+  }
+
+  var didMutate = false
+
+  // Step 1: Upgrade existing items ONLY when they still carry a legacy bundled display name (or
+  // lack the new NUT_SEED_TOPPING group on ing_mixed_nuts_seeds), preserving isLocallyAvailable.
+  val upgradedExistingIngredients = ingredients.map { item ->
+    val canonical = untangledById[item.ingredientId]
+    val needsNutSeedGroup =
+      item.ingredientId == "ing_mixed_nuts_seeds" && "NUT_SEED_TOPPING" !in item.substituteGroupIds
+    when {
+      canonical != null && (hasLegacyBundledDisplayName(item.displayName) || needsNutSeedGroup) -> {
+        val updated = item.copy(
+          displayName = canonical.displayName,
+          allergens = canonical.allergens,
+          substituteGroupIds = canonical.substituteGroupIds,
+          optimalPrepHint = canonical.optimalPrepHint ?: item.optimalPrepHint,
+        )
+        if (updated != item) {
+          didMutate = true
+        }
+        updated
+      }
+      else -> item
+    }
+  }
+
+  // Step 2: Append newly split canonical seed partner items at 0-stock ONLY on real canonical catalogs.
+  val existingIds = upgradedExistingIngredients.map { it.ingredientId }.toSet()
+  val isCanonicalHouseholdCatalog = "ing_spinach" in existingIds
+  val missingSeedItems = when {
+    isCanonicalHouseholdCatalog ->
+      seedCatalog.ingredients.filter { seedItem -> seedItem.ingredientId !in existingIds }
+    else -> emptyList()
+  }
+
+  val finalIngredients = when {
+    missingSeedItems.isEmpty() -> upgradedExistingIngredients
+    else -> {
+      didMutate = true
+      upgradedExistingIngredients + missingSeedItems
+    }
+  }
+
+  val existingPantryIds = pantryEntries.map { it.ingredientId }.toSet()
+  val missingZeroStockEntries = missingSeedItems
+    .filter { seedItem -> seedItem.ingredientId !in existingPantryIds }
+    .map { seedItem ->
+      PantryLedgerEntry(
+        ingredientId = seedItem.ingredientId,
+        tier = seedItem.tier,
+        currentQuantity = 0.0,
+        stapleStatus = StapleStatus.OUT,
+        isOutOfStock = true,
+        storageLocation = seedItem.defaultStorageLocation,
+        expiresInDays = null,
+      )
+    }
+  val finalPantryEntries = when {
+    missingZeroStockEntries.isEmpty() -> pantryEntries
+    else -> {
+      didMutate = true
+      pantryEntries + missingZeroStockEntries
+    }
+  }
+
+  // Step 3: Enroll rec_05_skillet_honey_oat_granola's ing_mixed_nuts_seeds BOM in NUT_SEED_TOPPING.
+  val finalRecipes = recipes.map { recipe ->
+    when {
+      recipe.recipeId != "rec_05_skillet_honey_oat_granola" -> recipe
+      else -> {
+        var recipeChanged = false
+        val updatedBom = recipe.bomLines.map { line ->
+          when {
+            line.ingredientId == "ing_mixed_nuts_seeds" && line.substituteGroupId == null -> {
+              recipeChanged = true
+              line.copy(substituteGroupId = "NUT_SEED_TOPPING")
+            }
+            else -> line
+          }
+        }
+        when {
+          recipeChanged -> {
+            didMutate = true
+            recipe.copy(bomLines = updatedBom)
+          }
+          else -> recipe
+        }
+      }
+    }
+  }
+
+  return UntangledCatalogMigration(
+    ingredients = finalIngredients,
+    pantryEntries = finalPantryEntries,
+    recipes = finalRecipes,
+    didMutate = didMutate,
+  )
+}
+
+// Legacy AI Chef discovery IDs mapped to single-ingredient titles for seamless snapshot upgrades.
+private val LEGACY_DISCOVERY_UNTANGLED_LABELS: Map<String, String> = mapOf(
+  "ing_chia_flax_seeds" to "Organic Chia Seeds",
+  "ing_wild_salmon" to "Sardine Fillets in Olive Oil",
+  "ing_walnut_butter" to "Smooth Almond Butter",
+  "ing_dark_cocoa" to "Unsweetened Tablea Cacao",
 )

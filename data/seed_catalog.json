@@ -50,7 +50,7 @@
     },
     {
       "ingredientId": "ing_cheese",
-      "displayName": "Comte & Cheddar Cheese",
+      "displayName": "Aged Cheddar Cheese",
       "category": "DAIRY_EGGS",
       "tier": "TIER_1_QUANTITATIVE",
       "baseUnit": "g",
@@ -112,7 +112,7 @@
     },
     {
       "ingredientId": "ing_rice",
-      "displayName": "Jasmine & Long-Grain Rice",
+      "displayName": "Jasmine White Rice",
       "category": "BAKERY_GRAINS",
       "tier": "TIER_1_QUANTITATIVE",
       "baseUnit": "g",
@@ -279,7 +279,7 @@
     },
     {
       "ingredientId": "ing_spinach",
-      "displayName": "Fresh Baby Spinach & Amaranth Greens",
+      "displayName": "Fresh Baby Spinach",
       "category": "PRODUCE",
       "tier": "TIER_1_QUANTITATIVE",
       "baseUnit": "g",
@@ -292,11 +292,11 @@
       "defaultStorageLocation": "FRIDGE",
       "defaultShelfLifeDays": 5,
       "estimatedPackagePriceUsd": 85.0,
-      "optimalPrepHint": "Optimal: Residual-Heat Wilt, Omelette Fold or Goussi Stew Finish"
+      "optimalPrepHint": "Optimal: Residual-Heat Wilt, Omelette Fold or Creamy Garlic Sauce"
     },
     {
       "ingredientId": "ing_onion",
-      "displayName": "Red & Yellow Cooking Onions",
+      "displayName": "Yellow Cooking Onions",
       "category": "PRODUCE",
       "tier": "TIER_1_QUANTITATIVE",
       "baseUnit": "count",
@@ -306,7 +306,7 @@
       "defaultStorageLocation": "PANTRY",
       "defaultShelfLifeDays": 30,
       "estimatedPackagePriceUsd": 130.0,
-      "optimalPrepHint": "Optimal: Caramelized Stew Base or Crisp Moyo Salsa"
+      "optimalPrepHint": "Optimal: Caramelized Stew Base, Savory Sauté or Soup Mirepoix"
     },
     {
       "ingredientId": "ing_bell_pepper",
@@ -352,7 +352,7 @@
     },
     {
       "ingredientId": "ing_chicken",
-      "displayName": "Free-Range Chicken Thighs & Breast",
+      "displayName": "Free-Range Chicken Thighs",
       "category": "PROTEIN",
       "tier": "TIER_1_QUANTITATIVE",
       "baseUnit": "g",
@@ -366,7 +366,7 @@
     },
     {
       "ingredientId": "ing_fish",
-      "displayName": "Whole Fresh Tilapia / Snapper",
+      "displayName": "Fresh Red Snapper",
       "category": "PROTEIN",
       "tier": "TIER_1_QUANTITATIVE",
       "baseUnit": "g",
@@ -378,7 +378,7 @@
       "defaultStorageLocation": "FREEZER",
       "defaultShelfLifeDays": 90,
       "estimatedPackagePriceUsd": 180.0,
-      "optimalPrepHint": "Optimal: Scored Tilapia/Bangus Grill, Moyo Platter or Garlic Skillet"
+      "optimalPrepHint": "Optimal: Scored Red Snapper Grill, Moyo Platter or Garlic Skillet"
     },
     {
       "ingredientId": "ing_salmon",
@@ -414,7 +414,7 @@
     },
     {
       "ingredientId": "ing_beans",
-      "displayName": "Black-Eyed Peas & Red Beans",
+      "displayName": "Black-Eyed Peas",
       "category": "PROTEIN",
       "tier": "TIER_1_QUANTITATIVE",
       "baseUnit": "g",
@@ -424,7 +424,7 @@
       "defaultStorageLocation": "PANTRY",
       "defaultShelfLifeDays": 365,
       "estimatedPackagePriceUsd": 140.0,
-      "optimalPrepHint": "Optimal: Overnight-Soaked Atassi Watché or Red-Red Bean Stew"
+      "optimalPrepHint": "Optimal: Overnight-Soaked Atassi Watché or Savory Bean Stew"
     },
     {
       "ingredientId": "ing_egusi_seeds",
@@ -473,7 +473,7 @@
     },
     {
       "ingredientId": "ing_mixed_nuts_seeds",
-      "displayName": "Pumpkin Seeds & Sliced Almonds",
+      "displayName": "Sliced Almonds",
       "category": "PANTRY_STAPLE",
       "tier": "TIER_1_QUANTITATIVE",
       "baseUnit": "g",
@@ -485,7 +485,10 @@
       "defaultStorageLocation": "PANTRY",
       "defaultShelfLifeDays": 180,
       "estimatedPackagePriceUsd": 340.0,
-      "optimalPrepHint": "Optimal: Antipolo Kasuy & Seed Granola (Finely Ground for Toddlers)"
+      "optimalPrepHint": "Optimal: Skillet Granola, Porridge Topper or Yogurt Crunch (Finely Ground for Toddlers)",
+      "substituteGroupIds": [
+        "NUT_SEED_TOPPING"
+      ]
     },
     {
       "ingredientId": "ing_olive_oil",
@@ -531,7 +534,7 @@
     },
     {
       "ingredientId": "ing_black_pepper",
-      "displayName": "Cracked Black Pepper & Ginger Spice",
+      "displayName": "Cracked Black Pepper",
       "category": "PANTRY_STAPLE",
       "tier": "TIER_2_STAPLE",
       "baseUnit": "g",
@@ -541,7 +544,7 @@
       "defaultStorageLocation": "PANTRY",
       "defaultShelfLifeDays": 365,
       "estimatedPackagePriceUsd": 85.0,
-      "optimalPrepHint": "Optimal: Aromatic Poultry Marinade & Egg Seasoning"
+      "optimalPrepHint": "Optimal: Freshly Cracked Poultry Marinade & Egg Seasoning"
     },
     {
       "ingredientId": "ing_garlic",
@@ -570,6 +573,100 @@
       "defaultShelfLifeDays": 365,
       "estimatedPackagePriceUsd": 120.0,
       "optimalPrepHint": "Optimal: Warm Oat Porridge, Sheet-Pan Pancakes & French Toast"
+    },
+    {
+      "ingredientId": "ing_amaranth_greens",
+      "displayName": "Fresh Amaranth Greens",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 300.0,
+      "isLocallyAvailable": true,
+      "substituteGroupIds": [
+        "LEAFY_GREENS"
+      ],
+      "allergens": [],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 5,
+      "estimatedPackagePriceUsd": 65.0,
+      "optimalPrepHint": "Optimal: Quick Garlic Sauté, Mung Bean Soup or Omelette Fold"
+    },
+    {
+      "ingredientId": "ing_pumpkin_seeds",
+      "displayName": "Roasted Pumpkin Seeds",
+      "category": "PANTRY_STAPLE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 500.0,
+      "isLocallyAvailable": true,
+      "substituteGroupIds": [
+        "NUT_SEED_TOPPING"
+      ],
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 180,
+      "estimatedPackagePriceUsd": 260.0,
+      "optimalPrepHint": "Optimal: Granola Crunch, Oatmeal Topping or Yogurt Bowl"
+    },
+    {
+      "ingredientId": "ing_ginger",
+      "displayName": "Fresh Ginger Root",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 250.0,
+      "isLocallyAvailable": true,
+      "substituteGroupIds": [],
+      "allergens": [],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 21,
+      "estimatedPackagePriceUsd": 55.0,
+      "optimalPrepHint": "Optimal: Tinola Broth, Stir-Fry Aromatics or Fish Steaming"
+    },
+    {
+      "ingredientId": "ing_red_onion",
+      "displayName": "Red Onions",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "count",
+      "defaultPackageQuantity": 8.0,
+      "isLocallyAvailable": true,
+      "substituteGroupIds": [],
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 30,
+      "estimatedPackagePriceUsd": 135.0,
+      "optimalPrepHint": "Optimal: Fresh Ensalada, Quick Pickle or Savory Sauté"
+    },
+    {
+      "ingredientId": "ing_chicken_breast",
+      "displayName": "Chicken Breast Fillets",
+      "category": "PROTEIN",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000.0,
+      "isLocallyAvailable": true,
+      "substituteGroupIds": [],
+      "allergens": [],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 2,
+      "estimatedPackagePriceUsd": 250.0,
+      "optimalPrepHint": "Optimal: High-Protein Pan-Sear, Shredded Tinola or Wraps"
+    },
+    {
+      "ingredientId": "ing_red_beans",
+      "displayName": "Red Kidney Beans",
+      "category": "PROTEIN",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000.0,
+      "isLocallyAvailable": true,
+      "substituteGroupIds": [],
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 365,
+      "estimatedPackagePriceUsd": 145.0,
+      "optimalPrepHint": "Optimal: Overnight Soak + One-Pot Stew or Rice Bowl"
     }
   ],
   "recipes": [
@@ -1157,7 +1254,8 @@
         {
           "ingredientId": "ing_mixed_nuts_seeds",
           "baseQuantity": 80,
-          "isOptional": false
+          "isOptional": false,
+          "substituteGroupId": "NUT_SEED_TOPPING"
         },
         {
           "ingredientId": "ing_milk",
@@ -4097,7 +4195,7 @@
       "storageLocation": "FRIDGE",
       "storageSubLocation": "Deli Cheese Drawer",
       "purchasedDaysAgo": 5,
-      "packageNote": "2 blocks • Melting & Sharp Cheddar",
+      "packageNote": "2 blocks • Aged Sharp Cheddar",
       "expiresInDays": 16
     },
     {
@@ -4279,7 +4377,7 @@
       "storageLocation": "PANTRY",
       "storageSubLocation": "Cool Counter Basket",
       "purchasedDaysAgo": 1,
-      "packageNote": "2 bunches • Ripe Saba & Plantains",
+      "packageNote": "2 bunches • Ripe Yellow Plantains",
       "expiresInDays": 5
     },
     {
@@ -4357,7 +4455,7 @@
       "storageLocation": "FREEZER",
       "storageSubLocation": "Freezer Meat Drawer",
       "purchasedDaysAgo": 4,
-      "packageNote": "2 kg • Portioned Thighs & Breast",
+      "packageNote": "2 kg • Portioned Free-Range Thighs",
       "expiresInDays": 90
     },
     {
@@ -4370,7 +4468,7 @@
       "storageLocation": "FREEZER",
       "storageSubLocation": "Top Freezer Drawer",
       "purchasedDaysAgo": 5,
-      "packageNote": "2 kg • Cleaned Marikina Market Tilapia",
+      "packageNote": "2 kg • Cleaned Fresh Red Snapper",
       "expiresInDays": 85
     },
     {
@@ -4461,7 +4559,7 @@
       "storageLocation": "PANTRY",
       "storageSubLocation": "Airtight Jar #5",
       "purchasedDaysAgo": 7,
-      "packageNote": "1 kg • Antipolo Kasuy, Seeds & Almonds",
+      "packageNote": "1 kg • Sliced California Almonds",
       "expiresInDays": 160
     },
     {
@@ -4510,7 +4608,7 @@
       "storageLocation": "PANTRY",
       "storageSubLocation": "Airtight Spice Rack",
       "purchasedDaysAgo": 22,
-      "packageNote": "Staple • Cracked Paminta & Ginger"
+      "packageNote": "Staple • Whole Cracked Paminta"
     },
     {
       "ingredientId": "ing_garlic",
@@ -4535,6 +4633,84 @@
       "storageSubLocation": "Airtight Spice Rack",
       "purchasedDaysAgo": 20,
       "packageNote": "Staple • Ground Ceylon Cinnamon"
+    },
+    {
+      "ingredientId": "ing_amaranth_greens",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 300.0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-03-02T06:00:00Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "High-Humidity Crisper",
+      "purchasedDaysAgo": 0,
+      "packageNote": "1 pack (300 g) • Fresh Kulitis Greens",
+      "expiresInDays": 5
+    },
+    {
+      "ingredientId": "ing_pumpkin_seeds",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 400.0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-03-02T06:00:00Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Airtight Seed Jar #2",
+      "purchasedDaysAgo": 5,
+      "packageNote": "400 g • Nut-Free Roasted Pepitas",
+      "expiresInDays": 180
+    },
+    {
+      "ingredientId": "ing_ginger",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 250.0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-03-02T06:00:00Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Aromatic Crisper Drawer",
+      "purchasedDaysAgo": 2,
+      "packageNote": "250 g • Fresh Luya Rhizomes",
+      "expiresInDays": 21
+    },
+    {
+      "ingredientId": "ing_red_onion",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 6.0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-03-02T06:00:00Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Ventilated Dark Bin",
+      "purchasedDaysAgo": 4,
+      "packageNote": "6 bulbs • Local Red Sibuyas",
+      "expiresInDays": 25
+    },
+    {
+      "ingredientId": "ing_chicken_breast",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 1000.0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-03-02T06:00:00Z",
+      "storageLocation": "FREEZER",
+      "storageSubLocation": "Freezer Poultry Drawer",
+      "purchasedDaysAgo": 3,
+      "packageNote": "1 kg • Portioned Lean Breast Fillets",
+      "expiresInDays": 60
+    },
+    {
+      "ingredientId": "ing_red_beans",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 1000.0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-03-02T06:00:00Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Legume Jar #5",
+      "purchasedDaysAgo": 12,
+      "packageNote": "1 kg • Dry Red Kidney Beans",
+      "expiresInDays": 365
     }
   ]
 }

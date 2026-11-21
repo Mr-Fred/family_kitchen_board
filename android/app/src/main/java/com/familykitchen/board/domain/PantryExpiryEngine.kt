@@ -618,9 +618,12 @@ private fun inferMacroProfile(
     key.contains("tofu") || key.contains("tokwa") -> MacroDensityProfile(94.0, 10.0, 2.0, 5.0)
     key.contains("bean") || key.contains("lentil") || key.contains("monggo") -> MacroDensityProfile(116.0, 7.7, 20.8, 0.5)
     key.contains("egusi") -> MacroDensityProfile(567.0, 28.4, 10.6, 47.4)
-    key.contains("peanut") || key.contains("nut") || key.contains("kasuy") -> MacroDensityProfile(588.0, 25.1, 20.0, 50.4)
+    key.contains("peanut") || key.contains("nut") || key.contains("kasuy") ||
+      key.contains("almond") || key.contains("pumpkin_seed") || key.contains("seed") ->
+      MacroDensityProfile(588.0, 25.1, 20.0, 50.4)
     key.contains("avocado") -> MacroDensityProfile(160.0, 2.0, 8.5, 14.7, gramsEquivalentPerCount = 150.0)
-    key.contains("spinach") || key.contains("kale") || key.contains("malunggay") || key.contains("pechay") || key.contains("kangkong") ->
+    key.contains("spinach") || key.contains("amaranth") || key.contains("kale") ||
+      key.contains("malunggay") || key.contains("pechay") || key.contains("kangkong") ->
       MacroDensityProfile(23.0, 2.9, 3.6, 0.4)
     key.contains("oat") -> MacroDensityProfile(389.0, 16.9, 66.3, 6.9)
     key.contains("rice") || key.contains("pasta") || key.contains("cornmeal") || key.contains("gari") ->

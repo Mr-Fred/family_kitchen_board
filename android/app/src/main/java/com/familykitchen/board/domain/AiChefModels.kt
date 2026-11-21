@@ -482,14 +482,14 @@ sealed interface AiChefAction {
   data object CancelActiveModelDownload : AiChefAction
 }
 
-// Curated discovery items filtered against householdAllergens before surfacing in AI Chef cards.
-// Every candidate carries a pre-computed whole-package RestockDelta for 1-tap grocery queueing.
+// Curated single-ingredient discovery items filtered against householdAllergens before surfacing in
+// AI Chef cards. Every candidate carries a pre-computed whole-package RestockDelta for 1-tap queueing.
 internal val CURATED_BRAIN_BOOSTER_CANDIDATES: List<AiNewIngredientSuggestion> = listOf(
-  // Omega-3 ALA + soluble fiber topper safe for toddler porridge and 8yo parfaits.
+  // Omega-3 ALA + soluble fiber chia topper safe for soaked toddler porridge and 8yo parfaits.
   AiNewIngredientSuggestion(
     item = IngredientCatalogItem(
-      ingredientId = "ing_chia_flax_seeds",
-      displayName = "Organic Chia & Milled Flax Seeds",
+      ingredientId = "ing_disc_chia_flax",
+      displayName = "Organic Chia Seeds",
       category = IngredientCategory.PANTRY_STAPLE,
       tier = IngredientTier.TIER_1_QUANTITATIVE,
       baseUnit = BaseUnit.GRAM,
@@ -497,34 +497,53 @@ internal val CURATED_BRAIN_BOOSTER_CANDIDATES: List<AiNewIngredientSuggestion> =
       estimatedPackagePriceUsd = 265.0,
     ),
     recommendedPackageCount = 1,
-    restockDelta = RestockDelta("ing_chia_flax_seeds", 500.0),
+    restockDelta = RestockDelta("ing_disc_chia_flax", 500.0),
     brainBoosterBenefit =
-      "Packed with plant-based Omega-3 ALA, Iron, and soluble fiber to sustain 8yo classroom focus and 2yo neural growth.",
-    pairedRecipeTitle = "15-Min Skillet Honey-Oat Granola",
+      "Packed with plant-based Omega-3 ALA, calcium, and soluble fiber to sustain 8yo classroom focus and 2yo neural growth.",
+    pairedRecipeTitle = "5-Min Night-Before Overnight Oats",
   ),
-  // Marine Omega-3 DHA, Choline, and Vitamin D protein option (tagged FISH for allergen gate).
+  // Finely milled golden flaxseed delivering bioavailable ALA lignans with zero whole-seed texture risk.
   AiNewIngredientSuggestion(
     item = IngredientCatalogItem(
-      ingredientId = "ing_wild_salmon",
-      displayName = "Chilled Salmon & Sardine Fillets",
+      ingredientId = "ing_disc_milled_flax",
+      displayName = "Milled Golden Flaxseed",
+      category = IngredientCategory.PANTRY_STAPLE,
+      tier = IngredientTier.TIER_1_QUANTITATIVE,
+      baseUnit = BaseUnit.GRAM,
+      defaultPackageQuantity = 400.0,
+      estimatedPackagePriceUsd = 225.0,
+    ),
+    recommendedPackageCount = 1,
+    restockDelta = RestockDelta("ing_disc_milled_flax", 400.0),
+    brainBoosterBenefit =
+      "Finely milled for maximum Omega-3 ALA absorption and Iron support in toddler oatmeal and granola bowls.",
+    pairedRecipeTitle = "15-Min Skillet Honey-Oat Granola",
+  ),
+  // Marine Omega-3 DHA, Choline, and Vitamin D pantry fish option (tagged FISH for allergen gate).
+  AiNewIngredientSuggestion(
+    item = IngredientCatalogItem(
+      ingredientId = "ing_disc_sardines_salmon",
+      displayName = "Sardine Fillets in Olive Oil",
       category = IngredientCategory.PROTEIN,
       tier = IngredientTier.TIER_1_QUANTITATIVE,
       baseUnit = BaseUnit.GRAM,
-      defaultPackageQuantity = 600.0,
+      defaultPackageQuantity = 400.0,
       allergens = listOf("FISH"),
-      estimatedPackagePriceUsd = 840.0,
+      defaultStorageLocation = StorageLocation.PANTRY,
+      defaultShelfLifeDays = 365,
+      estimatedPackagePriceUsd = 240.0,
     ),
     recommendedPackageCount = 1,
-    restockDelta = RestockDelta("ing_wild_salmon", 600.0),
+    restockDelta = RestockDelta("ing_disc_sardines_salmon", 400.0),
     brainBoosterBenefit =
       "Delivers bioavailable marine Omega-3 DHA, Choline, and Vitamin D for cognitive memory and visual development.",
-    pairedRecipeTitle = "One-Pan Lemon Herb Salmon & Rice",
+    pairedRecipeTitle = "Tuna & Olive Tapenade Baguette",
   ),
-  // Antipolo roasted cashew + walnut spread delivering Vitamin E with zero whole-nut choking risk.
+  // Smooth roasted almond spread delivering Vitamin E with zero whole-nut choking risk (tagged NUTS).
   AiNewIngredientSuggestion(
     item = IngredientCatalogItem(
-      ingredientId = "ing_walnut_butter",
-      displayName = "Smooth Antipolo Kasuy, Walnut & Almond Butter",
+      ingredientId = "ing_disc_walnut_kasuy",
+      displayName = "Smooth Almond Butter",
       category = IngredientCategory.PANTRY_STAPLE,
       tier = IngredientTier.TIER_1_QUANTITATIVE,
       baseUnit = BaseUnit.GRAM,
@@ -533,26 +552,26 @@ internal val CURATED_BRAIN_BOOSTER_CANDIDATES: List<AiNewIngredientSuggestion> =
       estimatedPackagePriceUsd = 340.0,
     ),
     recommendedPackageCount = 1,
-    restockDelta = RestockDelta("ing_walnut_butter", 400.0),
+    restockDelta = RestockDelta("ing_disc_walnut_kasuy", 400.0),
     brainBoosterBenefit =
-      "Provides Omega-3 polyphenols, Vitamin E, and Choline co-factors in a smooth 2yo-safe texture with zero whole-nut choking risk.",
+      "Provides Vitamin E, magnesium, and healthy fats in a smooth 2yo-safe texture with zero whole-nut choking risk.",
     pairedRecipeTitle = "Warm Cinnamon Oat Porridge",
   ),
-  // Local tablea cacao flavanol antioxidants + plant iron/folate combo supporting sustained energy.
+  // Local pure unsweetened tablea cacao flavanol antioxidants + plant iron supporting focus.
   AiNewIngredientSuggestion(
     item = IngredientCatalogItem(
-      ingredientId = "ing_dark_cocoa",
-      displayName = "Unsweetened Tablea Cacao & Red Lentils Pack",
+      ingredientId = "ing_disc_cacao_lentils",
+      displayName = "Unsweetened Tablea Cacao",
       category = IngredientCategory.PANTRY_STAPLE,
       tier = IngredientTier.TIER_1_QUANTITATIVE,
       baseUnit = BaseUnit.GRAM,
-      defaultPackageQuantity = 500.0,
-      estimatedPackagePriceUsd = 290.0,
+      defaultPackageQuantity = 250.0,
+      estimatedPackagePriceUsd = 220.0,
     ),
     recommendedPackageCount = 1,
-    restockDelta = RestockDelta("ing_dark_cocoa", 500.0),
+    restockDelta = RestockDelta("ing_disc_cacao_lentils", 250.0),
     brainBoosterBenefit =
-      "Combines flavanol antioxidants for cerebral blood flow with Iron and Folate for sustained energy.",
+      "Rich in cacao flavanol antioxidants for cerebral blood flow and plant-based Iron for sustained energy.",
     pairedRecipeTitle = "Sheet-Pan Banana Pancakes",
   ),
 )

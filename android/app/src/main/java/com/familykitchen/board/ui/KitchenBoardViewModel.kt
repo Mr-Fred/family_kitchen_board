@@ -251,10 +251,8 @@ class KitchenBoardViewModel(
   /** Toggles between compact mobile layout and multi-column wide kitchen-counter layout. */
   fun toggleWideCounterLayout() = mutableUiState.update { current ->
     val nextWide = !current.isWideCounterLayout
-    current.copy(
-      isWideCounterLayout = nextWide,
-      toastMessage = if (nextWide) "Wide Counter Mode enabled." else "Compact Mobile Mode enabled.",
-    )
+    current.copy(isWideCounterLayout = nextWide)
+      .withToast(if (nextWide) "Wide Counter Mode enabled." else "Compact Mobile Mode enabled.")
   }
 
   /** Toggles between Warm Daylight (`#FBFBF9`) and Ambient Counter Dark OLED themes. */
@@ -262,7 +260,7 @@ class KitchenBoardViewModel(
     mutableUiState.update { it.copy(isDarkCounterTheme = !it.isDarkCounterTheme) }
 
   /** Dismisses the sticky top confirmation or warning toast banner. */
-  fun dismissToast() = mutableUiState.update { it.copy(toastMessage = null) }
+  fun dismissToast() = mutableUiState.update { it.withToast(null) }
 
   // --- Board, Cooked Deduction (`EC-04`–`EC-07`), Swap (`EC-13`), Skip (`EC-12`) & Prep ---
 
@@ -308,7 +306,7 @@ class KitchenBoardViewModel(
     storagePort.commitCookedMealBatch(current, payload.slotId, deduction, nowIso())
     val savedNote = if (payload.saveOverrideAsHouseholdDefault) " (saved family default)" else ""
     mutableUiState.update {
-      it.copy(adjustingSlotId = null, toastMessage = "Cooked '${recipe.title}'$savedNote in 1 atomic batch.")
+      it.copy(adjustingSlotId = null).withToast("Cooked '${recipe.title}'$savedNote in 1 atomic batch.")
     }
   }
 
@@ -340,7 +338,7 @@ class KitchenBoardViewModel(
     val updatedBoard = MenuPlannerEngine.markSlotSkippedOrLeftovers(current.weeklyBoard, slotId)
     storagePort.saveSnapshotBatch(current.copy(weeklyBoard = updatedBoard, updatedAtIso = nowIso()))
     mutableUiState.update {
-      it.copy(adjustingSlotId = null, toastMessage = "Marked Leftovers / Skipped—reserved pantry stock released.")
+      it.copy(adjustingSlotId = null).withToast("Marked Leftovers / Skipped—reserved pantry stock released.")
     }
   }
 
@@ -373,7 +371,8 @@ class KitchenBoardViewModel(
     storagePort.saveSnapshotBatch(next)
     val scopeLabel = if (applyMondayThroughFriday) "Mon–Fri" else "Day ${dayIndex + 1}"
     mutableUiState.update {
-      it.copy(isCustomMealSheetOpen = false, toastMessage = "Scheduled '${recipe.title}' for $scopeLabel ${slotType.name.lowercase()}.")
+      it.copy(isCustomMealSheetOpen = false)
+        .withToast("Scheduled '${recipe.title}' for $scopeLabel ${slotType.name.lowercase()}.")
     }
   }
 
@@ -407,11 +406,8 @@ class KitchenBoardViewModel(
       ),
     )
     mutableUiState.update {
-      it.copy(
-        isCustomMealSheetOpen = false,
-        selectedRecipeId = batch.customRecipe.recipeId,
-        toastMessage = "Saved custom meal '${batch.customRecipe.title}' in 1 atomic batch.",
-      )
+      it.copy(isCustomMealSheetOpen = false, selectedRecipeId = batch.customRecipe.recipeId)
+        .withToast("Saved custom meal '${batch.customRecipe.title}' in 1 atomic batch.")
     }
   }
 
@@ -516,10 +512,8 @@ class KitchenBoardViewModel(
   /** Routes Smart Pantry's `Scan Receipt` command to `Ask AI` camera/gallery scan bar. */
   fun onScanReceiptFromPantry() = mutableUiState.update {
     // Zero fake prompt injection: prompts user to attach a real photo via FileProvider / Picker.
-    it.copy(
-      activeDestination = TopLevelDestination.ASK_AI,
-      toastMessage = "Tap Camera or Gallery in the composer below to scan your receipt or fridge.",
-    )
+    it.copy(activeDestination = TopLevelDestination.ASK_AI)
+      .withToast("Tap Camera or Gallery in the composer below to scan your receipt or fridge.")
   }
 
   /** Routes Smart Pantry's `AI Audit` command to `Ask AI` with an instant zero-waste audit prompt. */
@@ -531,16 +525,16 @@ class KitchenBoardViewModel(
   /** Opens `CleanRecipeReaderScreen` filtered to rescue recipes consuming [expiringCard]. */
   fun onFindRescueRecipesFromPantry(expiringCard: ExpiringPantryCardModel) = mutableUiState.update {
     val firstRescue = expiringCard.matchingRescueRecipes.firstOrNull()
+    val msg = when (firstRescue) {
+      null -> "Showing cookbook matches for ${expiringCard.catalogItem.displayName}."
+      else -> "Found ${expiringCard.matchingRescueRecipes.size} rescue recipe(s) for ${expiringCard.catalogItem.displayName}."
+    }
     it.copy(
       activeDestination = TopLevelDestination.RECIPES,
       selectedRecipeId = firstRescue?.recipeId ?: it.selectedRecipeId,
       searchQuery = if (firstRescue != null) "" else expiringCard.catalogItem.displayName,
       isSearchBarExpanded = firstRescue == null,
-      toastMessage = when (firstRescue) {
-        null -> "Showing cookbook matches for ${expiringCard.catalogItem.displayName}."
-        else -> "Found ${expiringCard.matchingRescueRecipes.size} rescue recipe(s) for ${expiringCard.catalogItem.displayName}."
-      },
-    )
+    ).withToast(msg)
   }
 
   /** Routes Smart Pantry's `Pair with <Co-Expiring>` pill to `Ask AI` zero-waste pairing. */
@@ -555,12 +549,8 @@ class KitchenBoardViewModel(
     when (topRescue) {
       null -> onRunAiAuditFromPantry()
       else -> mutableUiState.update {
-        it.copy(
-          activeDestination = TopLevelDestination.RECIPES,
-          selectedRecipeId = topRescue.recipeId,
-          searchQuery = "",
-          toastMessage = "Rescue tonight: '${topRescue.title}'.",
-        )
+        it.copy(activeDestination = TopLevelDestination.RECIPES, selectedRecipeId = topRescue.recipeId, searchQuery = "")
+          .withToast("Rescue tonight: '${topRescue.title}'.")
       }
     }
   }
@@ -689,14 +679,9 @@ class KitchenBoardViewModel(
       storagePort.saveSnapshotBatch(prev)
       mutableUiState.update {
         it.copy(
-          canUndoLastAgentAction = false,
-          lastAgentActionSummary = null,
-          lastAgentActionAdjustTarget = null,
-          confirmedVisualTurnIds = emptySet(),
-          appliedSwapProposalIds = emptySet(),
-          queuedIngredientProposalIds = emptySet(),
-          toastMessage = "Undid last Sous-Chef change.",
-        )
+          canUndoLastAgentAction = false, lastAgentActionSummary = null, lastAgentActionAdjustTarget = null,
+          confirmedVisualTurnIds = emptySet(), appliedSwapProposalIds = emptySet(), queuedIngredientProposalIds = emptySet(),
+        ).withToast("Undid last Sous-Chef change.")
       }
     }
   }
@@ -741,20 +726,19 @@ class KitchenBoardViewModel(
       val refreshed = state.copy(
         isOnboardingReplayOpen = false, activeDestination = TopLevelDestination.PLAN,
         canUndoLastAgentAction = false, lastAgentActionSummary = null, lastAgentActionAdjustTarget = null,
-        toastMessage = "Welcome to ${committed.householdProfile.householdName}! Your 7-day plan & pantry are ready.",
-      )
+      ).withToast("Welcome to ${committed.householdProfile.householdName}! Your 7-day plan & pantry are ready.")
       deriveKitchenUiState(refreshed, committed, storagePort.batchWriteCallCount)
     }
   }
 
-  /** Skips guided onboarding into the pre-stocked 38-item Sample Kitchen in 1 `O(1)` batch write. */
+  /** Skips guided onboarding into the pre-stocked 44-item Sample Kitchen in 1 `O(1)` batch write. */
   fun skipFirstRunOnboardingWithDemo() = launchDomainGuarded {
-    // Commit canonical 38-item demo stock in 1 O(1) write so impatient users explore immediately.
+    // Commit canonical 44-item demo stock in 1 O(1) write so impatient users explore immediately.
     val (seed, current) = resolveSeedAndBaseSnapshot(defaultCompleted = true)
     val demo = storagePort.skipFirstRunOnboardingBatch(current, seed.initialPantry, nowIso())
     mutableUiState.update { state ->
       val msg = "Exploring Sample Kitchen — customize anytime in Family Profile."
-      deriveKitchenUiState(state.copy(isOnboardingReplayOpen = false, toastMessage = msg), demo, storagePort.batchWriteCallCount)
+      deriveKitchenUiState(state.copy(isOnboardingReplayOpen = false).withToast(msg), demo, storagePort.batchWriteCallCount)
     }
   }
 
@@ -786,10 +770,8 @@ class KitchenBoardViewModel(
       val next = reduceSavedHouseholdProfile(mutableUiState.value.snapshot, updatedProfile, recommendedGroceryIdsToQueue, nowIso())
       storagePort.saveSnapshotBatch(next)
       mutableUiState.update {
-        it.copy(
-          isFamilyProfileSheetOpen = false,
-          toastMessage = "Saved ${updatedProfile.householdName} (${updatedProfile.currency.symbol} • ${updatedProfile.marketRegionLabel}).",
-        )
+        it.copy(isFamilyProfileSheetOpen = false)
+          .withToast("Saved ${updatedProfile.householdName} (${updatedProfile.currency.symbol} • ${updatedProfile.marketRegionLabel}).")
       }
     }
 
@@ -830,8 +812,7 @@ class KitchenBoardViewModel(
         lastAgentActionSummary = null,
         lastAgentActionAdjustTarget = null,
         lastQaScenarioStatusMessage = "Household state restored to canonical Antipolo–Marikina PHP (₱) seed.",
-        toastMessage = "Reset household state to canonical seed in 1 atomic write.",
-      )
+      ).withToast("Reset household state to canonical seed in 1 atomic write.")
       deriveKitchenUiState(resetUi, fresh, storagePort.batchWriteCallCount)
     }
   }
@@ -845,8 +826,7 @@ class KitchenBoardViewModel(
       val withStatus = current.copy(
         currentSimulatedHour24 = outcome.simulatedHourOverride ?: current.currentSimulatedHour24,
         lastQaScenarioStatusMessage = outcome.statusMessage,
-        toastMessage = outcome.statusMessage,
-      )
+      ).withToast(outcome.statusMessage)
       deriveKitchenUiState(withStatus, outcome.updatedSnapshot, storagePort.batchWriteCallCount)
     }
   }
@@ -872,7 +852,7 @@ class KitchenBoardViewModel(
     }
   }
 
-  private fun postToast(message: String) = mutableUiState.update { it.copy(toastMessage = message) }
+  private fun postToast(message: String) = mutableUiState.update { it.withToast(message) }
 
   private fun nowIso(): String = Instant.now().toString()
 

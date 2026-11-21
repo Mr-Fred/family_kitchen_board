@@ -57,10 +57,8 @@ internal class KitchenModelDownloadDelegate(
       } catch (err: Throwable) {
         // Surface fallback approval spec for preset so the dialog still opens cleanly on error.
         mutableUiState.update {
-          it.copy(
-            pendingModelDownloadApproval = ModelDownloadApprovalSpec(preset = preset),
-            toastMessage = err.message ?: "Unable to inspect local storage preconditions.",
-          )
+          it.copy(pendingModelDownloadApproval = ModelDownloadApprovalSpec(preset = preset))
+            .withToast(err.message ?: "Unable to inspect local storage preconditions.")
         }
       }
     }
@@ -85,11 +83,8 @@ internal class KitchenModelDownloadDelegate(
       !modelTransferDispatched.compareAndSet(false, true)
     ) {
       mutableUiState.update {
-        it.copy(
-          pendingModelDownloadApproval = null,
-          activeDeviceProfile = preset.targetProfile,
-          toastMessage = "Model setup is already running in the background — watch the live progress spinner.",
-        )
+        it.copy(pendingModelDownloadApproval = null, activeDeviceProfile = preset.targetProfile)
+          .withToast("Model setup is already running in the background — watch the live progress spinner.")
       }
       return
     }
@@ -97,11 +92,8 @@ internal class KitchenModelDownloadDelegate(
     // Dismiss the approval dialog immediately and inform the user that SavorAI stays usable.
     userCancelRequested.set(false)
     mutableUiState.update {
-      it.copy(
-        pendingModelDownloadApproval = null,
-        activeDeviceProfile = preset.targetProfile,
-        toastMessage = "Downloading ${preset.fileName} — you can keep using SavorAI while it downloads.",
-      )
+      it.copy(pendingModelDownloadApproval = null, activeDeviceProfile = preset.targetProfile)
+        .withToast("Downloading ${preset.fileName} — you can keep using SavorAI while it downloads.")
     }
 
     // Run network .part streaming + OpenCL GPU initialization in background across tab switches.
@@ -116,14 +108,10 @@ internal class KitchenModelDownloadDelegate(
             current.copy(
               aiRuntimeState = syncedState,
               cloudLlmConfig = cloudVaultPort.configFlow.value,
-              toastMessage = "Downloaded & loaded ${result.capabilities.modelName} (${result.capabilities.backendLabel}) — ready!",
-            )
+            ).withToast("Downloaded & loaded ${result.capabilities.modelName} (${result.capabilities.backendLabel}) — ready!")
           }
           result is AiRuntimeState.Error -> mutableUiState.update { current ->
-            current.copy(
-              aiRuntimeState = syncedState,
-              toastMessage = result.message,
-            )
+            current.copy(aiRuntimeState = syncedState).withToast(result.message)
           }
         }
       } catch (cancel: CancellationException) {
@@ -143,10 +131,7 @@ internal class KitchenModelDownloadDelegate(
                 is AiRuntimeState.Importing -> AiRuntimeState.Error(errMsg)
                 else -> current.aiRuntimeState
               }
-              current.copy(
-                aiRuntimeState = cleanRuntime,
-                toastMessage = errMsg,
-              )
+              current.copy(aiRuntimeState = cleanRuntime).withToast(errMsg)
             }
           }
         }
@@ -187,10 +172,7 @@ internal class KitchenModelDownloadDelegate(
           AiRuntimeState.Error(CANCELLED_DOWNLOAD_TOAST)
         else -> current.aiRuntimeState
       }
-      current.copy(
-        aiRuntimeState = restoredRuntime,
-        toastMessage = CANCELLED_DOWNLOAD_TOAST,
-      )
+      current.copy(aiRuntimeState = restoredRuntime).withToast(CANCELLED_DOWNLOAD_TOAST)
     }
   }
 

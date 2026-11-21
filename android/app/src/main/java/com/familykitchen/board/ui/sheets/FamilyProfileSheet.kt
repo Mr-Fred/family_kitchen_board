@@ -94,7 +94,7 @@ private val DIETARY_FOCUS_PRESETS: List<String> = listOf(
 // Quick-add Antipolo & Marikina palengke + supermarket discovery staples boosted in Sous-Chef proposals.
 private val QUICK_DISCOVERY_ITEMS: List<String> = listOf(
   "Malunggay (Moringa Leaves)", "Yellow Kamote (Sweet Potato)", "Ripe Saba Bananas",
-  "Carabao Mango", "Boneless Bangus (Milkfish)", "Firm Tokwa & Calamansi",
+  "Carabao Mango", "Boneless Bangus (Milkfish)", "Firm Tokwa (Tofu)", "Fresh Calamansi",
 )
 
 // Household-wide culinary tags steering seasoning, sugar limits, and vegetable ratios.

@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,9 +38,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.familykitchen.board.ports.AiRuntimeState
+import com.familykitchen.board.ui.UNDO_BAR_AUTO_DISMISS_MS
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 // Cohesive background progress banners, byte-level SAF transfer formatters, quiet single-line
 // AgentStatusPill, and 1-tap AgentCommitUndoBar docked above the Sous-Chef composer.
@@ -373,6 +376,13 @@ fun AgentCommitUndoBar(
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
+  // Calmly retire the post-action Undo bar after 8 seconds if left untouched.
+  LaunchedEffect(summary) {
+    if (summary.isNotBlank()) {
+      delay(UNDO_BAR_AUTO_DISMISS_MS)
+      onDismiss()
+    }
+  }
   // Soft sage confirmation strip with 1.dp warm botanical border and 48.dp action touch targets.
   Surface(
     shape = RoundedCornerShape(16.dp),

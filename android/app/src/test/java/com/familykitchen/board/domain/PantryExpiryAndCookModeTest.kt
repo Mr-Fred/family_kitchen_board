@@ -193,8 +193,8 @@ class PantryExpiryAndCookModeTest {
       rescuedMealsCount = 12,
     )
 
-    // Verify all 38 items are stocked and sweet potatoes stay in cool dark PANTRY per USDA FoodKeeper.
-    assertEquals(38, dashboard.totalItems)
+    // Verify all 44 items are stocked and sweet potatoes stay in cool dark PANTRY per USDA FoodKeeper.
+    assertEquals(44, dashboard.totalItems)
     assertTrue(dashboard.fridgeItems.isNotEmpty() && dashboard.dryPantryItems.isNotEmpty())
     assertTrue(dashboard.dryPantryItems.any { it.ingredientId == "ing_sweet_potato" })
 
@@ -603,7 +603,7 @@ class PantryExpiryAndCookModeTest {
 
     // Verify Antipolo-Marikina local market presets and substituteGroupId enrollment.
     val presetsById = indexCatalogById(LOCAL_MARKET_PRESET_INGREDIENTS)
-    assertEquals(20, LOCAL_MARKET_PRESET_INGREDIENTS.size)
+    assertEquals(26, LOCAL_MARKET_PRESET_INGREDIENTS.size)
     LOCAL_MARKET_PRESET_INGREDIENTS.forEach(SchemaValidator::validateIngredientCatalogItem)
 
     val malunggay = requireNotNull(presetsById["ing_malunggay_pechay"])

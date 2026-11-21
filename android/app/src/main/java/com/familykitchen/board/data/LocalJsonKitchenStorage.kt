@@ -4,6 +4,7 @@ import android.content.Context
 import com.familykitchen.board.domain.SchemaValidator
 import com.familykitchen.board.domain.SeedCatalogDataset
 import com.familykitchen.board.domain.ValidationException
+import com.familykitchen.board.domain.migrateUntangledCatalogData
 import com.familykitchen.board.ports.KitchenSnapshot
 import com.familykitchen.board.ports.KitchenStoragePort
 import java.io.File
@@ -112,8 +113,30 @@ class LocalJsonKitchenStorage(
           }
           when {
             existingSnapshot != null -> {
-              mutableSnapshotFlow.value = existingSnapshot
-              existingSnapshot
+              // Seamlessly untangle legacy bundled catalog names & append 0-stock seed partners
+              // without incrementing user batchWriteCallCount telemetry.
+              val migration = migrateUntangledCatalogData(
+                ingredients = existingSnapshot.ingredients,
+                pantryEntries = existingSnapshot.pantryEntries,
+                recipes = existingSnapshot.recipes,
+                seedCatalog = seedCatalog,
+              )
+              when {
+                migration.didMutate -> {
+                  val upgradedSnapshot = existingSnapshot.copy(
+                    ingredients = migration.ingredients,
+                    pantryEntries = migration.pantryEntries,
+                    recipes = migration.recipes,
+                  )
+                  writeSnapshotAtomicallyLocked(upgradedSnapshot, incrementWriteCounter = false)
+                  mutableSnapshotFlow.value = upgradedSnapshot
+                  upgradedSnapshot
+                }
+                else -> {
+                  mutableSnapshotFlow.value = existingSnapshot
+                  existingSnapshot
+                }
+              }
             }
             else -> {
               // Brand-new installs (hadExistingFile == false) seed hasCompletedOnboarding = false;

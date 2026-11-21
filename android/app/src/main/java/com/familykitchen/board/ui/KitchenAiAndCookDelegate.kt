@@ -171,10 +171,8 @@ internal class KitchenAiAndCookDelegate(
         // Revert active indicator and inform cook if platform speech binding is unavailable.
         if (!started) {
           mutableUiState.update {
-            it.copy(
-              activeCookModeSession = currentSession.copy(isHandsFreeVoiceActive = false),
-              toastMessage = "Hands-free speech service unavailable; use quick Q&A chips.",
-            )
+            it.copy(activeCookModeSession = currentSession.copy(isHandsFreeVoiceActive = false))
+              .withToast("Hands-free speech service unavailable; use quick Q&A chips.")
           }
         }
       }
@@ -206,9 +204,7 @@ internal class KitchenAiAndCookDelegate(
       else -> {
         // Keep activeCookModeSession and running step timers intact on ad-hoc Reader/AI sessions.
         mutableUiState.update {
-          it.copy(
-            toastMessage = "Schedule '${session.recipe.title}' on your Meal Plan to customize per-slot ingredient overrides.",
-          )
+          it.withToast("Schedule '${session.recipe.title}' on your Meal Plan to customize per-slot ingredient overrides.")
         }
       }
     }
@@ -248,10 +244,8 @@ internal class KitchenAiAndCookDelegate(
       // Persist deducted pantry, slot status, and rescued expiring counter in 1 O(1) write.
       storagePort.commitCookedMealBatch(current, targetSlotId, deduction, nowIso())
       mutableUiState.update {
-        it.copy(
-          activeCookModeSession = null,
-          toastMessage = "Completed '${session.recipe.title}' and updated your Pantry.",
-        )
+        it.copy(activeCookModeSession = null)
+          .withToast("Completed '${session.recipe.title}' and updated your Pantry.")
       }
     }
   }
@@ -280,7 +274,7 @@ internal class KitchenAiAndCookDelegate(
             onOpenCustomMealSheet(MealSlotType.DINNER)
           (lowerPrompt.contains("scan fridge") || lowerPrompt.contains("scan spice")) && stagedImage.isNullOrBlank() ->
             mutableUiState.update {
-              it.copy(toastMessage = "Tap Camera or Photo below to scan your fridge or spice rack.")
+              it.withToast("Tap Camera or Photo below to scan your fridge or spice rack.")
             }
           else -> submitTurn(action.promptText, attachedImagePath = null)
         }
@@ -311,10 +305,8 @@ internal class KitchenAiAndCookDelegate(
         storagePort.saveSnapshotBatch(next)
         recordUndoSnapshot(current, summary, TopLevelDestination.PLAN)
         mutableUiState.update {
-          it.copy(
-            appliedSwapProposalIds = it.appliedSwapProposalIds + action.proposal.proposalId,
-            toastMessage = summary,
-          )
+          it.copy(appliedSwapProposalIds = it.appliedSwapProposalIds + action.proposal.proposalId)
+            .withToast(summary)
         }
       }
 
@@ -330,10 +322,8 @@ internal class KitchenAiAndCookDelegate(
         storagePort.saveSnapshotBatch(next)
         recordUndoSnapshot(current, summary, TopLevelDestination.GROCERIES)
         mutableUiState.update {
-          it.copy(
-            queuedIngredientProposalIds = it.queuedIngredientProposalIds + action.proposal.proposalId,
-            toastMessage = summary,
-          )
+          it.copy(queuedIngredientProposalIds = it.queuedIngredientProposalIds + action.proposal.proposalId)
+            .withToast(summary)
         }
       }
 
@@ -353,10 +343,8 @@ internal class KitchenAiAndCookDelegate(
           .map { it.turnId }
           .toSet()
         mutableUiState.update {
-          it.copy(
-            confirmedVisualTurnIds = it.confirmedVisualTurnIds + confirmedIds,
-            toastMessage = summary,
-          )
+          it.copy(confirmedVisualTurnIds = it.confirmedVisualTurnIds + confirmedIds)
+            .withToast(summary)
         }
       }
 
@@ -373,7 +361,7 @@ internal class KitchenAiAndCookDelegate(
         )
         if (next == current) {
           mutableUiState.update {
-            it.copy(toastMessage = "Select at least one detected item to add.")
+            it.withToast("Select at least one detected item to add.")
           }
           return@runGuarded
         }
@@ -400,10 +388,8 @@ internal class KitchenAiAndCookDelegate(
           .toSet() + setOfNotNull(action.turnId.takeIf { it.isNotBlank() })
         recordUndoSnapshot(current, summary, adjustTarget)
         mutableUiState.update {
-          it.copy(
-            confirmedVisualTurnIds = it.confirmedVisualTurnIds + confirmedIds,
-            toastMessage = summary,
-          )
+          it.copy(confirmedVisualTurnIds = it.confirmedVisualTurnIds + confirmedIds)
+            .withToast(summary)
         }
       }
 
@@ -428,8 +414,7 @@ internal class KitchenAiAndCookDelegate(
             appliedSwapProposalIds = emptySet(),
             queuedIngredientProposalIds = emptySet(),
             confirmedVisualTurnIds = emptySet(),
-            toastMessage = "Reset SavorAI conversation.",
-          )
+          ).withToast("Reset SavorAI conversation.")
         }
       }
 
@@ -462,7 +447,7 @@ internal class KitchenAiAndCookDelegate(
         storagePort.saveSnapshotBatch(reduced.first)
         recordUndoSnapshot(current, summary, TopLevelDestination.RECIPES)
         mutableUiState.update {
-          it.copy(toastMessage = summary)
+          it.withToast(summary)
         }
       }
 
@@ -513,8 +498,8 @@ internal class KitchenAiAndCookDelegate(
     // Block overlapping AI turns while inference or photo EXIF preprocessing is already active.
     if (stateSnapshot.isAiGenerating || stateSnapshot.isPreprocessingImage) {
       mutableUiState.update {
-        it.copy(
-          toastMessage = when {
+        it.withToast(
+          when {
             stateSnapshot.isPreprocessingImage ->
               "Photo optimization is still finishing — try sending in a moment."
             else ->
@@ -561,22 +546,22 @@ internal class KitchenAiAndCookDelegate(
             ?: "Updated kitchen state."
           recordUndoSnapshot(preTurnSnapshot, summary, adjustTarget)
         }
+        // Increment toastEventId strictly when this turn emits a fresh vision warning or toast.
+        val newOutcomeToast = outcome.visionWarningMessage ?: outcome.toastMessage
         mutableUiState.update {
-          it.copy(
+          val cleared = it.copy(
             isAiGenerating = false,
             isGeneratingVisionTurn = false,
             attachedImagePath = null,
             attachedImageLabel = null,
-            toastMessage = outcome.visionWarningMessage ?: outcome.toastMessage ?: it.toastMessage,
           )
+          if (!newOutcomeToast.isNullOrBlank()) cleared.withToast(newOutcomeToast) else cleared
         }
       } catch (cancel: CancellationException) {
         throw cancel
       } catch (err: Throwable) {
         mutableUiState.update {
-          it.copy(
-            toastMessage = err.message ?: "Unable to complete SavorAI request.",
-          )
+          it.withToast(err.message ?: "Unable to complete SavorAI request.")
         }
       } finally {
         mutableUiState.update {
@@ -622,7 +607,7 @@ internal class KitchenAiAndCookDelegate(
     // Guard against overlapping camera/gallery preprocessing calls while resizing a photo.
     if (mutableUiState.value.isPreprocessingImage) {
       mutableUiState.update {
-        it.copy(toastMessage = "Still optimizing your previous photo — watch the spinner below.")
+        it.withToast("Still optimizing your previous photo — watch the spinner below.")
       }
       return
     }
@@ -651,7 +636,7 @@ internal class KitchenAiAndCookDelegate(
         throw cancel
       } catch (err: Throwable) {
         mutableUiState.update {
-          it.copy(toastMessage = err.message ?: "Unable to prepare kitchen photo.")
+          it.withToast(err.message ?: "Unable to prepare kitchen photo.")
         }
       } finally {
         mutableUiState.update {
@@ -672,17 +657,13 @@ internal class KitchenAiAndCookDelegate(
       !modelImportDispatched.compareAndSet(false, true)
     ) {
       mutableUiState.update {
-        it.copy(
-          toastMessage = "Model setup is already running in the background — watch the live progress spinner.",
-        )
+        it.withToast("Model setup is already running in the background — watch the live progress spinner.")
       }
       return
     }
     val cleanDisplayName = displayName?.trim()?.takeIf { it.isNotEmpty() }
     mutableUiState.update {
-      it.copy(
-        toastMessage = "Importing ${cleanDisplayName ?: "Gemma model"} — see live progress spinner...",
-      )
+      it.withToast("Importing ${cleanDisplayName ?: "Gemma model"} — see live progress spinner...")
     }
     // Stream SAF document via <name>.part temp file + atomic rename inside LiteRtMultimodalEngine.
     scope.launch {
@@ -690,18 +671,16 @@ internal class KitchenAiAndCookDelegate(
         val result = aiEdgePort.importAndLoadModel(sourceUriString, displayName)
         when (result) {
           is AiRuntimeState.Ready -> mutableUiState.update {
-            it.copy(
-              toastMessage = "Loaded ${result.capabilities.modelName} (${result.capabilities.backendLabel}) — ready!",
-            )
+            it.withToast("Loaded ${result.capabilities.modelName} (${result.capabilities.backendLabel}) — ready!")
           }
-          is AiRuntimeState.Error -> mutableUiState.update { it.copy(toastMessage = result.message) }
+          is AiRuntimeState.Error -> mutableUiState.update { it.withToast(result.message) }
           else -> Unit
         }
       } catch (cancel: CancellationException) {
         throw cancel
       } catch (err: Throwable) {
         mutableUiState.update {
-          it.copy(toastMessage = err.message ?: "Unable to import on-device model.")
+          it.withToast(err.message ?: "Unable to import on-device model.")
         }
       } finally {
         modelImportDispatched.set(false)

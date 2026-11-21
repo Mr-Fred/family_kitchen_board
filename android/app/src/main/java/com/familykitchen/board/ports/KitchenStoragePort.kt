@@ -526,7 +526,7 @@ interface KitchenStoragePort {
    * [KitchenSnapshot.hasCompletedOnboarding] `true`.
    *
    * @param current Current household snapshot before applying onboarding choices.
-   * @param seedPantry Canonical 38-item demo pantry stock for `SAMPLE_DEMO_KITCHEN` mode.
+   * @param seedPantry Canonical 44-item demo pantry stock for `SAMPLE_DEMO_KITCHEN` mode.
    * @param draft Validated 4-step user onboarding selections.
    * @param nowIso Deterministic ISO-8601 commit timestamp.
    * @return Persisted [KitchenSnapshot].
@@ -565,11 +565,11 @@ interface KitchenStoragePort {
   }
 
   /**
-   * Skips guided onboarding into the pre-stocked 38-item Sample Kitchen in a single `O(1)`
+   * Skips guided onboarding into the pre-stocked 44-item Sample Kitchen in a single `O(1)`
    * [saveSnapshotBatch] transaction (`batchWriteCallCount += 1`).
    *
    * @param current Current household snapshot.
-   * @param seedPantry Canonical 38-item demo pantry stock from `seed_catalog.json`.
+   * @param seedPantry Canonical 44-item demo pantry stock from `seed_catalog.json`.
    * @param nowIso Deterministic ISO-8601 commit timestamp.
    * @return Persisted demo [KitchenSnapshot] with `hasCompletedOnboarding = true`.
    */
@@ -578,7 +578,7 @@ interface KitchenStoragePort {
     seedPantry: List<PantryLedgerEntry>,
     nowIso: String = DEFAULT_TIMESTAMP_ISO,
   ): KitchenSnapshot {
-    // Stock the canonical 38-item sample kitchen and mark first-run setup completed atomically.
+    // Stock the canonical 44-item sample kitchen and mark first-run setup completed atomically.
     val demoSnapshot = current.copy(
       pantryEntries = seedPantry,
       rescuedExpiringMealsCount = 12,

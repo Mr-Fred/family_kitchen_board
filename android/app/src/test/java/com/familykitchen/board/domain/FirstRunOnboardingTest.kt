@@ -182,7 +182,7 @@ class FirstRunOnboardingTest {
       ),
       nowIso = stampIso,
     )
-    assertEquals(38, curatedOutcome.pantryEntries.size)
+    assertEquals(44, curatedOutcome.pantryEntries.size)
     assertEquals(0, curatedOutcome.rescuedExpiringMealsCount)
 
     val expectedStockedIds = setOf("ing_rice", "ing_olive_oil", "ing_chicken", "ing_banana")
@@ -206,7 +206,7 @@ class FirstRunOnboardingTest {
       }
     }
 
-    // 2. EMPTY_KITCHEN zeroes all 32 Tier-1 quantitative and 6 Tier-2 staple items cleanly.
+    // 2. EMPTY_KITCHEN zeroes all 38 Tier-1 quantitative and 6 Tier-2 staple items cleanly.
     val emptyOutcome = computeFirstRunOnboardingOutcome(
       catalog = canonicalSeed.ingredients,
       recipes = canonicalSeed.recipes,
@@ -215,9 +215,9 @@ class FirstRunOnboardingTest {
       draft = FirstRunOnboardingDraft(pantryMode = StartingPantryMode.EMPTY_KITCHEN),
       nowIso = stampIso,
     )
-    assertEquals(38, emptyOutcome.pantryEntries.size)
+    assertEquals(44, emptyOutcome.pantryEntries.size)
     assertEquals(0, emptyOutcome.rescuedExpiringMealsCount)
-    assertEquals(32, emptyOutcome.pantryEntries.count { it.tier == IngredientTier.TIER_1_QUANTITATIVE })
+    assertEquals(38, emptyOutcome.pantryEntries.count { it.tier == IngredientTier.TIER_1_QUANTITATIVE })
     assertEquals(6, emptyOutcome.pantryEntries.count { it.tier == IngredientTier.TIER_2_STAPLE })
     assertTrue(
       emptyOutcome.pantryEntries.all { entry ->
@@ -225,7 +225,7 @@ class FirstRunOnboardingTest {
       },
     )
 
-    // 3. SAMPLE_DEMO_KITCHEN restores the full 38-item seed pantry and rescuedExpiringMealsCount == 12.
+    // 3. SAMPLE_DEMO_KITCHEN restores the full 44-item seed pantry and rescuedExpiringMealsCount == 12.
     val demoOutcome = computeFirstRunOnboardingOutcome(
       catalog = canonicalSeed.ingredients,
       recipes = canonicalSeed.recipes,
@@ -234,7 +234,7 @@ class FirstRunOnboardingTest {
       draft = FirstRunOnboardingDraft(pantryMode = StartingPantryMode.SAMPLE_DEMO_KITCHEN),
       nowIso = stampIso,
     )
-    assertEquals(38, demoOutcome.pantryEntries.size)
+    assertEquals(44, demoOutcome.pantryEntries.size)
     assertEquals(canonicalSeed.initialPantry, demoOutcome.pantryEntries)
     assertEquals(12, demoOutcome.rescuedExpiringMealsCount)
   }
@@ -404,7 +404,7 @@ class FirstRunOnboardingTest {
       assertFalse(viewModel.uiState.value.isOnboardingActive)
       assertEquals(1, coldStorage.batchWriteCallCount)
 
-      // 4. Skipping onboarding on a fresh install stocks the 38-item demo kitchen in 1 O(1) write.
+      // 4. Skipping onboarding on a fresh install stocks the 44-item demo kitchen in 1 O(1) write.
       val skipStorage = FakeKitchenStorage(simulateFreshInstall = true)
       val skipViewModel = KitchenBoardViewModel(
         seedCatalogPort = SeedCatalogPort { canonicalSeed },
@@ -420,7 +420,7 @@ class FirstRunOnboardingTest {
       assertEquals(1, skipStorage.batchWriteCallCount)
       assertTrue(skipViewModel.uiState.value.snapshot.hasCompletedOnboarding)
       assertFalse(skipViewModel.uiState.value.isOnboardingActive)
-      assertEquals(38, skipViewModel.uiState.value.snapshot.pantryEntries.size)
+      assertEquals(44, skipViewModel.uiState.value.snapshot.pantryEntries.size)
       assertEquals(canonicalSeed.initialPantry, skipViewModel.uiState.value.snapshot.pantryEntries)
       assertEquals(12, skipViewModel.uiState.value.snapshot.rescuedExpiringMealsCount)
     } finally {
