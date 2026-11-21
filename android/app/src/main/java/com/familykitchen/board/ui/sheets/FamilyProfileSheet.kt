@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FamilyRestroom
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -40,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -119,6 +121,7 @@ fun FamilyProfileSheet(
   isWideCounterLayout: Boolean = false,
   onToggleDarkTheme: () -> Unit = {},
   onToggleWideLayout: () -> Unit = {},
+  onRelaunchOnboarding: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -138,6 +141,7 @@ fun FamilyProfileSheet(
       isWideCounterLayout = isWideCounterLayout,
       onToggleDarkTheme = onToggleDarkTheme,
       onToggleWideLayout = onToggleWideLayout,
+      onRelaunchOnboarding = onRelaunchOnboarding,
     )
   }
 }
@@ -160,6 +164,7 @@ fun FamilyProfileSheetContent(
   isWideCounterLayout: Boolean = false,
   onToggleDarkTheme: () -> Unit = {},
   onToggleWideLayout: () -> Unit = {},
+  onRelaunchOnboarding: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -241,6 +246,17 @@ fun FamilyProfileSheetContent(
         DisplayPreferenceToggleRow("Counter Dark Mode", "Low-glare warm OLED surface for evening prep", isDarkCounterTheme, onToggleDarkTheme)
         HorizontalDivider(color = extendedColors.borderSubtle)
         DisplayPreferenceToggleRow("Wide Counter Layout", "3-column stand layout with side navigation rail", isWideCounterLayout, onToggleWideLayout)
+        HorizontalDivider(color = extendedColors.borderSubtle)
+        // Re-open the 4-step First-Run Setup Wizard anytime to adjust household or starter pantry.
+        OutlinedButton(
+          onClick = onRelaunchOnboarding,
+          shape = CircleShape,
+          modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).defaultMinSize(minHeight = 48.dp),
+        ) {
+          Icon(Icons.Filled.Restaurant, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(modifier = Modifier.width(6.dp))
+          Text("Run Guided First-Run Setup", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+        }
       }
     }
 

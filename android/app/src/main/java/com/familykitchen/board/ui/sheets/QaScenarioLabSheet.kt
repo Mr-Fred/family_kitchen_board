@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.Card
@@ -120,6 +121,7 @@ fun QaScenarioLabSheet(
   onResetHouseholdState: () -> Unit,
   onTriggerScenario: (QaEdgeCaseScenario) -> Unit,
   onDismiss: () -> Unit,
+  onSimulateFreshInstall: () -> Unit = {},
 ) {
   // Expand sheet fully so clock simulator, reset button, and EC-01..EC-13 runners scan cleanly.
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -139,6 +141,7 @@ fun QaScenarioLabSheet(
       onResetHouseholdState = onResetHouseholdState,
       onTriggerScenario = onTriggerScenario,
       onDismiss = onDismiss,
+      onSimulateFreshInstall = onSimulateFreshInstall,
     )
   }
 }
@@ -158,6 +161,7 @@ fun QaScenarioLabSheetContent(
   onResetHouseholdState: () -> Unit,
   onTriggerScenario: (QaEdgeCaseScenario) -> Unit,
   onDismiss: () -> Unit = {},
+  onSimulateFreshInstall: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -256,6 +260,23 @@ fun QaScenarioLabSheetContent(
             text = "Reset Household State",
             maxLines = 1,
             softWrap = false,
+          )
+        }
+
+        // 1-tap QA launcher opening the 4-step First-Run Setup Wizard directly.
+        OutlinedButton(
+          onClick = onSimulateFreshInstall,
+          modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp),
+        ) {
+          Icon(Icons.Filled.Restaurant, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = "Launch First-Run Setup Wizard",
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
           )
         }
       }

@@ -26,12 +26,14 @@ import kotlinx.coroutines.sync.withLock
  * @param householdId Default household ID used when cold-initializing from a [SeedCatalogDataset].
  * @param boardId Default weekly board ID used when cold-initializing from a [SeedCatalogDataset].
  * @param weekStartDateIso Default ISO-8601 Monday date used when cold-initializing a weekly board.
+ * @param simulateFreshInstall When `true`, cold-start seeding marks `hasCompletedOnboarding = false`.
  */
 class FakeKitchenStorage(
   initialSnapshot: KitchenSnapshot? = null,
   private val householdId: String = DEFAULT_HOUSEHOLD_ID,
   private val boardId: String = DEFAULT_BOARD_ID,
   private val weekStartDateIso: String = DEFAULT_WEEK_START_ISO,
+  private val simulateFreshInstall: Boolean = false,
 ) : KitchenStoragePort {
 
   // Serialize concurrent state mutations so writeHistory and snapshotFlow stay strictly ordered.
@@ -81,6 +83,7 @@ class FakeKitchenStorage(
               householdId = householdId,
               boardId = boardId,
               weekStartDateIso = weekStartDateIso,
+              hasCompletedOnboarding = !simulateFreshInstall,
             )
             validateSnapshotInvariants(initialized)
             mutableSnapshotFlow.value = initialized

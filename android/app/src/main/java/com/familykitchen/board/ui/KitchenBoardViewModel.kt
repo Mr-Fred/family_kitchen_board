@@ -16,6 +16,7 @@ import com.familykitchen.board.domain.CookedDeductionPayload
 import com.familykitchen.board.domain.CustomGroceryItem
 import com.familykitchen.board.domain.EdgeDeviceProfile
 import com.familykitchen.board.domain.ExpiringPantryCardModel
+import com.familykitchen.board.domain.FirstRunOnboardingDraft
 import com.familykitchen.board.domain.GrocerySortMode
 import com.familykitchen.board.domain.HouseholdCurrency
 import com.familykitchen.board.domain.HouseholdProfile
@@ -727,7 +728,51 @@ class KitchenBoardViewModel(
     }
   }
 
-  // --- Family Profile (`PHP` `₱` & Templates) & QA Scenario Lab (`EC-01`–`EC-13`) ---
+  // --- First-Run Onboarding, Family Profile (`PHP` `₱` & Templates) & QA Scenario Lab ---
+
+  /** Commits the 4-step [FirstRunOnboardingDraft] into profile, pantry, and 7-day plan in 1 `O(1)` write. */
+  fun completeFirstRunOnboarding(draft: FirstRunOnboardingDraft) = launchDomainGuarded {
+    // Clear prior agent undo history so a stale pre-onboarding snapshot cannot overwrite setup.
+    lastUndoableSnapshot = null
+    val (seed, current) = resolveSeedAndBaseSnapshot(defaultCompleted = false)
+    // Single O(1) atomic batch write applying profile, starting pantry mode, and 21-slot board.
+    val committed = storagePort.commitFirstRunOnboardingBatch(current, seed.initialPantry, draft, nowIso())
+    mutableUiState.update { state ->
+      val refreshed = state.copy(
+        isOnboardingReplayOpen = false, activeDestination = TopLevelDestination.PLAN,
+        canUndoLastAgentAction = false, lastAgentActionSummary = null, lastAgentActionAdjustTarget = null,
+        toastMessage = "Welcome to ${committed.householdProfile.householdName}! Your 7-day plan & pantry are ready.",
+      )
+      deriveKitchenUiState(refreshed, committed, storagePort.batchWriteCallCount)
+    }
+  }
+
+  /** Skips guided onboarding into the pre-stocked 38-item Sample Kitchen in 1 `O(1)` batch write. */
+  fun skipFirstRunOnboardingWithDemo() = launchDomainGuarded {
+    // Commit canonical 38-item demo stock in 1 O(1) write so impatient users explore immediately.
+    val (seed, current) = resolveSeedAndBaseSnapshot(defaultCompleted = true)
+    val demo = storagePort.skipFirstRunOnboardingBatch(current, seed.initialPantry, nowIso())
+    mutableUiState.update { state ->
+      val msg = "Exploring Sample Kitchen — customize anytime in Family Profile."
+      deriveKitchenUiState(state.copy(isOnboardingReplayOpen = false, toastMessage = msg), demo, storagePort.batchWriteCallCount)
+    }
+  }
+
+  /** Relaunches the 4-step guided setup wizard from `FamilyProfileSheet` or `QaScenarioLabSheet`. */
+  fun relaunchFirstRunOnboarding() = mutableUiState.update {
+    // Dismiss open sheets first so modal scrims never stack behind the full-screen setup wizard.
+    it.copy(isFamilyProfileSheetOpen = false, isQaLabSheetOpen = false, isOnboardingReplayOpen = true)
+  }
+
+  /** Closes the replayed 4-step setup wizard without mutating persisted household state. */
+  fun dismissOnboardingReplay() = mutableUiState.update { it.copy(isOnboardingReplayOpen = false) }
+
+  private suspend fun resolveSeedAndBaseSnapshot(defaultCompleted: Boolean): Pair<SeedCatalogDataset, KitchenSnapshot> {
+    val seed = cachedSeedCatalog ?: seedCatalogPort.loadSeedCatalog().also { cachedSeedCatalog = it }
+    val snap = mutableUiState.value.snapshot
+    val base = if (snap.ingredients.isEmpty()) KitchenSnapshot.fromSeedCatalog(seed, hasCompletedOnboarding = defaultCompleted) else snap
+    return seed to base
+  }
 
   /** Opens `FamilyProfileSheet`. */
   fun openFamilyProfileSheet() = mutableUiState.update { it.copy(isFamilyProfileSheetOpen = true) }

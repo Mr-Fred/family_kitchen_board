@@ -104,8 +104,10 @@ class LocalJsonKitchenStorage(
         }
         withContext(ioDispatcher) {
           val targetFile = snapshotFile
+          // Detect whether a durable snapshot file existed prior to cold-start evaluation.
+          val hadExistingFile = targetFile.isFile && targetFile.length() > 0L
           val existingSnapshot = when {
-            targetFile.isFile && targetFile.length() > 0L -> tryReadExistingSnapshot(targetFile)
+            hadExistingFile -> tryReadExistingSnapshot(targetFile)
             else -> null
           }
           when {
@@ -114,9 +116,13 @@ class LocalJsonKitchenStorage(
               existingSnapshot
             }
             else -> {
-              // Seed initial Family-of-4 board on first launch or after unrecoverable file corruption.
+              // Brand-new installs (hadExistingFile == false) seed hasCompletedOnboarding = false;
+              // corrupt-file recoveries (hadExistingFile == true) preserve completed status.
               SchemaValidator.validateSeedCatalogDataset(seedCatalog)
-              val seeded = KitchenSnapshot.fromSeedCatalog(seedCatalog)
+              val seeded = KitchenSnapshot.fromSeedCatalog(
+                seedCatalog = seedCatalog,
+                hasCompletedOnboarding = hadExistingFile,
+              )
               writeSnapshotAtomicallyLocked(seeded, incrementWriteCounter = false)
               seeded
             }

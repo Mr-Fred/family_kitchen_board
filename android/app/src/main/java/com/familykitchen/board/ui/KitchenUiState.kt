@@ -149,6 +149,7 @@ enum class VoiceCaptureTarget {
  * @property cloudLlmConfig Non-secret hybrid On-Device / Cloud LLM configuration and key badge state.
  * @property isVerifyingCloudKey `true` while a lightweight Cloud LLM API key health probe is active.
  * @property isRefreshingCloudModels `true` while syncing live `/models` for the active provider.
+ * @property isOnboardingReplayOpen `true` when the user manually relaunches guided first-run setup.
  */
 @Immutable
 data class KitchenUiState(
@@ -203,8 +204,13 @@ data class KitchenUiState(
   val cloudLlmConfig: CloudLlmConfig = CloudLlmConfig(),
   val isVerifyingCloudKey: Boolean = false,
   val isRefreshingCloudModels: Boolean = false,
+  val isOnboardingReplayOpen: Boolean = false,
 ) {
   // Derived flags keep top-bar, banner, and composer spinners synchronized across all tabs.
+  /** `true` whenever a brand-new install has not yet finished setup or the user replays onboarding. */
+  val isOnboardingActive: Boolean
+    get() = !isLoading && (!snapshot.hasCompletedOnboarding || isOnboardingReplayOpen)
+
   /** `true` whenever app-scoped model discovery, SAF `.part` copying, or GPU loading is active. */
   val isModelOperationInProgress: Boolean
     get() = aiRuntimeState.isBackgroundBusy

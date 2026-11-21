@@ -36,6 +36,7 @@ import com.familykitchen.board.domain.CookModeSessionState
 import com.familykitchen.board.domain.CookedDeductionPayload
 import com.familykitchen.board.domain.CustomGroceryItem
 import com.familykitchen.board.domain.ExpiringPantryCardModel
+import com.familykitchen.board.domain.FirstRunOnboardingDraft
 import com.familykitchen.board.domain.GrocerySortMode
 import com.familykitchen.board.domain.HouseholdCurrency
 import com.familykitchen.board.domain.HouseholdProfile
@@ -59,6 +60,8 @@ import com.familykitchen.board.ui.board.CookedOverrideSheet
 import com.familykitchen.board.ui.board.TodayAndWeekScreen
 import com.familykitchen.board.ui.cookmode.StepByStepCookModeScreen
 import com.familykitchen.board.ui.grocery.SmartGroceryScreen
+import com.familykitchen.board.ui.onboarding.FirstRunOnboardingHost
+import com.familykitchen.board.ui.onboarding.FirstRunOnboardingScreen
 import com.familykitchen.board.ui.pacer.MorningPacerScreen
 import com.familykitchen.board.ui.pacer.PacerMode
 import com.familykitchen.board.ui.pantry.SmartPantryScreen
@@ -122,21 +125,14 @@ fun KitchenScaffold(
 
   // Forward all stateless UI state slices and explicit ViewModel method references.
   KitchenScaffoldContent(
-    uiState = uiState,
-    onSelectDestination = viewModel::selectDestination,
+    uiState = uiState, onSelectDestination = viewModel::selectDestination,
     onSelectGroceriesSubDestination = viewModel::selectGroceriesSubDestination,
-    onOpenWeeklyPrep = viewModel::openWeeklyPrepSession,
-    onSetPacerMode = viewModel::setPacerMode,
-    onSelectDay = viewModel::selectActiveDay,
-    onToggleSearch = viewModel::toggleSearchBar,
-    onSearchQueryChange = viewModel::updateSearchQuery,
-    onToggleDarkTheme = viewModel::toggleDarkCounterTheme,
-    onToggleWideLayout = viewModel::toggleWideCounterLayout,
-    onDismissToast = viewModel::dismissToast,
-    onStartCookingSlot = viewModel::startCookingSlot,
-    onQuickCookSlot = viewModel::quickCookSlot,
-    onOpenAdjustSlot = viewModel::openAdjustSlotSheet,
-    onDismissAdjustSlot = viewModel::dismissAdjustSlotSheet,
+    onOpenWeeklyPrep = viewModel::openWeeklyPrepSession, onSetPacerMode = viewModel::setPacerMode,
+    onSelectDay = viewModel::selectActiveDay, onToggleSearch = viewModel::toggleSearchBar,
+    onSearchQueryChange = viewModel::updateSearchQuery, onToggleDarkTheme = viewModel::toggleDarkCounterTheme,
+    onToggleWideLayout = viewModel::toggleWideCounterLayout, onDismissToast = viewModel::dismissToast,
+    onStartCookingSlot = viewModel::startCookingSlot, onQuickCookSlot = viewModel::quickCookSlot,
+    onOpenAdjustSlot = viewModel::openAdjustSlotSheet, onDismissAdjustSlot = viewModel::dismissAdjustSlotSheet,
     onConfirmCookedOverride = viewModel::confirmCookedOverride,
     onSelectWorkoutModifier = viewModel::selectSlotWorkoutModifier,
     onQuickSwapSlotRecipe = viewModel::quickSwapSlotRecipe,
@@ -147,8 +143,7 @@ fun KitchenScaffold(
     onSaveCustomMeal = viewModel::saveCustomFamilyMeal,
     onTogglePrepStationTask = viewModel::togglePrepStationTask,
     onCommitWeeklyPrep = viewModel::commitWeeklyPrepSession,
-    onAdjustPantryQuantity = viewModel::adjustPantryQuantity,
-    onSetStapleStatus = viewModel::setStapleStatus,
+    onAdjustPantryQuantity = viewModel::adjustPantryQuantity, onSetStapleStatus = viewModel::setStapleStatus,
     onToggleLocalAvailability = viewModel::toggleLocalAvailability,
     onToggleManualGroceryQueue = viewModel::toggleManualGroceryQueue,
     onRemoveManualGroceryQueue = viewModel::removeManualGroceryQueue,
@@ -166,15 +161,13 @@ fun KitchenScaffold(
     onAddCustomGroceryItem = viewModel::addCustomGroceryItem,
     onClearCheckedGrocery = viewModel::clearCheckedGroceryItems,
     onStartGroceryVoiceDictation = { runWithAudioPermission { viewModel.startGroceryVoiceDictation() } },
-    onOpenRecipeInReader = viewModel::openRecipeInReader,
-    onSelectRecipeInReader = viewModel::selectRecipe,
+    onOpenRecipeInReader = viewModel::openRecipeInReader, onSelectRecipeInReader = viewModel::selectRecipe,
     onToggleSavedRecipe = viewModel::toggleSavedRecipe,
     onToggleReaderIngredientChecked = viewModel::toggleReaderIngredientChecked,
     onResetReaderCheckedIngredients = viewModel::resetCheckedReaderIngredients,
     onQueueMissingRecipeIngredients = viewModel::queueMissingRecipeIngredients,
     onAddRecipeKitchenNote = viewModel::addRecipeKitchenNote,
-    onScheduleRecipeToPlan = viewModel::scheduleRecipeToPlan,
-    onShareRecipe = viewModel::notifyRecipeShared,
+    onScheduleRecipeToPlan = viewModel::scheduleRecipeToPlan, onShareRecipe = viewModel::notifyRecipeShared,
     onStartCookModeFromReader = { recipe, handsFree ->
       when {
         handsFree -> runWithAudioPermission { viewModel.startCookMode(recipe, null, true) }
@@ -190,8 +183,7 @@ fun KitchenScaffold(
     },
     onOpenCookModePantryAdjuster = viewModel::openCookModePantryAdjuster,
     onCompleteCookModeAndDeduct = viewModel::completeCookModeAndDeductPantry,
-    onExitCookMode = viewModel::exitCookMode,
-    onAiChefAction = viewModel::onAiChefAction,
+    onExitCookMode = viewModel::exitCookMode, onAiChefAction = viewModel::onAiChefAction,
     onUndoLastAgentAction = viewModel::undoLastAgentAction,
     onDismissAgentActionBanner = viewModel::dismissAgentActionBanner,
     onOpenFamilyProfile = viewModel::openFamilyProfileSheet,
@@ -199,11 +191,14 @@ fun KitchenScaffold(
     onSaveHouseholdProfile = viewModel::saveHouseholdProfile,
     onSelectConsumerTemplate = viewModel::selectConsumerTemplate,
     onSelectCurrencyAndRegion = viewModel::selectCurrencyAndRegion,
-    onOpenQaLab = viewModel::openQaLabSheet,
-    onDismissQaLab = viewModel::dismissQaLabSheet,
+    onOpenQaLab = viewModel::openQaLabSheet, onDismissQaLab = viewModel::dismissQaLabSheet,
     onSelectClockHour = viewModel::selectSimulatedClockHour,
     onResetHouseholdToSeed = viewModel::resetHouseholdStateToSeed,
     onTriggerQaScenario = viewModel::triggerQaScenario,
+    onCompleteFirstRunOnboarding = viewModel::completeFirstRunOnboarding,
+    onSkipFirstRunOnboarding = viewModel::skipFirstRunOnboardingWithDemo,
+    onRelaunchFirstRunOnboarding = viewModel::relaunchFirstRunOnboarding,
+    onDismissOnboardingReplay = viewModel::dismissOnboardingReplay,
     modifier = modifier,
   )
 }
@@ -286,6 +281,10 @@ fun KitchenScaffoldContent(
   onSelectClockHour: (Int) -> Unit = {},
   onResetHouseholdToSeed: () -> Unit = {},
   onTriggerQaScenario: (QaEdgeCaseScenario) -> Unit = {},
+  onCompleteFirstRunOnboarding: (FirstRunOnboardingDraft) -> Unit = {},
+  onSkipFirstRunOnboarding: () -> Unit = {},
+  onRelaunchFirstRunOnboarding: () -> Unit = {},
+  onDismissOnboardingReplay: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val configuration = LocalConfiguration.current
@@ -301,6 +300,33 @@ fun KitchenScaffoldContent(
   var isAiModelSetupExpanded by rememberSaveable { mutableStateOf(false) }
 
   Box(modifier = modifier.fillMaxSize()) {
+    // Render serene full-screen First-Run Onboarding instead of 5-tab chrome when setup is active.
+    if (uiState.isOnboardingActive) {
+      val replay = uiState.isOnboardingReplayOpen && uiState.snapshot.hasCompletedOnboarding
+      when {
+        isInspectionPreview -> FirstRunOnboardingScreen(
+          currentStep = 0,
+          draft = FirstRunOnboardingDraft.fromHouseholdProfile(profile, isFreshInstall = !replay),
+          isReplayMode = replay,
+          runtimeState = uiState.aiRuntimeState, activeDeviceProfile = uiState.activeDeviceProfile,
+          cloudConfig = uiState.cloudLlmConfig, isVerifyingCloudKey = uiState.isVerifyingCloudKey,
+          isRefreshingCloudModels = uiState.isRefreshingCloudModels, isSavingBatch = uiState.isSavingBatch,
+          toastMessage = uiState.toastMessage, onDismissToast = onDismissToast, onAiChefAction = onAiChefAction,
+          onCompleteOnboarding = onCompleteFirstRunOnboarding, onSkipWithDemoKitchen = onSkipFirstRunOnboarding,
+          onDismissReplay = onDismissOnboardingReplay,
+        )
+        else -> FirstRunOnboardingHost(
+          initialProfile = profile, isReplayMode = replay, runtimeState = uiState.aiRuntimeState,
+          activeDeviceProfile = uiState.activeDeviceProfile, cloudConfig = uiState.cloudLlmConfig,
+          isVerifyingCloudKey = uiState.isVerifyingCloudKey, isRefreshingCloudModels = uiState.isRefreshingCloudModels,
+          isSavingBatch = uiState.isSavingBatch, toastMessage = uiState.toastMessage, onDismissToast = onDismissToast,
+          onAiChefAction = onAiChefAction, onCompleteOnboarding = onCompleteFirstRunOnboarding,
+          onSkipWithDemoKitchen = onSkipFirstRunOnboarding, onDismissReplay = onDismissOnboardingReplay,
+        )
+      }
+      return@Box
+    }
+
     // Primary Material 3 Scaffold switching cleanly between 5-tab bottom bar and wide counter rail.
     Scaffold(
       containerColor = MaterialTheme.colorScheme.background,
@@ -655,6 +681,7 @@ fun KitchenScaffoldContent(
         isWideCounterLayout = uiState.isWideCounterLayout,
         onToggleDarkTheme = onToggleDarkTheme,
         onToggleWideLayout = onToggleWideLayout,
+        onRelaunchOnboarding = onRelaunchFirstRunOnboarding,
         onDismiss = onDismissFamilyProfile,
       )
     }
@@ -671,6 +698,7 @@ fun KitchenScaffoldContent(
         onSelectClockHour = onSelectClockHour,
         onResetHouseholdState = onResetHouseholdToSeed,
         onTriggerScenario = onTriggerQaScenario,
+        onSimulateFreshInstall = onRelaunchFirstRunOnboarding,
         onDismiss = onDismissQaLab,
       )
     }

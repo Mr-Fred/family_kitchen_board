@@ -6,6 +6,7 @@ import com.familykitchen.board.domain.CookedDeductionResult
 import com.familykitchen.board.domain.CustomGroceryItem
 import com.familykitchen.board.domain.DEFAULT_TIMESTAMP_ISO
 import com.familykitchen.board.domain.ExpiryStatus
+import com.familykitchen.board.domain.FirstRunOnboardingDraft
 import com.familykitchen.board.domain.GrocerySortMode
 import com.familykitchen.board.domain.HouseholdCurrency
 import com.familykitchen.board.domain.HouseholdProfile
@@ -18,6 +19,7 @@ import com.familykitchen.board.domain.SeedCatalogDataset
 import com.familykitchen.board.domain.WeeklyBoard
 import com.familykitchen.board.domain.autoDraftWeeklyBoard
 import com.familykitchen.board.domain.batchRestockPantry
+import com.familykitchen.board.domain.computeFirstRunOnboardingOutcome
 import com.familykitchen.board.domain.indexCatalogById
 import com.familykitchen.board.domain.indexPantryById
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +51,7 @@ import kotlinx.serialization.Serializable
  * @property checkedReaderIngredientsByRecipeId Checked prep ingredients in Clean Reader per recipe.
  * @property grocerySortMode Active Smart Grocery List ordering strategy.
  * @property rescuedExpiringMealsCount Cumulative meals cooked that rescued expiring stock (`96%`+).
+ * @property hasCompletedOnboarding Whether the household has completed or skipped first-run setup.
  */
 @Serializable
 data class KitchenSnapshot(
@@ -68,6 +71,7 @@ data class KitchenSnapshot(
   val checkedReaderIngredientsByRecipeId: Map<String, Set<String>> = emptyMap(),
   val grocerySortMode: GrocerySortMode = GrocerySortMode.AISLE_SORTED,
   val rescuedExpiringMealsCount: Int = 12,
+  val hasCompletedOnboarding: Boolean = true,
 ) {
   // Computed lookup maps avoid duplicating normalized collections inside persisted JSON files.
   /** Derived `O(1)` catalog lookup map keyed by `ingredientId`. */
@@ -91,6 +95,7 @@ data class KitchenSnapshot(
      * @param householdId Household identifier stamped onto the board and profile.
      * @param boardId Initial weekly board identifier.
      * @param weekStartDateIso ISO-8601 Monday start date for the drafted board.
+     * @param hasCompletedOnboarding `false` on brand-new cold device installs, `true` by default.
      * @return Initialized [KitchenSnapshot] ready for atomic persistence.
      */
     fun fromSeedCatalog(
@@ -98,6 +103,7 @@ data class KitchenSnapshot(
       householdId: String = "household_family_4",
       boardId: String = "board_week_1",
       weekStartDateIso: String = "2026-10-26",
+      hasCompletedOnboarding: Boolean = true,
     ): KitchenSnapshot {
       val profile = HouseholdProfile(householdId = householdId)
       // Draft 21 initial slots respecting Fred's <= 25m morning breakfast cap (EC-01).
@@ -122,6 +128,7 @@ data class KitchenSnapshot(
         weeklyBoard = draftedBoard,
         householdProfile = profile,
         savedRecipeIds = initialSavedIds,
+        hasCompletedOnboarding = hasCompletedOnboarding,
       )
     }
   }
@@ -511,5 +518,74 @@ interface KitchenStoragePort {
     val nextSnapshot = current.copy(householdProfile = updatedProfile, updatedAtIso = nowIso)
     saveSnapshotBatch(nextSnapshot)
     return nextSnapshot
+  }
+
+  /**
+   * Commits a completed 4-step [FirstRunOnboardingDraft] (from a brand-new install or replay) in a
+   * single `O(1)` [saveSnapshotBatch] transaction (`batchWriteCallCount += 1`), marking
+   * [KitchenSnapshot.hasCompletedOnboarding] `true`.
+   *
+   * @param current Current household snapshot before applying onboarding choices.
+   * @param seedPantry Canonical 38-item demo pantry stock for `SAMPLE_DEMO_KITCHEN` mode.
+   * @param draft Validated 4-step user onboarding selections.
+   * @param nowIso Deterministic ISO-8601 commit timestamp.
+   * @return Persisted [KitchenSnapshot].
+   */
+  suspend fun commitFirstRunOnboardingBatch(
+    current: KitchenSnapshot,
+    seedPantry: List<PantryLedgerEntry>,
+    draft: FirstRunOnboardingDraft,
+    nowIso: String = DEFAULT_TIMESTAMP_ISO,
+  ): KitchenSnapshot {
+    // Compute pure profile, starting pantry, and 21-slot weekly board in one deterministic pass.
+    val outcome = computeFirstRunOnboardingOutcome(
+      catalog = current.ingredients,
+      recipes = current.recipes,
+      seedPantry = seedPantry,
+      currentBoard = current.weeklyBoard,
+      draft = draft,
+      nowIso = nowIso,
+    )
+    val updatedSnapshot = current.copy(
+      householdProfile = outcome.householdProfile,
+      pantryEntries = outcome.pantryEntries,
+      weeklyBoard = outcome.weeklyBoard,
+      rescuedExpiringMealsCount = outcome.rescuedExpiringMealsCount,
+      aiAddedGroceryIds = emptySet(),
+      aiTurnHistory = emptyList(),
+      completedPrepTaskIds = emptySet(),
+      checkedGroceryItemIds = emptySet(),
+      customGroceryItems = emptyList(),
+      hasCompletedOnboarding = true,
+      updatedAtIso = nowIso,
+    )
+    // Persist the entire onboarding configuration in a single O(1) atomic snapshot write.
+    saveSnapshotBatch(updatedSnapshot)
+    return updatedSnapshot
+  }
+
+  /**
+   * Skips guided onboarding into the pre-stocked 38-item Sample Kitchen in a single `O(1)`
+   * [saveSnapshotBatch] transaction (`batchWriteCallCount += 1`).
+   *
+   * @param current Current household snapshot.
+   * @param seedPantry Canonical 38-item demo pantry stock from `seed_catalog.json`.
+   * @param nowIso Deterministic ISO-8601 commit timestamp.
+   * @return Persisted demo [KitchenSnapshot] with `hasCompletedOnboarding = true`.
+   */
+  suspend fun skipFirstRunOnboardingBatch(
+    current: KitchenSnapshot,
+    seedPantry: List<PantryLedgerEntry>,
+    nowIso: String = DEFAULT_TIMESTAMP_ISO,
+  ): KitchenSnapshot {
+    // Stock the canonical 38-item sample kitchen and mark first-run setup completed atomically.
+    val demoSnapshot = current.copy(
+      pantryEntries = seedPantry,
+      rescuedExpiringMealsCount = 12,
+      hasCompletedOnboarding = true,
+      updatedAtIso = nowIso,
+    )
+    saveSnapshotBatch(demoSnapshot)
+    return demoSnapshot
   }
 }
