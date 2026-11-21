@@ -1,0 +1,98 @@
+# Family Kitchen Board (`SavorAI`) — AI Agent Guide
+
+Authoritative project-local guide for AI agents working in `family_kitchen_board`: an offline-first, 100% Native Android culinary assistant (`SavorAI`), shelf-life & two-tier pantry ledger, clean cookbook reader, hands-free step-by-step cook mode, morning pacer, and 21-slot meal planner calibrated for a Family of 4 (`Fred`, `Wife`, `8-year-old`, and `2-year-old`) in **Antipolo & Marikina, PH (`PHP`, `₱`)** with consumer household templates.
+
+> [!IMPORTANT]
+>
+> - **Personal Repository Isolation**: This is a 100% personal project ([`.copilot_compliance.json`](.copilot_compliance.json)). Never introduce corporate domains, internal shortlinks, internal tooling names, workstation paths, or corporate Git identities. Always run `node scripts/verify_clean_personal_repo.cjs` before finishing any task.
+> - **Mandatory Coding & Architecture Rules**: Read and enforce [`.agents/rules/android_architecture.md`](.agents/rules/android_architecture.md) and [`.agents/DESIGN.md`](.agents/DESIGN.md) before creating or editing any Kotlin, Gradle, XML, or test file.
+
+---
+
+## Single Source of Truth & Target Platform
+
+- **Canonical Codebase (`android/`)**: `android/` is the single source of truth for the **100% Native Android** application (`applicationId = "com.familykitchen.board"`, `minSdk = 31`, `targetSdk = 34`, `compileSdk = 34`, Kotlin `2.2.0` on JVM `17`, Jetpack Compose BOM `2024.10.01`, Material 3 `Theme.FamilyKitchenBoard`). All legacy WebView, Capacitor, HTML, PWA, TypeScript, and stray Python files have been retired.
+- **Primary Hardware Target**: **Samsung Galaxy S22 & Galaxy S22 Ultra** (Android 12+, Adreno 730 / Exynos 2200 OpenCL GPU acceleration via `<uses-native-library android:name="libOpenCL.so" />` + `libvndksupport.so` with automatic CPU fallback on emulators).
+- **Default Offline-First + Opt-In Encrypted Cloud LLM Posture**: Defaults to `AiExecutionMode.ON_DEVICE` (`100%` offline local inference via `LiteRtMultimodalEngine`, bundled `Newsreader` + `Plus Jakarta Sans` fonts, local culinary artwork, household snapshots, and bilingual `en-US` / `fr-FR` speech recognition) with **zero** `MANAGE_EXTERNAL_STORAGE`, `READ_EXTERNAL_STORAGE`, or `WRITE_EXTERNAL_STORAGE` permissions. When the user explicitly switches to `AiExecutionMode.CLOUD_API`, `HybridAiInferenceRouter` and `CloudLlmClient` route text and multimodal vision turns over strict HTTPS (`android:networkSecurityConfig="@xml/network_security_config"` with `cleartextTrafficPermitted="false"`, `android:allowBackup="false"`, `ALLOWED_CLOUD_HOSTS` SSRF allowlist, and header-only API key authentication) backed at rest by `KeystoreCloudCredentialVault` (`AndroidKeyStore` AES-256-GCM, 128-bit tag).
+- **Antipolo–Marikina `PHP` (`₱`) Seed Catalog & Consumer Templates**:
+  - [`data/seed_catalog.json`](data/seed_catalog.json) (mirrored 1:1 to `android/app/src/main/assets/seed_catalog.json`) contains **38 curated ingredients** (`32` `TIER_1_QUANTITATIVE` + `6` `TIER_2_STAPLE`), **30 curated Family-of-4 recipes** (`baseServings = 4`, USDA macros, step technique/visual cues, 100% `toddlerPrepTip` + workout modifiers), and **38 initial pantry entries** (including 3 out-of-the-box expiring items: `ing_salmon = 1d`, `ing_spinach = 2d`, `ing_greek_yogurt = 2d`) priced in **Philippine Pesos (`PHP`, `₱`)** for Antipolo Palengke, Marikina Public Market, SM Marikina, and Robinsons Antipolo.
+  - `HouseholdAndMarketModels.kt` provides `HouseholdCurrency` (`PHP` `₱` default + `USD`, `EUR`, `GBP`, `XOF`), pure-Kotlin `formatKitchenCurrency`, `ConsumerHouseholdTemplate` (`FAMILY_TWO_KIDS` default, `PARENTS_AND_BABY`, `ACTIVE_COUPLE`, `SOLO_COOK`, `LARGE_MULTIGEN_FAMILY`), and **20 `LOCAL_MARKET_PRESET_INGREDIENTS`** (`ing_kale` & `ing_malunggay_pechay` in `LEAFY_GREENS`; `ing_carabao_mango` in `FRUIT_TOPPING`; `ing_bangus`, `ing_calamansi`, `ing_gata`).
+- **Module & Documentation Budgets ([`.copilot_compliance.json`](.copilot_compliance.json))**: Enforce `default_max_lines: 700` logical executable lines (target cohesive `100–450` logical lines per file), `min_comment_ratio: 0.05` explanatory `//` comments, `0` wildcard imports, `0` `!!`, `when` over `else if`, and KDoc `/** ... */` on every public symbol.
+
+---
+
+## Hexagonal Architecture & Kotlin Package Map
+
+All production source code lives under `android/app/src/main/java/com/familykitchen/board/` and separates the pure Functional Core (`domain/`) from outer Android/hardware Imperative Shell adapters (`data/`, `ai/`, `ui/`) across explicit `ports/`:
+
+- **`MainActivity.kt`**:
+  - Thin (`< 80` logical lines) `ComponentActivity` configuring `enableEdgeToEdge()`, pruning stale temp captures (`KitchenImagePreprocessor.pruneStaleCaptures`), wiring production hexagonal adapters (`KeystoreCloudCredentialVault`, `HybridAiInferenceRouter` wrapping `LiteRtMultimodalEngine`) into `KitchenBoardViewModel.Factory` with background `autoDiscoverAndInitialize()`, and hosting `setContent { FamilyKitchenBoardTheme { KitchenScaffold(viewModel) } }` (zero `WebView`, zero `AppCompat`).
+- **`domain/` — Pure Kotlin Functional Core ONLY**:
+  - **Hard Purity Invariant**: Imports **only** Kotlin standard library packages and `kotlinx.serialization.*` (zero `android.*`, `androidx.*`, Compose, `java.io.*`, or `java.util.Locale`).
+  - `KitchenModels.kt` & `HouseholdAndMarketModels.kt` — `@Serializable` models (`IngredientCatalogItem`, `IngredientTier`, `StapleStatus`, `StorageLocation`, `ExpiryStatus`, `RecipeDifficulty`, `GrocerySortMode`, `HouseholdCurrency`, `ConsumerHouseholdTemplate`, `HouseholdProfile`, `ChildGrowthStage`, `HouseholdLifeEvent`, `Recipe`, `MorningStep`, `PantryLedgerEntry`, `MealSlot`, `WeeklyBoard`, `WeeklyPrepSessionPlan`, `CustomGroceryItem`, `WeeklyGroceryDiff`).
+  - `AiChefModels.kt` & `CloudLlmModels.kt` — `NutritionFocusTag`, `EdgeDeviceProfile`, `AiExecutionMode`, `CloudLlmProvider` (`gemini-3.8-flash` / Gemini 4, `gpt-6.2-sol`, `claude-sonnet-5-5`, `google/gemini-4-neon`), `CloudLlmConfig`, legacy model migration & pure credential-masking/redaction helpers (`migrateDeprecatedCloudModelId`, `isDeprecatedCloudModelId`, `maskApiKeyPreview`, `isValidCloudModelId`, `redactApiSecrets`), `AiRichRecipeCard`, `AiMenuOptimizationProposal`, `VisualIntakeResult`, `AiChatTurn`, and `AiChefAction` (`sealed interface`).
+  - `DomainExceptions.kt` & `SchemaValidator.kt` — Typed `KitchenBoardException` hierarchy (`ValidationException`, `IngredientUnavailableException`, `ModelNotReadyException`, `VisionNotSupportedException`) and strict JSON/invariant boundary validation.
+  - `AvailabilityFilter.kt` — `evaluateRecipeAvailability` & `filterSchedulableRecipes` (`EC-02` hard-hide, `EC-03` in-stock `substituteGroupId` auto-swap).
+  - `PantryLedgerEngine.kt` — `resolveEffectiveMealBom`, `applyCookedDeduction`, `batchRestockPantry`, `adjustPantryQuantity`, `setStapleStatus`, & `toggleLocalAvailability` (`EC-04`–`EC-07`, `EC-10`, `EC-11`).
+  - `PantryExpiryEngine.kt` — `evaluatePantryExpiryDashboard` (`Action Required` cards, co-expiring pairs, `PHP` `₱` value at risk, Waste Score `%`), `evaluateRecipePantryMatch`, `scaleRecipeForYield`, & macro-recomputing `swapRecipeIngredient`.
+  - `MenuPlannerEngine.kt` — `computeCalibratedMorningMinutes` (`1.4x` buffer, `<= 25m` Breakfast cap `EC-01`), `findInstantInStockSwaps` (`EC-13`), `markSlotSkippedOrLeftovers` (`EC-12`), `toggleSlotWorkoutModifier`, `buildResolvedMealCard` (`EC-08`), `autoDraftWeeklyBoard`, `buildWeeklyMealPrepSessionPlan`, & `applyWeeklyPrepSessionBatch`.
+  - `CookModeEngine.kt` — `CookModeSessionState`, `StepTimerState`, step/multi-timer reducers (`tickRunningTimers`, `addOneMinuteToTimer`, `resetStepTimer`), bilingual (`en-US` & `fr-FR`) `parseCookModeVoiceIntent`, `answerCookStepQuestion`, & `applyVoiceTranscriptToCookSession`.
+  - `GroceryDiffEngine.kt` — `sortSlotsChronologically` & `computeWeeklyGroceryDiff` (`EC-09` chronological 21-slot Tier-1 reservation, whole-package `ceil` rounding, meal attributions, and deduplication `₱` savings).
+  - `AiMenuAdvisorEngine.kt` & `AiVisualAndToolGrounding.kt` — Pantry-aware system/vision prompts, Gemma token stripping, untrusted LLM JSON grounding, offline zero-waste/brain-booster proposal generation, 4-member 1-pot goal plating, and custom family meal batch scheduling.
+- **`ports/` — Pure Coroutine Port Interfaces**:
+  - `KitchenStoragePort` (`KitchenSnapshot` + `O(1)` batch helpers: `commitCookedMealBatch`, `commitGroceryRestockBatch`, `toggleGroceryItemChecked`, `addCustomGroceryItem`, `clearCheckedGroceryItems`, `toggleSavedRecipe`, `addRecipeKitchenNote`, `toggleReaderIngredientChecked`, `setGrocerySortMode`, `applyConsumerHouseholdTemplate`, `setHouseholdCurrencyAndRegion`), `SeedCatalogPort`, `AiEdgePort`, `CloudCredentialVaultPort`, and `VoiceInputPort`.
+- **`data/` — Offline Persistence, Keystore Credential Vault, Asset & Image Adapters**:
+  - `AssetSeedCatalogLoader`, `LocalJsonKitchenStorage`, `KeystoreCloudCredentialVault`, `InMemoryCloudCredentialVault`, `KitchenImagePreprocessor`, and `FakeKitchenStorage`.
+- **`ai/` — Hybrid On-Device & Cloud Multimodal LLM, Live Model Sync & Voice Adapters**:
+  - `LiteRtMultimodalEngine`, `HybridAiInferenceRouter`, `CloudLlmClient`, `CloudModelCatalogFetcher`, `ModelFileDiscovery`, `AiChefCoordinator`, and `AndroidVoiceInputAdapter`.
+- **`ui/` — Material 3 Jetpack Compose Screens (`docs/ui-spec/`), Sheets & `@Preview`s**:
+  - `theme/` (`Color.kt`, `Type.kt`, `Shape.kt`, `Theme.kt`) — Dual-layer `SavorAI` Material 3 + Extended Culinary/Expiry/Safety tokens and bundled offline `Newsreader` & `Plus Jakarta Sans` typography.
+  - `KitchenUiState.kt`, `KitchenBoardViewModel.kt`, `KitchenViewModelReducers.kt`, `KitchenAiAndCookDelegate.kt`, `KitchenCloudConfigDelegate.kt` — Unidirectional `StateFlow<KitchenUiState>` orchestration + `onCleared()` teardown.
+  - `navigation/` (`KitchenScaffold.kt`, `KitchenScaffoldBars.kt`) — `64.dp` `SavorAI` Top App Bar (`"<householdName> • <marketRegionLabel>"` -> `QaScenarioLabSheet`, `Search`, `Dark/Wide`, `Profile` -> `FamilyProfileSheet`), dismissible toast banner, frosted 4-tab `NavigationBar` (`Ask AI`, `Pantry`, `Recipes`, `Groceries` + live badge) / wide `NavigationRail`, `Groceries` 3-way sub-switcher (`Grocery List`, `Meal Plan`, `Pacer <=25m`), full-screen `StepByStepCookModeScreen` overlay, and all 4 modal bottom sheets.
+  - Feature packages: `aichef/` (`ai_assistant`), `pantry/` (`smart_pantry_expiry`), `grocery/` (`smart_grocery_list`), `recipes/` (`recipe_reader`), `cookmode/` (`step_by_step_cook_mode`), `board/`, `pacer/`, `sheets/` (`CustomMealSheet`, `FamilyProfileSheet`, `QaScenarioLabSheet`), and pure-Kotlin `preview/PreviewFixtures.kt`.
+
+---
+
+## Locked Edge-Case Matrix (`EC-01`–`EC-13`) & Multimodal Vision Contract
+
+### Locked Edge Cases (`EC-01`–`EC-13`)
+
+| ID | Rule / Scenario | Mandatory Domain Behavior |
+| :--- | :--- | :--- |
+| `EC-01` | `<= 25m` Breakfast Cap + `1.4x` Buffer | Reject `BREAKFAST` scheduling whenever `ceil(max(0, rawPrep - min(5, nightPrep)) * 1.4) + cook > 25`. |
+| `EC-02` | Local Unavailability & Allergen Hard-Hide | Block scheduling when a required BOM ingredient is `isLocallyAvailable == false` or hits an active allergen with no substitute. |
+| `EC-03` | Deterministic `substituteGroupId` Auto-Swap | Rewrite unavailable/allergen-blocked BOM lines to an available, unit-compatible substitute (`FRUIT_TOPPING`, `LEAFY_GREENS`), preferring in-stock items. |
+| `EC-04` | One-Time Cook Quantity Override | Deduct exact `actualUsedQuantities` without mutating `recipe.householdBomOverrides` when save-default is unchecked. |
+| `EC-05` | Save Household Default Override | Normalize overridden quantities by `baseServings / targetServings` and persist into `recipe.householdBomOverrides` in 1 atomic batch. |
+| `EC-06` | Ad-Hoc Extra Ingredient Deduction | Deduct unplanned extras (e.g., `+1 Tomato`) in the same single `O(1)` cooked-meal batch transaction. |
+| `EC-07` | Flat `1x` Dad Workout Boost | Add `PRE_WORKOUT_CARB` / `POST_WORKOUT_HIGH_PROTEIN` `extraBomLines` flat (`1x`), never scaled by `targetServings`. |
+| `EC-08` | Child Safety Callout Integrity | Render stage-adapted `toddlerPrepTip` (`BABY_6_12M`..`KIDS_5_PLUS`) as plain escaped Compose `Text` on meal, reader, pacer, and cook-mode cards. |
+| `EC-09` | Chronological 21-Slot Reservation & Rounding | Reserve Tier-1 stock chronologically across `PLANNED` slots, flag mid-week shortages, and round `packagesToBuy = ceil(deficit / packageQty)`. |
+| `EC-10` | Floor-at-Zero Pantry Depletion | Clamp Tier-1 deductions via `max(0, currentQuantity - usedQuantity)` and flip `isOutOfStock = (nextQuantity == 0)`. |
+| `EC-11` | Tier-2 Staple Tri-State Lifecycle | Never deduct Tier-2 staples on cook; queue `1` package when `LOW` or `OUT` and reset `stapleStatus = PLENTY` on batch restock. |
+| `EC-12` | `COMPLETED_SKIPPED` Reservation Release | Marking a slot `COMPLETED_SKIPPED` deducts `0` stock and immediately releases its reserved BOM from the Smart Grocery List. |
+| `EC-13` | Instant In-Stock Meal Swap | Return only locally available, allergen-safe recipes (`<= 25m` if `BREAKFAST`) with 100% Tier-1 stock coverage and zero `OUT` Tier-2 staples. |
+
+### Authentic On-Device Multimodal Vision Contract (`LiteRtMultimodalEngine`)
+
+1. **Scoped Camera & Gallery Intake**: Uses zero-permission `PickVisualMedia(ImageOnly)` and `FileProvider`-backed `TakePicture` in `cacheDir/captures/`, normalized via `ExifInterface` and downscaled to `<= 1280px` (`JPEG` quality `88`) in `KitchenImagePreprocessor` with deterministic temp deletion in `finally`.
+2. **Serialized Per-Scan `Conversation`**: Renders the real attached thumbnail in `AiChefScreen` and invokes `conversation.sendMessage(Contents.of(Content.ImageFile(path), Content.Text(prompt)))` under `engineMutex` on a fresh `Conversation` closed after each scan.
+3. **Non-Silent Vision Gate & Confirmation-Gated Restock**: Never injects fake grocery strings, never mutates pantry state prior to user confirmation, and throws `VisionNotSupportedException` explicitly whenever `supportsVision == false`.
+
+---
+
+## Verification Commands & 7 Hermetic JUnit Suites
+
+Run all 7 hermetic JVM unit test suites (`EdgeCasesEc01ToEc13Test`, `AiAdvisorAndSchemaValidatorTest`, `PantryExpiryAndCookModeTest`, `BatchStorageInvariantTest`, `VisionGateAndChefCoordinatorTest`, `CloudLlmAndHybridRouterTest`, `CloudModelCatalogAndVaultMigrationTest`) and build the debug APK:
+
+```bash
+cd android
+./gradlew testDebugUnitTest
+./gradlew assembleDebug
+```
+
+Run the personal-repository zero-leak guardrail from the repository root:
+
+```bash
+node scripts/verify_clean_personal_repo.cjs
+```
