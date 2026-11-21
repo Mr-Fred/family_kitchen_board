@@ -1,0 +1,4540 @@
+{
+  "ingredients": [
+    {
+      "ingredientId": "ing_egg",
+      "displayName": "Large Farm Eggs",
+      "category": "DAIRY_EGGS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "count",
+      "defaultPackageQuantity": 12,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "EGGS"
+      ],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 28,
+      "estimatedPackagePriceUsd": 118.0,
+      "optimalPrepHint": "Optimal: Soft Scramble, Omelette Fold or Custard (USDA: 3-5 wks chilled)"
+    },
+    {
+      "ingredientId": "ing_milk",
+      "displayName": "Whole Fresh Milk",
+      "category": "DAIRY_EGGS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "ml",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "DAIRY"
+      ],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 7,
+      "estimatedPackagePriceUsd": 115.0,
+      "optimalPrepHint": "Optimal: Overnight Oats, Porridge or Pancake Batter (USDA: 7 days)"
+    },
+    {
+      "ingredientId": "ing_greek_yogurt",
+      "displayName": "Plain Greek Yogurt",
+      "category": "DAIRY_EGGS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "DAIRY"
+      ],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 10,
+      "estimatedPackagePriceUsd": 395.0,
+      "optimalPrepHint": "Optimal: Berry Parfait, Off-Heat Pasta Sauce or Cream Swap"
+    },
+    {
+      "ingredientId": "ing_cheese",
+      "displayName": "Comte & Cheddar Cheese",
+      "category": "DAIRY_EGGS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 400,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "DAIRY"
+      ],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 21,
+      "estimatedPackagePriceUsd": 285.0,
+      "optimalPrepHint": "Optimal: Tartine Melt, Skillet Omelette Fold or Quesadilla"
+    },
+    {
+      "ingredientId": "ing_butter",
+      "displayName": "Unsalted Creamery Butter",
+      "category": "DAIRY_EGGS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 250,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "DAIRY"
+      ],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 30,
+      "estimatedPackagePriceUsd": 225.0,
+      "optimalPrepHint": "Optimal: Pan Basting, French Toast Sear or Lemon-Garlic Glaze"
+    },
+    {
+      "ingredientId": "ing_baguette",
+      "displayName": "Crusty Artisan Baguette",
+      "category": "BAKERY_GRAINS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "count",
+      "defaultPackageQuantity": 2,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "GLUTEN"
+      ],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 3,
+      "estimatedPackagePriceUsd": 160.0,
+      "optimalPrepHint": "Optimal: Warm Avocado Tartine, Bistro Sandwich or Custard Fingers"
+    },
+    {
+      "ingredientId": "ing_oats",
+      "displayName": "Rolled Whole Grain Oats",
+      "category": "BAKERY_GRAINS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 270,
+      "estimatedPackagePriceUsd": 245.0,
+      "optimalPrepHint": "Optimal: Skillet Granola, Overnight Jars or Creamy Cinnamon Porridge"
+    },
+    {
+      "ingredientId": "ing_rice",
+      "displayName": "Jasmine & Long-Grain Rice",
+      "category": "BAKERY_GRAINS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 2000,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 365,
+      "estimatedPackagePriceUsd": 116.0,
+      "optimalPrepHint": "Optimal: Jasmine/Sinandomeng Base, Smoky Jollof or Beninese Watché"
+    },
+    {
+      "ingredientId": "ing_pasta",
+      "displayName": "Durum Wheat Penne Pasta",
+      "category": "BAKERY_GRAINS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "GLUTEN"
+      ],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 365,
+      "estimatedPackagePriceUsd": 145.0,
+      "optimalPrepHint": "Optimal: Off-Heat Yogurt Garlic Toss or Skillet Tuna Bake"
+    },
+    {
+      "ingredientId": "ing_cornmeal",
+      "displayName": "Beninese Roasted Cornmeal (Mawe/Amiwo)",
+      "category": "BAKERY_GRAINS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 240,
+      "estimatedPackagePriceUsd": 95.0,
+      "optimalPrepHint": "Optimal: Traditional Red Amiwo Whisked in Spiced Tomato Stock"
+    },
+    {
+      "ingredientId": "ing_cassava_gari",
+      "displayName": "Roasted Cassava Gari",
+      "category": "BAKERY_GRAINS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 270,
+      "estimatedPackagePriceUsd": 135.0,
+      "optimalPrepHint": "Optimal: Dampened Fluffy Gari Foto or Red-Red Crunch"
+    },
+    {
+      "ingredientId": "ing_tortilla_wrap",
+      "displayName": "Whole Wheat Flour Wraps",
+      "category": "BAKERY_GRAINS",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "count",
+      "defaultPackageQuantity": 8,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "GLUTEN"
+      ],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 14,
+      "estimatedPackagePriceUsd": 155.0,
+      "optimalPrepHint": "Optimal: Pinwheel Omelette Roll or Crisp Quesadilla Melt"
+    },
+    {
+      "ingredientId": "ing_avocado",
+      "displayName": "Ripe Hass Avocado",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "count",
+      "defaultPackageQuantity": 4,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 4,
+      "estimatedPackagePriceUsd": 165.0,
+      "optimalPrepHint": "Optimal: Local Rizal Avocado Tartine or Sunshine Rice Bowl"
+    },
+    {
+      "ingredientId": "ing_blueberry",
+      "displayName": "Fresh Blueberries",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 250,
+      "isLocallyAvailable": true,
+      "substituteGroupIds": [
+        "FRUIT_TOPPING"
+      ],
+      "allergens": [],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 7,
+      "estimatedPackagePriceUsd": 320.0,
+      "optimalPrepHint": "Optimal: Yogurt Parfait Topper or Quartered Toddler Bowl"
+    },
+    {
+      "ingredientId": "ing_banana",
+      "displayName": "Sweet Ripe Bananas",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "substituteGroupIds": [
+        "FRUIT_TOPPING"
+      ],
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 5,
+      "estimatedPackagePriceUsd": 90.0,
+      "optimalPrepHint": "Optimal: Lakatan Sheet-Pan Pancakes, Granola or Pre-Workout Boost"
+    },
+    {
+      "ingredientId": "ing_mango",
+      "displayName": "Fresh Kent Mango",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "substituteGroupIds": [
+        "FRUIT_TOPPING"
+      ],
+      "allergens": [],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 5,
+      "estimatedPackagePriceUsd": 175.0,
+      "optimalPrepHint": "Optimal: Sweet Carabao Mango Rice Bowl or Warm Porridge Topping"
+    },
+    {
+      "ingredientId": "ing_tomato",
+      "displayName": "Vine-Ripened Tomatoes",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "count",
+      "defaultPackageQuantity": 6,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 6,
+      "estimatedPackagePriceUsd": 85.0,
+      "optimalPrepHint": "Optimal: Sizzling Dja Sauce, Raw Moyo Salsa or Bistro Slices"
+    },
+    {
+      "ingredientId": "ing_plantain",
+      "displayName": "Ripe Yellow Plantains",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "count",
+      "defaultPackageQuantity": 6,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 6,
+      "estimatedPackagePriceUsd": 75.0,
+      "optimalPrepHint": "Optimal: Caramelized Saba/Alloco Rounds or Sweet Egg Scramble"
+    },
+    {
+      "ingredientId": "ing_spinach",
+      "displayName": "Fresh Baby Spinach & Amaranth Greens",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 300,
+      "isLocallyAvailable": true,
+      "substituteGroupIds": [
+        "LEAFY_GREENS"
+      ],
+      "allergens": [],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 5,
+      "estimatedPackagePriceUsd": 85.0,
+      "optimalPrepHint": "Optimal: Residual-Heat Wilt, Omelette Fold or Goussi Stew Finish"
+    },
+    {
+      "ingredientId": "ing_onion",
+      "displayName": "Red & Yellow Cooking Onions",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "count",
+      "defaultPackageQuantity": 8,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 30,
+      "estimatedPackagePriceUsd": 130.0,
+      "optimalPrepHint": "Optimal: Caramelized Stew Base or Crisp Moyo Salsa"
+    },
+    {
+      "ingredientId": "ing_bell_pepper",
+      "displayName": "Sweet Bell Peppers",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "count",
+      "defaultPackageQuantity": 6,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 10,
+      "estimatedPackagePriceUsd": 165.0,
+      "optimalPrepHint": "Optimal: Roasted Jollof Purée or Sweet Skillet Strips"
+    },
+    {
+      "ingredientId": "ing_sweet_potato",
+      "displayName": "Orange Sweet Potatoes",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1500,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 21,
+      "estimatedPackagePriceUsd": 120.0,
+      "optimalPrepHint": "Optimal: Cool Pantry Kamote (Never Fridge) • Sheet-Pan or Mafé"
+    },
+    {
+      "ingredientId": "ing_lemon",
+      "displayName": "Fresh Lemons",
+      "category": "PRODUCE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "count",
+      "defaultPackageQuantity": 6,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 21,
+      "estimatedPackagePriceUsd": 110.0,
+      "optimalPrepHint": "Optimal: Herb Salmon Roast, Tilapia Score Rub or Moyo Dressing"
+    },
+    {
+      "ingredientId": "ing_chicken",
+      "displayName": "Free-Range Chicken Thighs & Breast",
+      "category": "PROTEIN",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 2,
+      "estimatedPackagePriceUsd": 230.0,
+      "optimalPrepHint": "Optimal: Poulet Bicyclette Braise, Mafé or Honey-Lemon Sheet Pan"
+    },
+    {
+      "ingredientId": "ing_fish",
+      "displayName": "Whole Fresh Tilapia / Snapper",
+      "category": "PROTEIN",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "FISH"
+      ],
+      "defaultStorageLocation": "FREEZER",
+      "defaultShelfLifeDays": 90,
+      "estimatedPackagePriceUsd": 180.0,
+      "optimalPrepHint": "Optimal: Scored Tilapia/Bangus Grill, Moyo Platter or Garlic Skillet"
+    },
+    {
+      "ingredientId": "ing_salmon",
+      "displayName": "Atlantic Salmon Fillets",
+      "category": "PROTEIN",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 800,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "FISH"
+      ],
+      "defaultStorageLocation": "FRIDGE",
+      "defaultShelfLifeDays": 2,
+      "estimatedPackagePriceUsd": 1120.0,
+      "optimalPrepHint": "Optimal: Crispy Pan-Sear or One-Pan Lemon Herb Bake (USDA: 1-2d raw)"
+    },
+    {
+      "ingredientId": "ing_tuna",
+      "displayName": "Olive-Oil Poached Tuna",
+      "category": "PROTEIN",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 400,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "FISH"
+      ],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 365,
+      "estimatedPackagePriceUsd": 210.0,
+      "optimalPrepHint": "Optimal: Lemon Tapenade Baguette or Weeknight Skillet Pasta"
+    },
+    {
+      "ingredientId": "ing_beans",
+      "displayName": "Black-Eyed Peas & Red Beans",
+      "category": "PROTEIN",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 1000,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 365,
+      "estimatedPackagePriceUsd": 140.0,
+      "optimalPrepHint": "Optimal: Overnight-Soaked Atassi Watché or Red-Red Bean Stew"
+    },
+    {
+      "ingredientId": "ing_egusi_seeds",
+      "displayName": "Ground Egusi Melon Seeds",
+      "category": "PROTEIN",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 500,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 180,
+      "estimatedPackagePriceUsd": 260.0,
+      "optimalPrepHint": "Optimal: Tender Curd Beninese Sauce Goussi with Greens"
+    },
+    {
+      "ingredientId": "ing_honey",
+      "displayName": "Raw Wildflower Honey",
+      "category": "PANTRY_STAPLE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "ml",
+      "defaultPackageQuantity": 500,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 365,
+      "estimatedPackagePriceUsd": 295.0,
+      "optimalPrepHint": "Optimal: Rizal Wildflower Honey Glaze or Parfait Drizzle (12m+ Only)"
+    },
+    {
+      "ingredientId": "ing_peanut_butter",
+      "displayName": "Natural Roasted Peanut Paste",
+      "category": "PANTRY_STAPLE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 500,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "PEANUTS",
+        "NUTS"
+      ],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 180,
+      "estimatedPackagePriceUsd": 185.0,
+      "optimalPrepHint": "Optimal: Emulsified West African Mafé or Thin Porridge Swirl"
+    },
+    {
+      "ingredientId": "ing_mixed_nuts_seeds",
+      "displayName": "Pumpkin Seeds & Sliced Almonds",
+      "category": "PANTRY_STAPLE",
+      "tier": "TIER_1_QUANTITATIVE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 500,
+      "isLocallyAvailable": true,
+      "allergens": [
+        "NUTS"
+      ],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 180,
+      "estimatedPackagePriceUsd": 340.0,
+      "optimalPrepHint": "Optimal: Antipolo Kasuy & Seed Granola (Finely Ground for Toddlers)"
+    },
+    {
+      "ingredientId": "ing_olive_oil",
+      "displayName": "Extra-Virgin Olive Oil",
+      "category": "PANTRY_STAPLE",
+      "tier": "TIER_2_STAPLE",
+      "baseUnit": "ml",
+      "defaultPackageQuantity": 750,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 365,
+      "estimatedPackagePriceUsd": 695.0,
+      "optimalPrepHint": "Optimal: Gentle Pan-Sear, Sheet-Pan Roast & Bistro Finishing"
+    },
+    {
+      "ingredientId": "ing_red_palm_oil",
+      "displayName": "Unrefined Zomi Red Palm Oil",
+      "category": "PANTRY_STAPLE",
+      "tier": "TIER_2_STAPLE",
+      "baseUnit": "ml",
+      "defaultPackageQuantity": 750,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 365,
+      "estimatedPackagePriceUsd": 380.0,
+      "optimalPrepHint": "Optimal: Authentic Amiwo, Atassi Dja & Red-Red Base"
+    },
+    {
+      "ingredientId": "ing_salt",
+      "displayName": "Fine Sea Salt",
+      "category": "PANTRY_STAPLE",
+      "tier": "TIER_2_STAPLE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 500,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 730,
+      "estimatedPackagePriceUsd": 45.0,
+      "optimalPrepHint": "Optimal: Light Table Seasoning After Separating Baby Portion"
+    },
+    {
+      "ingredientId": "ing_black_pepper",
+      "displayName": "Cracked Black Pepper & Ginger Spice",
+      "category": "PANTRY_STAPLE",
+      "tier": "TIER_2_STAPLE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 100,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 365,
+      "estimatedPackagePriceUsd": 85.0,
+      "optimalPrepHint": "Optimal: Aromatic Poultry Marinade & Egg Seasoning"
+    },
+    {
+      "ingredientId": "ing_garlic",
+      "displayName": "Fresh Garlic Bulbs",
+      "category": "PANTRY_STAPLE",
+      "tier": "TIER_2_STAPLE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 200,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 60,
+      "estimatedPackagePriceUsd": 55.0,
+      "optimalPrepHint": "Optimal: Crushed Bawang Marinade, Butter Baste & Braise Base"
+    },
+    {
+      "ingredientId": "ing_cinnamon",
+      "displayName": "Ground Ceylon Cinnamon",
+      "category": "PANTRY_STAPLE",
+      "tier": "TIER_2_STAPLE",
+      "baseUnit": "g",
+      "defaultPackageQuantity": 100,
+      "isLocallyAvailable": true,
+      "allergens": [],
+      "defaultStorageLocation": "PANTRY",
+      "defaultShelfLifeDays": 365,
+      "estimatedPackagePriceUsd": 120.0,
+      "optimalPrepHint": "Optimal: Warm Oat Porridge, Sheet-Pan Pancakes & French Toast"
+    }
+  ],
+  "recipes": [
+    {
+      "recipeId": "rec_01_egg_avocado_baguette_tartine",
+      "title": "Warm Egg, Cheese & Avocado Baguette Tartine",
+      "sourceAttribution": "French Boulangerie Classics • USDA Verified",
+      "allowedSlots": [
+        "BREAKFAST",
+        "LUNCH"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 5,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 8,
+      "calibratedActiveMinutes": 15,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Split baguette lengthwise and toast lightly with olive oil.",
+          "timerSeconds": 180,
+          "title": "Toast Baguette",
+          "headline": "Split artisan baguette lengthwise and toast with extra-virgin olive oil.",
+          "techniqueBadge": "Crisp-Crumb Toast",
+          "visualTargetCue": "Light golden edges with pillowy warm center crumb",
+          "chefTip": "Sous-Chef Rule: Keep inner crumb soft on one section for safe toddler finger strips.",
+          "stepIngredientIds": [
+            "ing_baguette",
+            "ing_olive_oil"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Mash ripe avocado with a pinch of sea salt and spread over warm bread.",
+          "timerSeconds": 120,
+          "title": "Avocado Mash",
+          "headline": "Smash ripe Hass avocado coarsely and spread across warm toasted bread.",
+          "techniqueBadge": "Warm-Bread Vapor Barrier",
+          "visualTargetCue": "Chunky bright green layer sealing toasted baguette",
+          "chefTip": "Sous-Chef Rule: Plate young children's avocado strip before sprinkling sea salt on adult portions.",
+          "stepIngredientIds": [
+            "ing_avocado",
+            "ing_salt"
+          ]
+        },
+        {
+          "stepNumber": 3,
+          "instruction": "Soft-scramble 4 eggs with shredded cheese and pile onto tartines.",
+          "timerSeconds": 300,
+          "title": "Soft Curd Scramble",
+          "headline": "Fold 4 farm eggs slowly with shredded Comté until glossy curds form.",
+          "techniqueBadge": "Low-Heat Bistro Curd",
+          "visualTargetCue": "Soft ribboned curds with melted cheese threads (cook firm when pregnancy safety is active)",
+          "chefTip": "Sous-Chef Rule: Remove skillet 15 seconds early—carryover heat keeps eggs custard-tender.",
+          "stepIngredientIds": [
+            "ing_egg",
+            "ing_cheese"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Cut 2yo portion onto soft inner baguette crumb with crust trimmed into bite-sized strips.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_baguette",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_egg",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_avocado",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_cheese",
+          "baseQuantity": 80,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_olive_oil",
+          "baseQuantity": 10,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_salt",
+          "baseQuantity": 2,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 448,
+      "proteinGrams": 19,
+      "carbsGrams": 38,
+      "fatGrams": 25,
+      "difficulty": "EASY",
+      "cuisineTag": "French Bistro",
+      "chefNote": "Pull scrambled eggs off direct heat while curds still glisten; carryover pan warmth keeps them velvety.",
+      "chefPairingNote": "Pair with warm rooibos or café au lait for adults and chilled milk with berries for kids.",
+      "isSavedFavorite": true
+    },
+    {
+      "recipeId": "rec_02_crispy_chicken_tomato_baguette",
+      "title": "Crispy Chicken & Tomato Baguette",
+      "sourceAttribution": "French Bistro Weeknight • USDA Verified",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 10,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 12,
+      "calibratedActiveMinutes": 26,
+      "nightBeforePrepSteps": [
+        "Slice chicken cutlets and refrigerate in olive oil and garlic."
+      ],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Pan-sear seasoned chicken strips in olive oil until golden.",
+          "timerSeconds": 480,
+          "title": "The Sear & Roast",
+          "headline": "Pan-sear seasoned chicken strips in olive oil until golden.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_chicken",
+            "ing_olive_oil"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Slice ripe tomatoes and warm baguettes in the oven.",
+          "timerSeconds": 180,
+          "title": "Assemble & Plate",
+          "headline": "Slice ripe tomatoes and warm baguettes in the oven.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_baguette",
+            "ing_tomato"
+          ]
+        },
+        {
+          "stepNumber": 3,
+          "instruction": "Layer chicken, tomatoes, spinach, and melted cheese inside baguettes.",
+          "timerSeconds": 180,
+          "title": "Finish & Serve",
+          "headline": "Layer chicken, tomatoes, spinach, and melted cheese inside baguettes.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_baguette",
+            "ing_chicken",
+            "ing_tomato",
+            "ing_spinach",
+            "ing_cheese"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Shred chicken finely and serve deconstructed with soft diced tomatoes for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_baguette",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_chicken",
+          "baseQuantity": 500,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_spinach",
+          "baseQuantity": 100,
+          "isOptional": false,
+          "substituteGroupId": "LEAFY_GREENS"
+        },
+        {
+          "ingredientId": "ing_cheese",
+          "baseQuantity": 100,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_olive_oil",
+          "baseQuantity": 15,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 674,
+      "proteinGrams": 48,
+      "carbsGrams": 67,
+      "fatGrams": 24,
+      "difficulty": "EASY",
+      "cuisineTag": "French Bistro",
+      "chefNote": "Rest pan-seared chicken strips 2 minutes before assembly so juices stay locked inside the meat.",
+      "chefPairingNote": "Serve with sparkling lemon-cucumber water and crisp baby spinach.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_03_tuna_olive_baguette",
+      "title": "Tuna & Olive Tapenade Baguette",
+      "sourceAttribution": "Mediterranean Café Express • USDA Verified",
+      "allowedSlots": [
+        "BREAKFAST",
+        "LUNCH"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 7,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 5,
+      "calibratedActiveMinutes": 15,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Flake poached tuna with olive oil, lemon juice, and diced tomatoes.",
+          "timerSeconds": 240,
+          "title": "Mise en Place",
+          "headline": "Flake poached tuna with olive oil, lemon juice, and diced tomatoes.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_tuna",
+            "ing_tomato",
+            "ing_lemon",
+            "ing_olive_oil"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Toast baguette halves until crisp on the edges.",
+          "timerSeconds": 180,
+          "title": "Golden Finish",
+          "headline": "Toast baguette halves until crisp on the edges.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_baguette"
+          ]
+        },
+        {
+          "stepNumber": 3,
+          "instruction": "Fill warm baguette with tuna mixture and baby spinach leaves.",
+          "timerSeconds": 120,
+          "title": "Finish & Serve",
+          "headline": "Fill warm baguette with tuna mixture and baby spinach leaves.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_baguette",
+            "ing_tuna"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Flake tuna thoroughly to check for any bones and serve on soft bread squares for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_baguette",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tuna",
+          "baseQuantity": 300,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_lemon",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_olive_oil",
+          "baseQuantity": 15,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 357,
+      "proteinGrams": 29,
+      "carbsGrams": 35,
+      "fatGrams": 11,
+      "difficulty": "EASY",
+      "cuisineTag": "Mediterranean Express",
+      "chefNote": "Brighten olive-oil poached tuna with fresh lemon juice before piling onto warm toasted baguette.",
+      "chefPairingNote": "Pair with chilled citrus-mint water to aid mineral absorption.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_04_spiced_omelette_baguette",
+      "title": "Spiced Omelette Baguette",
+      "sourceAttribution": "Cotonou Morning Kiosk Tradition",
+      "allowedSlots": [
+        "BREAKFAST"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 6,
+      "nightBeforePrepMinutes": 2,
+      "cookMinutes": 8,
+      "calibratedActiveMinutes": 14,
+      "nightBeforePrepSteps": [
+        "Finely dice onion and tomato in a sealed prep ramekin at 8:30 PM."
+      ],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Whisk 4 eggs with pre-diced onion, tomato, and a pinch of black pepper.",
+          "timerSeconds": 120,
+          "title": "Mise en Place",
+          "headline": "Whisk 4 eggs with pre-diced onion, tomato, and a pinch of black pepper.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_egg",
+            "ing_tomato",
+            "ing_onion",
+            "ing_black_pepper"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Fry folded omelette in butter and slide into warm crusty baguette.",
+          "timerSeconds": 360,
+          "title": "Golden Finish",
+          "headline": "Fry folded omelette in butter and slide into warm crusty baguette.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_baguette",
+            "ing_butter"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Serve omelette strips alongside buttered crustless baguette pieces for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_baguette",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_egg",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_onion",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_butter",
+          "baseQuantity": 20,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_black_pepper",
+          "baseQuantity": 1,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 288,
+      "proteinGrams": 13,
+      "carbsGrams": 35,
+      "fatGrams": 10,
+      "difficulty": "EASY",
+      "cuisineTag": "Beninese Morning",
+      "chefNote": "Pre-dicing onion and tomato the evening before shaves 3 active minutes off weekday breakfast.",
+      "chefPairingNote": "Traditional morning pairing: warm ginger-lemon infusion or frothy warm milk.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_05_skillet_honey_oat_granola",
+      "title": "15-Min Skillet Honey-Oat Granola",
+      "sourceAttribution": "20-Minute Morning Pacer • USDA Verified",
+      "allowedSlots": [
+        "BREAKFAST"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 5,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 10,
+      "calibratedActiveMinutes": 17,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Toast rolled oats and mixed seeds in a dry wide skillet over medium heat.",
+          "timerSeconds": 300,
+          "title": "The Sear & Roast",
+          "headline": "Toast rolled oats and mixed seeds in a dry wide skillet over medium heat.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_oats",
+            "ing_mixed_nuts_seeds"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Stir in butter, honey, and cinnamon until golden and fragrant.",
+          "timerSeconds": 300,
+          "title": "Phase 2",
+          "headline": "Stir in butter, honey, and cinnamon until golden and fragrant.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_honey",
+            "ing_cinnamon"
+          ]
+        },
+        {
+          "stepNumber": 3,
+          "instruction": "Serve warm with cold milk and sliced ripe bananas.",
+          "timerSeconds": 120,
+          "title": "Assemble & Plate",
+          "headline": "Serve warm with cold milk and sliced ripe bananas.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_mixed_nuts_seeds",
+            "ing_milk",
+            "ing_banana"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Crush seeds and nuts finely for 2yo and soak granola in warm milk for 2 minutes to soften.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_oats",
+          "baseQuantity": 240,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_honey",
+          "baseQuantity": 45,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_mixed_nuts_seeds",
+          "baseQuantity": 80,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_milk",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_banana",
+          "baseQuantity": 200,
+          "isOptional": false,
+          "substituteGroupId": "FRUIT_TOPPING"
+        },
+        {
+          "ingredientId": "ing_cinnamon",
+          "baseQuantity": 2,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 504,
+      "proteinGrams": 19,
+      "carbsGrams": 73,
+      "fatGrams": 17,
+      "difficulty": "EASY",
+      "cuisineTag": "Morning Kitchen",
+      "chefNote": "Dry-toast rolled oats and seeds until fragrant first so honey glazes evenly without scorching.",
+      "chefPairingNote": "Spoon warm over cold milk and ripe sliced bananas with Ceylon cinnamon.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_06_greek_yogurt_granola_parfait",
+      "title": "Greek Yogurt, Granola & Berry/Banana Parfait",
+      "sourceAttribution": "Zero-Cook Morning Bar • USDA Verified",
+      "allowedSlots": [
+        "BREAKFAST"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 6,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 0,
+      "calibratedActiveMinutes": 9,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Spoon creamy Greek yogurt into 4 family bowls.",
+          "timerSeconds": 120,
+          "title": "Mise en Place",
+          "headline": "Spoon creamy Greek yogurt into 4 family bowls.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_greek_yogurt"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Top with toasted oats, honey drizzle, and fresh berries or sliced banana.",
+          "timerSeconds": 180,
+          "title": "Golden Finish",
+          "headline": "Top with toasted oats, honey drizzle, and fresh berries or sliced banana.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_oats",
+            "ing_blueberry",
+            "ing_honey"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Crush seeds and nuts finely for 2yo and quarter any whole berries lengthwise.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_greek_yogurt",
+          "baseQuantity": 500,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_oats",
+          "baseQuantity": 160,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_blueberry",
+          "baseQuantity": 150,
+          "isOptional": false,
+          "substituteGroupId": "FRUIT_TOPPING"
+        },
+        {
+          "ingredientId": "ing_honey",
+          "baseQuantity": 30,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 301,
+      "proteinGrams": 20,
+      "carbsGrams": 46,
+      "fatGrams": 5,
+      "difficulty": "EASY",
+      "cuisineTag": "Morning Kitchen",
+      "chefNote": "Zero stove time—rescues expiring Plain Greek Yogurt while delivering 20g+ bioavailable protein.",
+      "chefPairingNote": "Pair with fresh berries and cold water for sustained morning classroom focus.",
+      "isSavedFavorite": true
+    },
+    {
+      "recipeId": "rec_07_sheet_pan_banana_pancakes",
+      "title": "Sheet-Pan Banana Pancakes",
+      "sourceAttribution": "Hands-Off Family Breakfast • USDA Verified",
+      "allowedSlots": [
+        "BREAKFAST"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 8,
+      "nightBeforePrepMinutes": 3,
+      "cookMinutes": 12,
+      "calibratedActiveMinutes": 19,
+      "nightBeforePrepSteps": [
+        "Whisk oat flour, cinnamon, and salt in a mixing bowl at 8:30 PM."
+      ],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Mash ripe bananas with eggs and milk, then fold into dry oat mix.",
+          "timerSeconds": 240,
+          "title": "Mise en Place",
+          "headline": "Mash ripe bananas with eggs and milk, then fold into dry oat mix.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_banana",
+            "ing_egg",
+            "ing_milk"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Bake on buttered sheet pan at 200C for 12 minutes and slice into squares.",
+          "timerSeconds": 720,
+          "title": "Golden Finish",
+          "headline": "Bake on buttered sheet pan at 200C for 12 minutes and slice into squares.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_butter"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Cut soft sheet-pan pancake into finger-width strips for easy 2yo self-feeding.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_oats",
+          "baseQuantity": 250,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_banana",
+          "baseQuantity": 250,
+          "isOptional": false,
+          "substituteGroupId": "FRUIT_TOPPING"
+        },
+        {
+          "ingredientId": "ing_egg",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_milk",
+          "baseQuantity": 250,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_butter",
+          "baseQuantity": 20,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_cinnamon",
+          "baseQuantity": 2,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 428,
+      "proteinGrams": 18,
+      "carbsGrams": 59,
+      "fatGrams": 14,
+      "difficulty": "EASY",
+      "cuisineTag": "Morning Kitchen",
+      "chefNote": "Baking oat-banana batter on a single sheet pan plates 4 servings at once with zero skillet flipping.",
+      "chefPairingNote": "Top warm squares with Greek yogurt dollops for balanced slow-release energy.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_08_veggie_omelette_wrap",
+      "title": "Veggie Omelette Wrap",
+      "sourceAttribution": "15-Minute Skillet Wraps • USDA Verified",
+      "allowedSlots": [
+        "BREAKFAST"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 6,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 8,
+      "calibratedActiveMinutes": 17,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Wilt baby spinach and diced tomatoes in olive oil.",
+          "timerSeconds": 180,
+          "title": "Preparation",
+          "headline": "Wilt baby spinach and diced tomatoes in olive oil.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_spinach",
+            "ing_tomato",
+            "ing_olive_oil"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Pour in 4 beaten eggs, top with cheese, and press warm tortilla wraps on top.",
+          "timerSeconds": 300,
+          "title": "Finish & Serve",
+          "headline": "Pour in 4 beaten eggs, top with cheese, and press warm tortilla wraps on top.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_tortilla_wrap",
+            "ing_egg",
+            "ing_cheese"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Slice tortilla pinwheels into 1cm soft spirals for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_tortilla_wrap",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_egg",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_spinach",
+          "baseQuantity": 100,
+          "isOptional": false,
+          "substituteGroupId": "LEAFY_GREENS"
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_cheese",
+          "baseQuantity": 80,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_olive_oil",
+          "baseQuantity": 10,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 327,
+      "proteinGrams": 17,
+      "carbsGrams": 27,
+      "fatGrams": 17,
+      "difficulty": "EASY",
+      "cuisineTag": "Morning Kitchen",
+      "chefNote": "Pressing the whole-wheat tortilla onto barely-set eggs bonds the wrap for clean pinwheel slices.",
+      "chefPairingNote": "Serve with fresh orange or lemon segments to boost non-heme iron uptake from spinach.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_09_overnight_oats",
+      "title": "5-Min Night-Before Overnight Oats",
+      "sourceAttribution": "5-Min Night-Prep Pacer • USDA Verified",
+      "allowedSlots": [
+        "BREAKFAST"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 7,
+      "nightBeforePrepMinutes": 5,
+      "cookMinutes": 2,
+      "calibratedActiveMinutes": 5,
+      "nightBeforePrepSteps": [
+        "Stir oats, milk, Greek yogurt, and cinnamon in 4 jars at 8:30 PM and chill overnight."
+      ],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Pull chilled oat jars from the fridge and top with sliced banana and honey.",
+          "timerSeconds": 120,
+          "title": "Mise en Place",
+          "headline": "Pull chilled oat jars from the fridge and top with sliced banana and honey.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_banana",
+            "ing_honey"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Overnight soaked oats are naturally soft; mash banana topping slightly for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_oats",
+          "baseQuantity": 240,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_milk",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_greek_yogurt",
+          "baseQuantity": 200,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_banana",
+          "baseQuantity": 200,
+          "isOptional": false,
+          "substituteGroupId": "FRUIT_TOPPING"
+        },
+        {
+          "ingredientId": "ing_honey",
+          "baseQuantity": 25,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_cinnamon",
+          "baseQuantity": 2,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 404,
+      "proteinGrams": 19,
+      "carbsGrams": 66,
+      "fatGrams": 9,
+      "difficulty": "EASY",
+      "cuisineTag": "Morning Kitchen",
+      "chefNote": "Soaking rolled oats overnight in milk and Greek yogurt softens starches for creamy 2-minute plating.",
+      "chefPairingNote": "Serve straight from chilled mason jars with sliced banana and warm herbal tea.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_10_sweet_plantain_egg_scramble",
+      "title": "Sweet Plantain & Egg Scramble",
+      "sourceAttribution": "West African Morning Table • USDA Verified",
+      "allowedSlots": [
+        "BREAKFAST"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 6,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 10,
+      "calibratedActiveMinutes": 19,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Cube ripe yellow plantains and pan-sear in olive oil until caramelized.",
+          "timerSeconds": 360,
+          "title": "The Sear & Roast",
+          "headline": "Cube ripe yellow plantains and pan-sear in olive oil until caramelized.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_plantain",
+            "ing_onion",
+            "ing_olive_oil"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Scramble 4 eggs with diced tomatoes and onion right alongside the plantains.",
+          "timerSeconds": 240,
+          "title": "Finish & Serve",
+          "headline": "Scramble 4 eggs with diced tomatoes and onion right alongside the plantains.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_plantain",
+            "ing_egg",
+            "ing_tomato",
+            "ing_onion"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Dice ripe plantains into small 1cm soft cubes and cool for 2 minutes for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_plantain",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_egg",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_onion",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_olive_oil",
+          "baseQuantity": 15,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_salt",
+          "baseQuantity": 2,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 288,
+      "proteinGrams": 9,
+      "carbsGrams": 48,
+      "fatGrams": 9,
+      "difficulty": "EASY",
+      "cuisineTag": "West African Morning",
+      "chefNote": "Caramelize ripe yellow plantain cubes undisturbed on medium heat before folding in seasoned eggs.",
+      "chefPairingNote": "Pair with fresh vine tomato wedges and chilled hibiscus-citrus cooler.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_11_warm_cinnamon_oat_porridge",
+      "title": "Warm Cinnamon Oat Porridge",
+      "sourceAttribution": "Wholesome Family Porridge • USDA Verified",
+      "allowedSlots": [
+        "BREAKFAST"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 4,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 10,
+      "calibratedActiveMinutes": 16,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Simmer rolled oats with milk and cinnamon until creamy.",
+          "timerSeconds": 480,
+          "title": "Aromatic Simmer",
+          "headline": "Simmer rolled oats with milk and cinnamon until creamy.",
+          "techniqueBadge": "Gentle Emulsion Simmer",
+          "visualTargetCue": "Steady gentle bubbles and glossy thickened sauce",
+          "chefTip": "Sous-Chef Rule: Maintain a calm simmer and stir from the bottom so starches never catch.",
+          "stepIngredientIds": [
+            "ing_oats",
+            "ing_milk",
+            "ing_cinnamon"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Swirl in peanut butter and top with diced mango or banana.",
+          "timerSeconds": 120,
+          "title": "Finish & Serve",
+          "headline": "Swirl in peanut butter and top with diced mango or banana.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_peanut_butter",
+            "ing_mango"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Thin 2yo porridge bowl with extra splash of cold milk so peanut butter is never sticky.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_oats",
+          "baseQuantity": 240,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_milk",
+          "baseQuantity": 500,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_peanut_butter",
+          "baseQuantity": 60,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_mango",
+          "baseQuantity": 200,
+          "isOptional": false,
+          "substituteGroupId": "FRUIT_TOPPING"
+        },
+        {
+          "ingredientId": "ing_cinnamon",
+          "baseQuantity": 2,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 429,
+      "proteinGrams": 18,
+      "carbsGrams": 57,
+      "fatGrams": 16,
+      "difficulty": "EASY",
+      "cuisineTag": "Morning Kitchen",
+      "chefNote": "Swirl natural roasted peanut paste off the heat so healthy fats stay glossy and smooth.",
+      "chefPairingNote": "Crown with diced ripe Kent mango for Vitamin C and tropical sweetness.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_12_french_toast_fingers",
+      "title": "French Toast Fingers",
+      "sourceAttribution": "French Boulangerie Classics • USDA Verified",
+      "allowedSlots": [
+        "BREAKFAST"
+      ],
+      "preferredOwner": "FRED",
+      "baseServings": 4,
+      "rawPrepMinutes": 6,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 10,
+      "calibratedActiveMinutes": 19,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Whisk eggs, milk, and cinnamon in a shallow dish and dip baguette batons.",
+          "timerSeconds": 180,
+          "title": "Mise en Place",
+          "headline": "Whisk eggs, milk, and cinnamon in a shallow dish and dip baguette batons.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_baguette",
+            "ing_egg",
+            "ing_milk",
+            "ing_cinnamon"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Golden-sear in butter for 4 minutes per side and serve with fruit.",
+          "timerSeconds": 420,
+          "title": "Golden Finish",
+          "headline": "Golden-sear in butter for 4 minutes per side and serve with fruit.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_butter"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Soak 2yo baguette sticks an extra 15 seconds in egg-milk custard for a pillowy center.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_baguette",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_egg",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_milk",
+          "baseQuantity": 180,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_butter",
+          "baseQuantity": 25,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_banana",
+          "baseQuantity": 200,
+          "isOptional": false,
+          "substituteGroupId": "FRUIT_TOPPING"
+        },
+        {
+          "ingredientId": "ing_cinnamon",
+          "baseQuantity": 2,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Drizzle +20ml honey and add +100g sliced banana on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_banana",
+              "baseQuantity": 100,
+              "isOptional": false
+            },
+            {
+              "ingredientId": "ing_honey",
+              "baseQuantity": 20,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Add +2 extra eggs (+12.6g protein) to the recovery portion.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_egg",
+              "baseQuantity": 2,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 335,
+      "proteinGrams": 13,
+      "carbsGrams": 45,
+      "fatGrams": 12,
+      "difficulty": "EASY",
+      "cuisineTag": "French Bistro",
+      "chefNote": "Slicing day-old baguette into baton sticks creates crisp golden edges around a custard-soft core.",
+      "chefPairingNote": "Serve warm with sliced ripe bananas and cold milk.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_13_beninese_atassi_watche",
+      "title": "Beninese Atassi (Watché) Rice & Beans",
+      "sourceAttribution": "Beninese Culinary Heritage (Cotonou Watché)",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 12,
+      "nightBeforePrepMinutes": 5,
+      "cookMinutes": 35,
+      "calibratedActiveMinutes": 45,
+      "nightBeforePrepSteps": [
+        "Rinse and soak black-eyed beans in a bowl of water at 8:30 PM."
+      ],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Simmer soaked beans until tender, then add washed rice to cook together.",
+          "timerSeconds": 1500,
+          "title": "Aromatic Simmer",
+          "headline": "Simmer soaked beans until tender, then add washed rice to cook together.",
+          "techniqueBadge": "Gentle Emulsion Simmer",
+          "visualTargetCue": "Steady gentle bubbles and glossy thickened sauce",
+          "chefTip": "Sous-Chef Rule: Maintain a calm simmer and stir from the bottom so starches never catch.",
+          "stepIngredientIds": [
+            "ing_rice",
+            "ing_beans"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Prepare sizzling Zomi tomato-onion stew (`Dja`) and serve with boiled eggs.",
+          "timerSeconds": 600,
+          "title": "Velvet Simmer & Fold",
+          "headline": "Prepare sizzling Zomi tomato-onion stew (`Dja`) and serve with boiled eggs.",
+          "techniqueBadge": "Gentle Emulsion Simmer",
+          "visualTargetCue": "Steady gentle bubbles and glossy thickened sauce",
+          "chefTip": "Sous-Chef Rule: Maintain a calm simmer and stir from the bottom so starches never catch.",
+          "stepIngredientIds": [
+            "ing_tomato",
+            "ing_onion",
+            "ing_egg",
+            "ing_red_palm_oil"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Mash beans slightly with soft rice and mild tomato sauce (before adding any chili) for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_rice",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_beans",
+          "baseQuantity": 300,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_onion",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_egg",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_red_palm_oil",
+          "baseQuantity": 30,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_salt",
+          "baseQuantity": 4,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 658,
+      "proteinGrams": 23,
+      "carbsGrams": 111,
+      "fatGrams": 13,
+      "difficulty": "MEDIUM",
+      "cuisineTag": "Beninese Heritage",
+      "chefNote": "Simmer pre-soaked cowpeas first, then steam rice directly in the bean pot for authentic Watché color and aroma.",
+      "chefPairingNote": "Serve hot with sizzling Zomi tomato-onion Dja sauce and crisp cucumber salad.",
+      "isSavedFavorite": true
+    },
+    {
+      "recipeId": "rec_14_poulet_bicyclette_braised",
+      "title": "Poulet Bicyclette Braised Chicken",
+      "sourceAttribution": "Beninese Culinary Heritage (Poulet Bicyclette)",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 15,
+      "nightBeforePrepMinutes": 5,
+      "cookMinutes": 35,
+      "calibratedActiveMinutes": 49,
+      "nightBeforePrepSteps": [
+        "Marinate chicken thighs with garlic, onion, and black pepper overnight."
+      ],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Braise marinated chicken with aromatics until tender and golden.",
+          "timerSeconds": 1500,
+          "title": "Aromatic Simmer",
+          "headline": "Braise marinated chicken with aromatics until tender and golden.",
+          "techniqueBadge": "Gentle Emulsion Simmer",
+          "visualTargetCue": "Steady gentle bubbles and glossy thickened sauce",
+          "chefTip": "Sous-Chef Rule: Maintain a calm simmer and stir from the bottom so starches never catch.",
+          "stepIngredientIds": [
+            "ing_chicken"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Serve with steamed jasmine rice and caramelized onion-tomato jus.",
+          "timerSeconds": 600,
+          "title": "Finish & Serve",
+          "headline": "Serve with steamed jasmine rice and caramelized onion-tomato jus.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_rice",
+            "ing_onion",
+            "ing_tomato"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Pull tender dark thigh meat off the bone into tiny shreds mixed with broth-moistened rice for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_chicken",
+          "baseQuantity": 800,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_rice",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_onion",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_garlic",
+          "baseQuantity": 15,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_olive_oil",
+          "baseQuantity": 20,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 760,
+      "proteinGrams": 52,
+      "carbsGrams": 90,
+      "fatGrams": 20,
+      "difficulty": "ARTISAN",
+      "cuisineTag": "Beninese Heritage",
+      "chefNote": "Par-braising garlic-ginger marinated chicken before golden roasting recreates authentic tender-crisp texture.",
+      "chefPairingNote": "Pair with fragrant jasmine rice and sparkling lemon-ginger tonic.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_15_amiwo_red_cornmeal_chicken",
+      "title": "Amiwo Red Cornmeal & Chicken",
+      "sourceAttribution": "Beninese Royal Tradition (Abomey Amiwo)",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 15,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 30,
+      "calibratedActiveMinutes": 51,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Simmer rich tomato, onion, and garlic broth with seasoned chicken.",
+          "timerSeconds": 1000,
+          "title": "Aromatic Simmer",
+          "headline": "Simmer rich tomato, onion, and garlic broth with seasoned chicken.",
+          "techniqueBadge": "Gentle Emulsion Simmer",
+          "visualTargetCue": "Steady gentle bubbles and glossy thickened sauce",
+          "chefTip": "Sous-Chef Rule: Maintain a calm simmer and stir from the bottom so starches never catch.",
+          "stepIngredientIds": [
+            "ing_chicken",
+            "ing_tomato",
+            "ing_onion",
+            "ing_garlic"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Whisk roasted cornmeal steadily into the spiced tomato stock until silky smooth.",
+          "timerSeconds": 800,
+          "title": "Golden Finish",
+          "headline": "Whisk roasted cornmeal steadily into the spiced tomato stock until silky smooth.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_cornmeal",
+            "ing_tomato"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Amiwo cornmeal is naturally soft and spoonable; top with finely shredded chicken for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_cornmeal",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_chicken",
+          "baseQuantity": 700,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_onion",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_red_palm_oil",
+          "baseQuantity": 25,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_garlic",
+          "baseQuantity": 10,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 732,
+      "proteinGrams": 48,
+      "carbsGrams": 88,
+      "fatGrams": 22,
+      "difficulty": "ARTISAN",
+      "cuisineTag": "Beninese Heritage",
+      "chefNote": "Reserve one cup of spiced red tomato-chicken broth before whisking cornmeal so Amiwo stays velvety.",
+      "chefPairingNote": "Classic southern Benin pairing: braised chicken, caramelized onion rings, and chilled hibiscus bissap.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_16_grilled_tilapia_alloco",
+      "title": "Grilled Tilapia & Fried Plantains (Alloco)",
+      "sourceAttribution": "West African Coastal Table • USDA Verified",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 12,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 22,
+      "calibratedActiveMinutes": 39,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Score tilapia, rub with garlic, lemon, and herbs, and roast until flaky.",
+          "timerSeconds": 900,
+          "title": "The Sear & Roast",
+          "headline": "Score tilapia, rub with garlic, lemon, and herbs, and roast until flaky.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_fish",
+            "ing_lemon"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Pan-sear ripe plantain rounds until golden and serve with fresh tomato-onion salsa.",
+          "timerSeconds": 420,
+          "title": "Golden Finish",
+          "headline": "Pan-sear ripe plantain rounds until golden and serve with fresh tomato-onion salsa.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_fish",
+            "ing_plantain",
+            "ing_tomato",
+            "ing_onion",
+            "ing_lemon"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Carefully pinch through tilapia flakes with fingers to remove every pin-bone before serving 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_fish",
+          "baseQuantity": 800,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_plantain",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_onion",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_lemon",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_olive_oil",
+          "baseQuantity": 25,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 493,
+      "proteinGrams": 44,
+      "carbsGrams": 65,
+      "fatGrams": 10,
+      "difficulty": "MEDIUM",
+      "cuisineTag": "West African Coastal",
+      "chefNote": "Score whole fish diagonally to the bone so crushed garlic, lemon, and herbs season every flake.",
+      "chefPairingNote": "Serve alongside golden sweet Alloco plantains and bright tomato-onion salsa.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_17_west_african_peanut_stew_mafe",
+      "title": "West African Peanut Chicken Stew (Mafé)",
+      "sourceAttribution": "West African One-Pot Heritage (Sauce Arachide)",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 12,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 28,
+      "calibratedActiveMinutes": 45,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Brown chicken and diced sweet potatoes with onions and crushed tomatoes.",
+          "timerSeconds": 720,
+          "title": "The Sear & Roast",
+          "headline": "Brown chicken and diced sweet potatoes with onions and crushed tomatoes.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_chicken",
+            "ing_sweet_potato",
+            "ing_tomato"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Whisk in smooth roasted peanut paste, simmer until velvety, and fold in spinach.",
+          "timerSeconds": 960,
+          "title": "Golden Finish",
+          "headline": "Whisk in smooth roasted peanut paste, simmer until velvety, and fold in spinach.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_peanut_butter",
+            "ing_spinach"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Smooth peanut sauce and fork-tender sweet potato cubes are ideal for 2yo; serve over soft rice.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_chicken",
+          "baseQuantity": 600,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_peanut_butter",
+          "baseQuantity": 150,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_sweet_potato",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_spinach",
+          "baseQuantity": 150,
+          "isOptional": false,
+          "substituteGroupId": "LEAFY_GREENS"
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_rice",
+          "baseQuantity": 350,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 884,
+      "proteinGrams": 51,
+      "carbsGrams": 103,
+      "fatGrams": 31,
+      "difficulty": "MEDIUM",
+      "cuisineTag": "West African One-Pot",
+      "chefNote": "Whisk smooth peanut paste with two ladles of hot tomato broth first so the Mafé sauce emulsifies silkily.",
+      "chefPairingNote": "Finish with wilted baby spinach over steamed rice and fresh lemon water.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_18_egusi_melon_seed_spinach_stew",
+      "title": "Egusi / Melon Seed Spinach Stew",
+      "sourceAttribution": "Beninese Culinary Heritage (Sauce Goussi)",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 12,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 25,
+      "calibratedActiveMinutes": 42,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Simmer tomato, bell pepper, and onion base with tender chicken pieces.",
+          "timerSeconds": 720,
+          "title": "Aromatic Simmer",
+          "headline": "Simmer tomato, bell pepper, and onion base with tender chicken pieces.",
+          "techniqueBadge": "Gentle Emulsion Simmer",
+          "visualTargetCue": "Steady gentle bubbles and glossy thickened sauce",
+          "chefTip": "Sous-Chef Rule: Maintain a calm simmer and stir from the bottom so starches never catch.",
+          "stepIngredientIds": [
+            "ing_chicken",
+            "ing_tomato"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Spoon in ground egusi melon seed paste to form tender curds and wilt fresh spinach.",
+          "timerSeconds": 780,
+          "title": "Assemble & Plate",
+          "headline": "Spoon in ground egusi melon seed paste to form tender curds and wilt fresh spinach.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_egusi_seeds",
+            "ing_spinach"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Finely chop spinach leaves so there are no long stringy stems for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_egusi_seeds",
+          "baseQuantity": 200,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_spinach",
+          "baseQuantity": 250,
+          "isOptional": false,
+          "substituteGroupId": "LEAFY_GREENS"
+        },
+        {
+          "ingredientId": "ing_chicken",
+          "baseQuantity": 500,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_rice",
+          "baseQuantity": 350,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_red_palm_oil",
+          "baseQuantity": 20,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 868,
+      "proteinGrams": 50,
+      "carbsGrams": 81,
+      "fatGrams": 38,
+      "difficulty": "ARTISAN",
+      "cuisineTag": "Beninese Heritage",
+      "chefNote": "Drop spoonfuls of hydrated ground egusi paste into simmering tomato stock without stirring for 4 minutes so curds form.",
+      "chefPairingNote": "Fold in fresh spinach right at the end and serve with steamed rice.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_19_moyo_tomato_onion_fish",
+      "title": "Moyo Tomato-Onion Fish Platter",
+      "sourceAttribution": "Ouidah Coastal Kitchen (Poisson au Moyo)",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 10,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 20,
+      "calibratedActiveMinutes": 34,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Pan-roast seasoned fish fillets in olive oil until golden.",
+          "timerSeconds": 720,
+          "title": "The Sear & Roast",
+          "headline": "Pan-roast seasoned fish fillets in olive oil until golden.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_fish",
+            "ing_olive_oil"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Toss warm tomato, onion, bell pepper, and lemon Moyo sauce over fish and rice.",
+          "timerSeconds": 480,
+          "title": "Finish & Serve",
+          "headline": "Toss warm tomato, onion, bell pepper, and lemon Moyo sauce over fish and rice.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_fish",
+            "ing_tomato",
+            "ing_onion",
+            "ing_bell_pepper",
+            "ing_rice"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Double-check fish flakes for bones and dice tomatoes finely for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_fish",
+          "baseQuantity": 750,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_onion",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_bell_pepper",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_rice",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_olive_oil",
+          "baseQuantity": 20,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 645,
+      "proteinGrams": 47,
+      "carbsGrams": 93,
+      "fatGrams": 9,
+      "difficulty": "EASY",
+      "cuisineTag": "West African Coastal",
+      "chefNote": "Keep half the diced tomatoes, onions, and bell peppers fresh with lemon juice for authentic crisp Moyo contrast.",
+      "chefPairingNote": "Pair with warm jasmine rice and chilled sparkling citrus water.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_20_one_pan_lemon_herb_salmon_rice",
+      "title": "One-Pan Lemon Herb Salmon & Rice",
+      "sourceAttribution": "Mediterranean One-Pan Express • USDA Verified",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 8,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 20,
+      "calibratedActiveMinutes": 32,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Bake salmon fillets with lemon slices, butter, and garlic.",
+          "timerSeconds": 900,
+          "title": "The Sear & Bake",
+          "headline": "Roast lemon-butter Atlantic salmon until crisp at the edges and opaque.",
+          "techniqueBadge": "One-Pan Moisture Lock",
+          "visualTargetCue": "Flaky coral center (63C / 145F USDA safe temp) with golden lemon-butter glaze",
+          "chefTip": "Sous-Chef Rule: Pat salmon fillets dry before seasoning so butter browns cleanly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_salmon",
+            "ing_lemon",
+            "ing_butter"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Fluff steamed rice with wilted baby spinach and pan juices.",
+          "timerSeconds": 300,
+          "title": "Wilt & Fluff",
+          "headline": "Fold baby spinach directly into warm jasmine rice and citrus pan juices.",
+          "techniqueBadge": "Residual-Heat Wilt",
+          "visualTargetCue": "Emerald tender spinach ribbons coating fluffy rice grains",
+          "chefTip": "Sous-Chef Rule: Residual rice steam wilts spinach in 90 seconds while preserving folate and vibrant color.",
+          "stepIngredientIds": [
+            "ing_rice",
+            "ing_spinach"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Flake soft center of salmon fillet and verify zero pin-bones for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_salmon",
+          "baseQuantity": 600,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_rice",
+          "baseQuantity": 350,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_spinach",
+          "baseQuantity": 150,
+          "isOptional": false,
+          "substituteGroupId": "LEAFY_GREENS"
+        },
+        {
+          "ingredientId": "ing_lemon",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_butter",
+          "baseQuantity": 25,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 689,
+      "proteinGrams": 38,
+      "carbsGrams": 73,
+      "fatGrams": 26,
+      "difficulty": "EASY",
+      "cuisineTag": "Mediterranean Express",
+      "chefNote": "Zero-waste weeknight favorite rescuing fresh Atlantic salmon and baby spinach in a single pan.",
+      "chefPairingNote": "Crisp lemon-mint sparkling water balances rich Omega-3 salmon and garlic butter.",
+      "isSavedFavorite": true
+    },
+    {
+      "recipeId": "rec_21_creamy_garlic_pasta_spinach",
+      "title": "Creamy Garlic Pasta & Spinach",
+      "sourceAttribution": "Mediterranean Bistro Weeknight • USDA Verified",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 8,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 15,
+      "calibratedActiveMinutes": 27,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Boil penne pasta in salted water until tender.",
+          "timerSeconds": 600,
+          "title": "Al Dente Boil",
+          "headline": "Simmer durum penne in salted water and reserve 60ml starchy cooking water.",
+          "techniqueBadge": "Starch Emulsion Prep",
+          "visualTargetCue": "Tender penne with slight bounce (+60s softer portion for toddlers)",
+          "chefTip": "Sous-Chef Rule: Starchy pasta water binds Greek yogurt and cheese into a glossy bistro sauce.",
+          "stepIngredientIds": [
+            "ing_pasta"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Toss pasta with garlic butter, Greek yogurt, melted cheese, and baby spinach.",
+          "timerSeconds": 300,
+          "title": "Velvet Yogurt Toss",
+          "headline": "Fold garlic butter, Greek yogurt, melted Comté, and baby spinach off-heat.",
+          "techniqueBadge": "Off-Heat Tempering",
+          "visualTargetCue": "Silky ivory sauce clinging to pasta with emerald spinach",
+          "chefTip": "Sous-Chef Rule: Remove skillet from direct flame for 20 seconds before folding Greek yogurt so proteins stay silky.",
+          "stepIngredientIds": [
+            "ing_butter",
+            "ing_garlic",
+            "ing_greek_yogurt",
+            "ing_cheese",
+            "ing_spinach"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Cook penne an extra 60 seconds and cut tubes in half lengthwise for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_pasta",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_spinach",
+          "baseQuantity": 150,
+          "isOptional": false,
+          "substituteGroupId": "LEAFY_GREENS"
+        },
+        {
+          "ingredientId": "ing_cheese",
+          "baseQuantity": 120,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_greek_yogurt",
+          "baseQuantity": 150,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_butter",
+          "baseQuantity": 20,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_garlic",
+          "baseQuantity": 10,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 567,
+      "proteinGrams": 26,
+      "carbsGrams": 79,
+      "fatGrams": 16,
+      "difficulty": "EASY",
+      "cuisineTag": "Mediterranean Express",
+      "chefNote": "Temper Plain Greek Yogurt with warm starchy pasta water off-heat for creamy richness without heavy cream.",
+      "chefPairingNote": "Serve with cracked black pepper, lemon zest, and chilled pear-mint spritzer.",
+      "isSavedFavorite": true
+    },
+    {
+      "recipeId": "rec_22_sheet_pan_honey_mustard_chicken",
+      "title": "Sheet-Pan Honey Mustard Chicken Thighs",
+      "sourceAttribution": "One-Pan Family Roasts • USDA Verified",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 10,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 25,
+      "calibratedActiveMinutes": 39,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Toss chicken thighs and cubed sweet potatoes with honey, olive oil, and lemon.",
+          "timerSeconds": 300,
+          "title": "Preparation",
+          "headline": "Toss chicken thighs and cubed sweet potatoes with honey, olive oil, and lemon.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_chicken",
+            "ing_sweet_potato",
+            "ing_honey",
+            "ing_lemon",
+            "ing_olive_oil"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Roast on a single sheet pan at 200C until caramelized and tender.",
+          "timerSeconds": 1500,
+          "title": "Golden Finish",
+          "headline": "Roast on a single sheet pan at 200C until caramelized and tender.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_chicken",
+            "ing_sweet_potato",
+            "ing_honey"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Dice roasted sweet potatoes and chicken into pea-sized bites for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_chicken",
+          "baseQuantity": 750,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_sweet_potato",
+          "baseQuantity": 600,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_honey",
+          "baseQuantity": 30,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_lemon",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_olive_oil",
+          "baseQuantity": 20,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 497,
+      "proteinGrams": 43,
+      "carbsGrams": 40,
+      "fatGrams": 18,
+      "difficulty": "EASY",
+      "cuisineTag": "Family Sheet-Pan",
+      "chefNote": "Leave ½-inch air gaps around sweet potato cubes on the hot pan so edges roast caramelized and sweet.",
+      "chefPairingNote": "Pair with crisp seasonal greens and sparkling lemon water.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_23_cassava_gari_foto_eggs",
+      "title": "Beninese Gari Foto & Spiced Scrambled Eggs",
+      "sourceAttribution": "Beninese Bistro Classics (Gari Foto)",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 8,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 12,
+      "calibratedActiveMinutes": 24,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Sauté onions, tomatoes, and bell peppers in olive oil.",
+          "timerSeconds": 360,
+          "title": "Preparation",
+          "headline": "Sauté onions, tomatoes, and bell peppers in olive oil.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_tomato",
+            "ing_onion",
+            "ing_bell_pepper",
+            "ing_olive_oil"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Fluff dampened cassava gari into the savory tomato sauce and top with 4 eggs.",
+          "timerSeconds": 360,
+          "title": "Finish & Serve",
+          "headline": "Fluff dampened cassava gari into the savory tomato sauce and top with 4 eggs.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_cassava_gari",
+            "ing_egg",
+            "ing_tomato"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Hydrate gari with warm water until extra soft and fluffy for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_cassava_gari",
+          "baseQuantity": 300,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_egg",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_onion",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_bell_pepper",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_olive_oil",
+          "baseQuantity": 20,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 415,
+      "proteinGrams": 9,
+      "carbsGrams": 71,
+      "fatGrams": 10,
+      "difficulty": "EASY",
+      "cuisineTag": "Beninese Bistro",
+      "chefNote": "Mist dry cassava gari lightly with warm water by hand so granules bloom couscous-fluffy in the savory tomato sauce.",
+      "chefPairingNote": "Top with soft-scrambled or boiled eggs and serve with chilled ginger-citrus water.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_24_sweet_potato_black_bean_skillet",
+      "title": "Roasted Sweet Potato & Bean Skillet",
+      "sourceAttribution": "Plant-Forward Family Skillets • USDA Verified",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 10,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 20,
+      "calibratedActiveMinutes": 34,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Pan-roast diced sweet potatoes with onions and bell peppers until tender.",
+          "timerSeconds": 900,
+          "title": "The Sear & Roast",
+          "headline": "Pan-roast diced sweet potatoes with onions and bell peppers until tender.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_sweet_potato",
+            "ing_bell_pepper"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Fold in cooked beans, avocado cubes, and melted cheese.",
+          "timerSeconds": 300,
+          "title": "Finish & Serve",
+          "headline": "Fold in cooked beans, avocado cubes, and melted cheese.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_beans",
+            "ing_avocado",
+            "ing_cheese"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Mash cooked beans lightly with a fork so skins are soft for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_sweet_potato",
+          "baseQuantity": 500,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_beans",
+          "baseQuantity": 300,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_avocado",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_bell_pepper",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_cheese",
+          "baseQuantity": 80,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 432,
+      "proteinGrams": 17,
+      "carbsGrams": 56,
+      "fatGrams": 18,
+      "difficulty": "EASY",
+      "cuisineTag": "Plant-Rich Skillet",
+      "chefNote": "Fold ripe Hass avocado cubes in off the heat to preserve creamy texture and vibrant color.",
+      "chefPairingNote": "Serve with fresh citrus water to double plant-based iron absorption from cowpeas.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_25_jollof_rice_grilled_chicken",
+      "title": "Smoky Party Jollof Rice & Chicken",
+      "sourceAttribution": "West African Celebration Classics (Smoky Jollof)",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 12,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 30,
+      "calibratedActiveMinutes": 47,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Simmer roasted tomato, onion, and bell pepper purée with golden chicken.",
+          "timerSeconds": 720,
+          "title": "The Sear & Roast",
+          "headline": "Simmer roasted tomato, onion, and bell pepper purée with golden chicken.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_chicken",
+            "ing_tomato",
+            "ing_bell_pepper",
+            "ing_onion"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Steam long-grain rice in the spiced tomato stock with sweet fried plantains.",
+          "timerSeconds": 1080,
+          "title": "Finish & Serve",
+          "headline": "Steam long-grain rice in the spiced tomato stock with sweet fried plantains.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_rice",
+            "ing_tomato",
+            "ing_bell_pepper",
+            "ing_plantain"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Serve mild tomato rice with diced sweet plantain and shredded chicken for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_rice",
+          "baseQuantity": 450,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_chicken",
+          "baseQuantity": 650,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_bell_pepper",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_plantain",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_onion",
+          "baseQuantity": 2,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 831,
+      "proteinGrams": 46,
+      "carbsGrams": 132,
+      "fatGrams": 13,
+      "difficulty": "MEDIUM",
+      "cuisineTag": "West African Celebration",
+      "chefNote": "Seal the pot tightly over low heat so long-grain rice steams exclusively in roasted tomato-pepper vapour.",
+      "chefPairingNote": "Serve with caramelized sweet plantains and chilled hibiscus tea.",
+      "isSavedFavorite": true
+    },
+    {
+      "recipeId": "rec_26_garlic_butter_tilapia_spinach",
+      "title": "Pan-Seared Garlic Butter Fish & Greens",
+      "sourceAttribution": "20-Minute Coastal Skillet • USDA Verified",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 8,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 15,
+      "calibratedActiveMinutes": 27,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Sear fish fillets in butter and olive oil with garlic and lemon.",
+          "timerSeconds": 600,
+          "title": "The Sear & Roast",
+          "headline": "Sear fish fillets in butter and olive oil with garlic and lemon.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_fish",
+            "ing_butter",
+            "ing_lemon"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Wilt baby spinach in pan juices and serve with warm crusty baguette.",
+          "timerSeconds": 300,
+          "title": "Finish & Serve",
+          "headline": "Wilt baby spinach in pan juices and serve with warm crusty baguette.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_spinach",
+            "ing_baguette"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Flake fish carefully to confirm zero bones and serve with buttered bread for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_fish",
+          "baseQuantity": 650,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_spinach",
+          "baseQuantity": 200,
+          "isOptional": false,
+          "substituteGroupId": "LEAFY_GREENS"
+        },
+        {
+          "ingredientId": "ing_baguette",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_butter",
+          "baseQuantity": 25,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_lemon",
+          "baseQuantity": 1,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 380,
+      "proteinGrams": 41,
+      "carbsGrams": 34,
+      "fatGrams": 10,
+      "difficulty": "EASY",
+      "cuisineTag": "West African Coastal",
+      "chefNote": "Wilt baby spinach directly in the lemon-garlic brown butter pan drippings in under 2 minutes.",
+      "chefPairingNote": "Serve with warm crusty baguette slices to soak up the citrus pan juices.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_27_avocado_chicken_quesadilla_wrap",
+      "title": "Toasted Chicken, Cheese & Avocado Wrap",
+      "sourceAttribution": "Weeknight Skillet Melts • USDA Verified",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 8,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 10,
+      "calibratedActiveMinutes": 22,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Layer shredded cooked chicken, cheese, and mashed avocado on flour wraps.",
+          "timerSeconds": 240,
+          "title": "Mise en Place",
+          "headline": "Layer shredded cooked chicken, cheese, and mashed avocado on flour wraps.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_tortilla_wrap",
+            "ing_chicken",
+            "ing_avocado",
+            "ing_cheese"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Toast folded wraps in a dry skillet until golden and melty.",
+          "timerSeconds": 360,
+          "title": "Golden Finish",
+          "headline": "Toast folded wraps in a dry skillet until golden and melty.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_tortilla_wrap"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Cut soft center of quesadilla into small triangles for 2yo hands.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_tortilla_wrap",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_chicken",
+          "baseQuantity": 450,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_avocado",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_cheese",
+          "baseQuantity": 120,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 2,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 556,
+      "proteinGrams": 38,
+      "carbsGrams": 32,
+      "fatGrams": 32,
+      "difficulty": "EASY",
+      "cuisineTag": "Family Skillet",
+      "chefNote": "Toast folded wraps in a dry skillet over medium-low heat so cheese melts evenly as tortillas crisp.",
+      "chefPairingNote": "Serve with diced vine-ripened tomatoes and cold milk or citrus water.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_28_tuna_sweetcorn_pasta_bake",
+      "title": "Family Tuna & Tomato Skillet Pasta",
+      "sourceAttribution": "Pantry-Smart Weeknight Pasta • USDA Verified",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 8,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 15,
+      "calibratedActiveMinutes": 27,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Boil penne pasta while simmering diced tomatoes, onion, and garlic in olive oil.",
+          "timerSeconds": 600,
+          "title": "Aromatic Simmer",
+          "headline": "Boil penne pasta while simmering diced tomatoes, onion, and garlic in olive oil.",
+          "techniqueBadge": "Gentle Emulsion Simmer",
+          "visualTargetCue": "Steady gentle bubbles and glossy thickened sauce",
+          "chefTip": "Sous-Chef Rule: Maintain a calm simmer and stir from the bottom so starches never catch.",
+          "stepIngredientIds": [
+            "ing_pasta",
+            "ing_tuna",
+            "ing_tomato"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Fold in flaked tuna, spinach, and grated cheese until melted.",
+          "timerSeconds": 300,
+          "title": "Assemble & Plate",
+          "headline": "Fold in flaked tuna, spinach, and grated cheese until melted.",
+          "techniqueBadge": "Balanced Family Plating",
+          "visualTargetCue": "Evenly coated textures ready for family bowls",
+          "chefTip": "Sous-Chef Rule: Portion toddler/child bowls first before adding extra table seasoning.",
+          "stepIngredientIds": [
+            "ing_tuna",
+            "ing_spinach",
+            "ing_cheese"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Cut penne pasta in half for 2yo and flake tuna finely into the mild tomato sauce.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_pasta",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tuna",
+          "baseQuantity": 350,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_spinach",
+          "baseQuantity": 120,
+          "isOptional": false,
+          "substituteGroupId": "LEAFY_GREENS"
+        },
+        {
+          "ingredientId": "ing_cheese",
+          "baseQuantity": 80,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 648,
+      "proteinGrams": 45,
+      "carbsGrams": 80,
+      "fatGrams": 16,
+      "difficulty": "EASY",
+      "cuisineTag": "Mediterranean Express",
+      "chefNote": "Gently fold olive-oil poached tuna in during the last 90 seconds so large tender flakes stay intact.",
+      "chefPairingNote": "Pair with wilted baby spinach and chilled lemon-herb water.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_29_plantain_bean_red_stew_red_red",
+      "title": "West African Red-Red Bean Stew & Plantains",
+      "sourceAttribution": "Gulf of Guinea Heritage (Red-Red Stew)",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 10,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 25,
+      "calibratedActiveMinutes": 39,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Simmer black-eyed beans with tomatoes, onions, and aromatic Zomi palm oil.",
+          "timerSeconds": 1020,
+          "title": "Aromatic Simmer",
+          "headline": "Simmer black-eyed beans with tomatoes, onions, and aromatic Zomi palm oil.",
+          "techniqueBadge": "Gentle Emulsion Simmer",
+          "visualTargetCue": "Steady gentle bubbles and glossy thickened sauce",
+          "chefTip": "Sous-Chef Rule: Maintain a calm simmer and stir from the bottom so starches never catch.",
+          "stepIngredientIds": [
+            "ing_beans",
+            "ing_tomato",
+            "ing_onion",
+            "ing_red_palm_oil"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Roast sweet ripe plantain slices until caramelized and serve with gari sprinkle.",
+          "timerSeconds": 480,
+          "title": "Golden Finish",
+          "headline": "Roast sweet ripe plantain slices until caramelized and serve with gari sprinkle.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_plantain",
+            "ing_cassava_gari"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Mash stewed beans and soft roasted plantain together on 2yo's plate.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_beans",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_plantain",
+          "baseQuantity": 4,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_tomato",
+          "baseQuantity": 3,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_onion",
+          "baseQuantity": 1,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_cassava_gari",
+          "baseQuantity": 100,
+          "isOptional": true
+        },
+        {
+          "ingredientId": "ing_red_palm_oil",
+          "baseQuantity": 25,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 541,
+      "proteinGrams": 14,
+      "carbsGrams": 112,
+      "fatGrams": 8,
+      "difficulty": "MEDIUM",
+      "cuisineTag": "West African Classic",
+      "chefNote": "Slowly simmering black-eyed beans with sweet onions and Zomi palm oil yields a velvety protein-rich stew.",
+      "chefPairingNote": "Crown with caramelized roasted plantains and an optional dusting of cassava gari.",
+      "isSavedFavorite": false
+    },
+    {
+      "recipeId": "rec_30_coconut_mango_chicken_rice_bowl",
+      "title": "Tropical Mango & Herb Chicken Rice Bowl",
+      "sourceAttribution": "Global Sunshine Bowls • USDA Verified",
+      "allowedSlots": [
+        "LUNCH",
+        "DINNER"
+      ],
+      "preferredOwner": "WIFE",
+      "baseServings": 4,
+      "rawPrepMinutes": 10,
+      "nightBeforePrepMinutes": 0,
+      "cookMinutes": 20,
+      "calibratedActiveMinutes": 34,
+      "nightBeforePrepSteps": [],
+      "morningSteps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Sear lemon-garlic chicken bites until golden and juicy.",
+          "timerSeconds": 720,
+          "title": "The Sear & Roast",
+          "headline": "Sear lemon-garlic chicken bites until golden and juicy.",
+          "techniqueBadge": "Maillard Heat Control",
+          "visualTargetCue": "Even golden-brown color and fragrant aroma",
+          "chefTip": "Sous-Chef Rule: Avoid crowding the pan so ingredients caramelize evenly instead of steaming.",
+          "stepIngredientIds": [
+            "ing_chicken",
+            "ing_lemon"
+          ]
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Assemble warm jasmine rice bowls topped with chicken, diced ripe mango, and avocado.",
+          "timerSeconds": 480,
+          "title": "Finish & Serve",
+          "headline": "Assemble warm jasmine rice bowls topped with chicken, diced ripe mango, and avocado.",
+          "techniqueBadge": "Weeknight Precision",
+          "visualTargetCue": "Vibrant color, steaming hot center, balanced seasoning",
+          "chefTip": "Sous-Chef Rule: Taste and adjust seasoning right before serving warm to the table.",
+          "stepIngredientIds": [
+            "ing_chicken",
+            "ing_rice",
+            "ing_mango",
+            "ing_avocado"
+          ]
+        }
+      ],
+      "toddlerPrepTip": "Ripe mango and avocado cubes are soft; dice chicken bites small for 2yo.",
+      "bomLines": [
+        {
+          "ingredientId": "ing_chicken",
+          "baseQuantity": 600,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_rice",
+          "baseQuantity": 400,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_mango",
+          "baseQuantity": 250,
+          "isOptional": false,
+          "substituteGroupId": "FRUIT_TOPPING"
+        },
+        {
+          "ingredientId": "ing_avocado",
+          "baseQuantity": 2,
+          "isOptional": false
+        },
+        {
+          "ingredientId": "ing_lemon",
+          "baseQuantity": 1,
+          "isOptional": false
+        }
+      ],
+      "workoutModifiers": [
+        {
+          "profile": "PRE_WORKOUT_CARB",
+          "instructionAddOn": "Pre-Workout Carb Boost: Add +100g steamed rice or warm bread on the athlete's plate.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_rice",
+              "baseQuantity": 100,
+              "isOptional": false
+            }
+          ]
+        },
+        {
+          "profile": "POST_WORKOUT_HIGH_PROTEIN",
+          "instructionAddOn": "Post-Workout Protein Boost: Sear +150g extra lean chicken (+32g protein) for athletic recovery.",
+          "extraBomLines": [
+            {
+              "ingredientId": "ing_chicken",
+              "baseQuantity": 150,
+              "isOptional": false
+            }
+          ]
+        }
+      ],
+      "caloriesPerServing": 751,
+      "proteinGrams": 41,
+      "carbsGrams": 97,
+      "fatGrams": 22,
+      "difficulty": "EASY",
+      "cuisineTag": "Sunshine Bowl",
+      "chefNote": "Balance warm lemon-seared chicken over jasmine rice with cool ripe Kent mango and creamy avocado.",
+      "chefPairingNote": "Pair with chilled lime-mint water for a refreshing family dinner.",
+      "isSavedFavorite": false
+    }
+  ],
+  "initialPantry": [
+    {
+      "ingredientId": "ing_egg",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 24,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Middle Fridge Shelf",
+      "purchasedDaysAgo": 7,
+      "packageNote": "2 dozen • Fresh Farm Large",
+      "expiresInDays": 21
+    },
+    {
+      "ingredientId": "ing_milk",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Cold Interior Shelf",
+      "purchasedDaysAgo": 2,
+      "packageNote": "2 cartons (2 L) • Fresh Whole Milk",
+      "expiresInDays": 5
+    },
+    {
+      "ingredientId": "ing_greek_yogurt",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Top Fridge Shelf",
+      "purchasedDaysAgo": 8,
+      "packageNote": "2 tubs (2 kg) • Opened 8d Ago",
+      "expiresInDays": 2
+    },
+    {
+      "ingredientId": "ing_cheese",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 800,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Deli Cheese Drawer",
+      "purchasedDaysAgo": 5,
+      "packageNote": "2 blocks • Melting & Sharp Cheddar",
+      "expiresInDays": 16
+    },
+    {
+      "ingredientId": "ing_butter",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 500,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Chilled Dairy Bin",
+      "purchasedDaysAgo": 6,
+      "packageNote": "2 packs • Unsalted Creamery",
+      "expiresInDays": 24
+    },
+    {
+      "ingredientId": "ing_baguette",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 4,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Linen Bread Bag",
+      "purchasedDaysAgo": 0,
+      "packageNote": "4 loaves • Marikina Artisan Bakery",
+      "expiresInDays": 3
+    },
+    {
+      "ingredientId": "ing_oats",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Airtight Canister #1",
+      "purchasedDaysAgo": 14,
+      "packageNote": "2 kg • Old-Fashioned Rolled",
+      "expiresInDays": 240
+    },
+    {
+      "ingredientId": "ing_rice",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 4000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Grain Dispenser #1",
+      "purchasedDaysAgo": 20,
+      "packageNote": "4 kg • Fragrant Jasmine Rice",
+      "expiresInDays": 330
+    },
+    {
+      "ingredientId": "ing_pasta",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Dry Goods Shelf 2",
+      "purchasedDaysAgo": 18,
+      "packageNote": "2 packs • Durum Semolina Penne",
+      "expiresInDays": 340
+    },
+    {
+      "ingredientId": "ing_cornmeal",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Airtight Canister #2",
+      "purchasedDaysAgo": 12,
+      "packageNote": "2 kg • Fine Roasted Cornmeal",
+      "expiresInDays": 210
+    },
+    {
+      "ingredientId": "ing_cassava_gari",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Airtight Canister #3",
+      "purchasedDaysAgo": 15,
+      "packageNote": "2 kg • Fermented Cassava Gari",
+      "expiresInDays": 240
+    },
+    {
+      "ingredientId": "ing_tortilla_wrap",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 16,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Bakery Shelf",
+      "purchasedDaysAgo": 3,
+      "packageNote": "2 packs • Whole Wheat Wraps",
+      "expiresInDays": 11
+    },
+    {
+      "ingredientId": "ing_avocado",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 8,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Counter Ripening Bowl",
+      "purchasedDaysAgo": 1,
+      "packageNote": "8 count • Local Rizal Avocados",
+      "expiresInDays": 4
+    },
+    {
+      "ingredientId": "ing_blueberry",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 500,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Low-Moisture Berry Drawer",
+      "purchasedDaysAgo": 2,
+      "packageNote": "2 punnets • Fresh Unwashed",
+      "expiresInDays": 5
+    },
+    {
+      "ingredientId": "ing_banana",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Counter Banana Hanger",
+      "purchasedDaysAgo": 1,
+      "packageNote": "2 bunches • Sweet Ripe Lakatan",
+      "expiresInDays": 4
+    },
+    {
+      "ingredientId": "ing_mango",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Fruit Crisper",
+      "purchasedDaysAgo": 1,
+      "packageNote": "2 kg • Sweet Carabao Mangoes",
+      "expiresInDays": 4
+    },
+    {
+      "ingredientId": "ing_tomato",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 12,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Stem-Down Counter Basket",
+      "purchasedDaysAgo": 1,
+      "packageNote": "12 count • Market Vine-Ripened",
+      "expiresInDays": 5
+    },
+    {
+      "ingredientId": "ing_plantain",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 12,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Cool Counter Basket",
+      "purchasedDaysAgo": 1,
+      "packageNote": "2 bunches • Ripe Saba & Plantains",
+      "expiresInDays": 5
+    },
+    {
+      "ingredientId": "ing_spinach",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 600,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "High-Humidity Crisper",
+      "purchasedDaysAgo": 3,
+      "packageNote": "2 packs (600 g) • Washed Leafy Greens",
+      "expiresInDays": 2
+    },
+    {
+      "ingredientId": "ing_onion",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 16,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Ventilated Dark Bin",
+      "purchasedDaysAgo": 5,
+      "packageNote": "16 bulbs • Dry Cured Sibuyas",
+      "expiresInDays": 25
+    },
+    {
+      "ingredientId": "ing_bell_pepper",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 12,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Crisper Drawer",
+      "purchasedDaysAgo": 3,
+      "packageNote": "12 count • Sweet Red & Green",
+      "expiresInDays": 7
+    },
+    {
+      "ingredientId": "ing_sweet_potato",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 3000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Cool Dark Root Basket",
+      "purchasedDaysAgo": 4,
+      "packageNote": "3 kg • Orange Kamote (No Fridge)",
+      "expiresInDays": 17
+    },
+    {
+      "ingredientId": "ing_lemon",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 12,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Citrus Crisper Bin",
+      "purchasedDaysAgo": 3,
+      "packageNote": "12 count • Fresh Lemons & Citrus",
+      "expiresInDays": 18
+    },
+    {
+      "ingredientId": "ing_chicken",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FREEZER",
+      "storageSubLocation": "Freezer Meat Drawer",
+      "purchasedDaysAgo": 4,
+      "packageNote": "2 kg • Portioned Thighs & Breast",
+      "expiresInDays": 90
+    },
+    {
+      "ingredientId": "ing_fish",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FREEZER",
+      "storageSubLocation": "Top Freezer Drawer",
+      "purchasedDaysAgo": 5,
+      "packageNote": "2 kg • Cleaned Marikina Market Tilapia",
+      "expiresInDays": 85
+    },
+    {
+      "ingredientId": "ing_salmon",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 1600,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "FRIDGE",
+      "storageSubLocation": "Coldest Bottom Shelf",
+      "purchasedDaysAgo": 1,
+      "packageNote": "2 fillets (1.6 kg) • SM Marikina Chilled",
+      "expiresInDays": 1
+    },
+    {
+      "ingredientId": "ing_tuna",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 800,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Tinned Seafood Shelf",
+      "purchasedDaysAgo": 15,
+      "packageNote": "2 jars • Olive-Oil Chunks",
+      "expiresInDays": 350
+    },
+    {
+      "ingredientId": "ing_beans",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 2000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Legume Jar #4",
+      "purchasedDaysAgo": 16,
+      "packageNote": "2 kg • Cowpeas / Paayap",
+      "expiresInDays": 340
+    },
+    {
+      "ingredientId": "ing_egusi_seeds",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 1000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Airtight Seed Jar",
+      "purchasedDaysAgo": 10,
+      "packageNote": "1 kg • Ground Melon Seeds",
+      "expiresInDays": 160
+    },
+    {
+      "ingredientId": "ing_honey",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 1000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Dry Pantry Shelf",
+      "purchasedDaysAgo": 25,
+      "packageNote": "2 jars • Raw Rizal Wildflower",
+      "expiresInDays": 360
+    },
+    {
+      "ingredientId": "ing_peanut_butter",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 1000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Nut & Seed Shelf",
+      "purchasedDaysAgo": 8,
+      "packageNote": "2 jars • Unsweetened Roasted Mani",
+      "expiresInDays": 165
+    },
+    {
+      "ingredientId": "ing_mixed_nuts_seeds",
+      "tier": "TIER_1_QUANTITATIVE",
+      "currentQuantity": 1000,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Airtight Jar #5",
+      "purchasedDaysAgo": 7,
+      "packageNote": "1 kg • Antipolo Kasuy, Seeds & Almonds",
+      "expiresInDays": 160
+    },
+    {
+      "ingredientId": "ing_olive_oil",
+      "tier": "TIER_2_STAPLE",
+      "currentQuantity": 0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Dark Glass Cruet",
+      "purchasedDaysAgo": 14,
+      "packageNote": "Staple • Cold-Pressed EVOO"
+    },
+    {
+      "ingredientId": "ing_red_palm_oil",
+      "tier": "TIER_2_STAPLE",
+      "currentQuantity": 0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "West African Pantry Shelf",
+      "purchasedDaysAgo": 18,
+      "packageNote": "Staple • Unrefined Zomi Oil"
+    },
+    {
+      "ingredientId": "ing_salt",
+      "tier": "TIER_2_STAPLE",
+      "currentQuantity": 0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Ceramic Salt Cellar",
+      "purchasedDaysAgo": 30,
+      "packageNote": "Staple • Iodized Fine Sea Salt"
+    },
+    {
+      "ingredientId": "ing_black_pepper",
+      "tier": "TIER_2_STAPLE",
+      "currentQuantity": 0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Airtight Spice Rack",
+      "purchasedDaysAgo": 22,
+      "packageNote": "Staple • Cracked Paminta & Ginger"
+    },
+    {
+      "ingredientId": "ing_garlic",
+      "tier": "TIER_2_STAPLE",
+      "currentQuantity": 0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Ventilated Garlic Pot",
+      "purchasedDaysAgo": 6,
+      "packageNote": "Staple • Whole Dry Bawang Bulbs"
+    },
+    {
+      "ingredientId": "ing_cinnamon",
+      "tier": "TIER_2_STAPLE",
+      "currentQuantity": 0,
+      "stapleStatus": "PLENTY",
+      "isOutOfStock": false,
+      "updatedAtIso": "2026-10-25T07:00:00.000Z",
+      "storageLocation": "PANTRY",
+      "storageSubLocation": "Airtight Spice Rack",
+      "purchasedDaysAgo": 20,
+      "packageNote": "Staple • Ground Ceylon Cinnamon"
+    }
+  ]
+}
