@@ -15,8 +15,8 @@ android {
     // Targets modern Android 12+ phones and tablets across all manufacturers (API 31+).
     minSdk = 31
     targetSdk = 34
-    versionCode = 1
-    versionName = "1.0.0"
+    versionCode = 2
+    versionName = "2.0.0-alpha1"
   }
 
   buildTypes {

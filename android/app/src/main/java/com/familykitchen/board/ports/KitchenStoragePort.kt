@@ -9,8 +9,10 @@ import com.familykitchen.board.domain.ExpiryStatus
 import com.familykitchen.board.domain.FirstRunOnboardingDraft
 import com.familykitchen.board.domain.GrocerySortMode
 import com.familykitchen.board.domain.HouseholdCurrency
+import com.familykitchen.board.domain.HouseholdElephantMemory
 import com.familykitchen.board.domain.HouseholdProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
+import com.familykitchen.board.domain.KitchenDomainToolState
 import com.familykitchen.board.domain.MealSlotStatus
 import com.familykitchen.board.domain.PantryLedgerEntry
 import com.familykitchen.board.domain.Recipe
@@ -54,29 +56,31 @@ import kotlinx.serialization.Serializable
  * @property hasCompletedOnboarding Whether the household has completed or skipped first-run setup.
  * @property groceryQuantityOverrides Custom trip buy-quantity overrides in canonical `BaseUnit` keyed by `ingredientId`.
  * @property dismissedGroceryItemIds Catalog `ingredientId`s skipped by the shopper for the current shopping trip.
+ * @property elephantMemory Bounded long-term semantic facts and episodic digests for SavorAI v2.0.
  */
 @Serializable
 data class KitchenSnapshot(
-  val ingredients: List<IngredientCatalogItem>,
-  val recipes: List<Recipe>,
-  val pantryEntries: List<PantryLedgerEntry>,
-  val weeklyBoard: WeeklyBoard,
-  val householdProfile: HouseholdProfile = HouseholdProfile(),
-  val aiAddedGroceryIds: Set<String> = emptySet(),
+  override val ingredients: List<IngredientCatalogItem>,
+  override val recipes: List<Recipe>,
+  override val pantryEntries: List<PantryLedgerEntry>,
+  override val weeklyBoard: WeeklyBoard,
+  override val householdProfile: HouseholdProfile = HouseholdProfile(),
+  override val aiAddedGroceryIds: Set<String> = emptySet(),
   val aiTurnHistory: List<AiChatTurn> = emptyList(),
   val completedPrepTaskIds: Set<String> = emptySet(),
   val updatedAtIso: String = DEFAULT_TIMESTAMP_ISO,
-  val checkedGroceryItemIds: Set<String> = emptySet(),
+  override val checkedGroceryItemIds: Set<String> = emptySet(),
   val customGroceryItems: List<CustomGroceryItem> = emptyList(),
   val savedRecipeIds: Set<String> = emptySet(),
   val recipeNotesByRecipeId: Map<String, List<String>> = emptyMap(),
   val checkedReaderIngredientsByRecipeId: Map<String, Set<String>> = emptyMap(),
-  val grocerySortMode: GrocerySortMode = GrocerySortMode.AISLE_SORTED,
-  val rescuedExpiringMealsCount: Int = 12,
+  override val grocerySortMode: GrocerySortMode = GrocerySortMode.AISLE_SORTED,
+  override val rescuedExpiringMealsCount: Int = 12,
   val hasCompletedOnboarding: Boolean = true,
-  val groceryQuantityOverrides: Map<String, Double> = emptyMap(),
-  val dismissedGroceryItemIds: Set<String> = emptySet(),
-) {
+  override val groceryQuantityOverrides: Map<String, Double> = emptyMap(),
+  override val dismissedGroceryItemIds: Set<String> = emptySet(),
+  override val elephantMemory: HouseholdElephantMemory = HouseholdElephantMemory(),
+) : KitchenDomainToolState {
   // Computed lookup maps avoid duplicating normalized collections inside persisted JSON files.
   /** Derived `O(1)` catalog lookup map keyed by `ingredientId`. */
   val catalogById: Map<String, IngredientCatalogItem>
