@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -34,6 +35,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
@@ -124,6 +126,7 @@ fun FridgeProduceSection(
   onAdjustQuantity: (ingredientId: String, deltaQuantity: Double) -> Unit,
   onToggleLocallyAvailable: (ingredientId: String, isLocallyAvailable: Boolean) -> Unit,
   onToggleManualQueue: (ingredientId: String) -> Unit,
+  onEditIngredientById: (String) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   // Skip orphaned ledger records cleanly if an item was removed from catalog.
@@ -138,6 +141,7 @@ fun FridgeProduceSection(
         onAdjustQuantity = { delta -> onAdjustQuantity(item.ingredientId, delta) },
         onToggleLocallyAvailable = { next -> onToggleLocallyAvailable(item.ingredientId, next) },
         onToggleManualQueue = { onToggleManualQueue(item.ingredientId) },
+        onEditIngredient = { onEditIngredientById(item.ingredientId) },
       )
     }
   }
@@ -155,6 +159,7 @@ fun FridgeProduceInteractiveRow(
   onAdjustQuantity: (Double) -> Unit,
   onToggleLocallyAvailable: (Boolean) -> Unit,
   onToggleManualQueue: () -> Unit,
+  onEditIngredient: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   var expanded by rememberSaveable(catalogItem.ingredientId) { mutableStateOf(false) }
@@ -280,6 +285,19 @@ fun FridgeProduceInteractiveRow(
             )
             Switch(checked = catalogItem.isLocallyAvailable, onCheckedChange = onToggleLocallyAvailable)
           }
+          // 48.dp Rename / Edit pill opening EditCatalogIngredientSheet right from Fridge cards.
+          if (onEditIngredient != null) {
+            OutlinedButton(
+              onClick = onEditIngredient,
+              shape = CircleShape,
+              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+              modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
+            ) {
+              Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Rename / Edit", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
+            }
+          }
         }
       }
     }
@@ -296,13 +314,19 @@ fun DryGoodsAndFreezerGridSection(
   catalogById: Map<String, IngredientCatalogItem>,
   onSelectStapleStatus: (ingredientId: String, newStatus: StapleStatus) -> Unit,
   onAdjustQuantity: (ingredientId: String, deltaQuantity: Double) -> Unit,
+  onEditIngredientById: (String) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val validPairs = entries.mapNotNull { entry -> catalogById[entry.ingredientId]?.let { entry to it } }
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
     PantryZoneSectionHeader(Icons.Filled.Kitchen, sectionTitle, validPairs.size)
     validPairs.chunked(2).forEach { pair ->
-      DryGoodsGridPairRow(pair = pair, onSelectStapleStatus = onSelectStapleStatus, onAdjustQuantity = onAdjustQuantity)
+      DryGoodsGridPairRow(
+        pair = pair,
+        onSelectStapleStatus = onSelectStapleStatus,
+        onAdjustQuantity = onAdjustQuantity,
+        onEditIngredientById = onEditIngredientById,
+      )
     }
   }
 }
@@ -316,6 +340,7 @@ fun DryGoodsGridPairRow(
   pair: List<Pair<PantryLedgerEntry, IngredientCatalogItem>>,
   onSelectStapleStatus: (ingredientId: String, newStatus: StapleStatus) -> Unit,
   onAdjustQuantity: (ingredientId: String, deltaQuantity: Double) -> Unit,
+  onEditIngredientById: (String) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -331,6 +356,7 @@ fun DryGoodsGridPairRow(
         extendedColors = extendedColors,
         onSelectStapleStatus = { nextStatus -> onSelectStapleStatus(item.ingredientId, nextStatus) },
         onAdjustTier1Quantity = { delta -> onAdjustQuantity(item.ingredientId, delta) },
+        onEditIngredient = { onEditIngredientById(item.ingredientId) },
         modifier = Modifier.weight(1f).fillMaxHeight(),
       )
     }
@@ -345,6 +371,7 @@ private fun DryGoodsGridTile(
   extendedColors: ExtendedKitchenColors,
   onSelectStapleStatus: (StapleStatus) -> Unit,
   onAdjustTier1Quantity: (Double) -> Unit,
+  onEditIngredient: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   var expanded by rememberSaveable(item.ingredientId) { mutableStateOf(false) }
@@ -397,22 +424,35 @@ private fun DryGoodsGridTile(
       verticalArrangement = Arrangement.SpaceBetween,
     ) {
       Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        // Row 1: Subtle 8.dp status dot + single non-wrapping status capsule (<= 3 metadata items).
+        // Row 1: Subtle 8.dp status dot + status capsule on left, compact Edit tap target on right.
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(statusColor))
-          Surface(shape = CircleShape, color = tagBg) {
-            Text(
-              text = tagText,
-              style = MaterialTheme.typography.labelSmall,
-              fontWeight = FontWeight.Bold,
-              color = tagFg,
-              maxLines = 1,
-              softWrap = false,
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
+            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(statusColor))
+            Surface(shape = CircleShape, color = tagBg) {
+              Text(
+                text = tagText,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = tagFg,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+              )
+            }
+          }
+          IconButton(onClick = onEditIngredient, modifier = Modifier.size(32.dp)) {
+            Icon(
+              imageVector = Icons.Filled.Edit,
+              contentDescription = "Edit ${item.displayName}",
+              tint = extendedColors.herbalSage,
+              modifier = Modifier.size(16.dp),
             )
           }
         }
@@ -514,6 +554,7 @@ fun PantryLedgerItemCard(
   onSelectStapleStatus: (StapleStatus) -> Unit,
   onToggleLocallyAvailable: (Boolean) -> Unit,
   onToggleManualQueue: () -> Unit,
+  onEditIngredient: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -537,6 +578,11 @@ fun PantryLedgerItemCard(
         Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
           Text(catalogItem.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
           Text(catalogItem.category.displayLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (onEditIngredient != null) {
+          IconButton(onClick = onEditIngredient, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Filled.Edit, contentDescription = "Edit ${catalogItem.displayName}", tint = extendedColors.herbalSage, modifier = Modifier.size(19.dp))
+          }
         }
         OutlinedButton(
           onClick = onToggleManualQueue,

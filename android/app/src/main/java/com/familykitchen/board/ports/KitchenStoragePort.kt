@@ -52,6 +52,8 @@ import kotlinx.serialization.Serializable
  * @property grocerySortMode Active Smart Grocery List ordering strategy.
  * @property rescuedExpiringMealsCount Cumulative meals cooked that rescued expiring stock (`96%`+).
  * @property hasCompletedOnboarding Whether the household has completed or skipped first-run setup.
+ * @property groceryQuantityOverrides Custom trip buy-quantity overrides in canonical `BaseUnit` keyed by `ingredientId`.
+ * @property dismissedGroceryItemIds Catalog `ingredientId`s skipped by the shopper for the current shopping trip.
  */
 @Serializable
 data class KitchenSnapshot(
@@ -72,6 +74,8 @@ data class KitchenSnapshot(
   val grocerySortMode: GrocerySortMode = GrocerySortMode.AISLE_SORTED,
   val rescuedExpiringMealsCount: Int = 12,
   val hasCompletedOnboarding: Boolean = true,
+  val groceryQuantityOverrides: Map<String, Double> = emptyMap(),
+  val dismissedGroceryItemIds: Set<String> = emptySet(),
 ) {
   // Computed lookup maps avoid duplicating normalized collections inside persisted JSON files.
   /** Derived `O(1)` catalog lookup map keyed by `ingredientId`. */
@@ -241,13 +245,15 @@ interface KitchenStoragePort {
     deltas: List<RestockDelta>,
     nowIso: String = DEFAULT_TIMESTAMP_ISO,
   ): KitchenSnapshot {
-    // Merge all checked restock deltas in one pure pass and clear fulfilled manual/checked IDs.
+    // Merge all checked restock deltas in one pure pass and clear fulfilled manual/checked/override IDs.
     val restockedPantry = batchRestockPantry(current.pantryEntries, current.ingredients, deltas, nowIso)
     val restockedIds = deltas.map { it.ingredientId }.toSet()
     val nextSnapshot = current.copy(
       pantryEntries = restockedPantry,
       aiAddedGroceryIds = current.aiAddedGroceryIds - restockedIds,
       checkedGroceryItemIds = current.checkedGroceryItemIds - restockedIds,
+      groceryQuantityOverrides = current.groceryQuantityOverrides - restockedIds,
+      dismissedGroceryItemIds = current.dismissedGroceryItemIds - restockedIds,
       updatedAtIso = nowIso,
     )
     // Persist the entire grocery restock in one atomic write regardless of checked item count.
@@ -556,6 +562,8 @@ interface KitchenStoragePort {
       completedPrepTaskIds = emptySet(),
       checkedGroceryItemIds = emptySet(),
       customGroceryItems = emptyList(),
+      groceryQuantityOverrides = emptyMap(),
+      dismissedGroceryItemIds = emptySet(),
       hasCompletedOnboarding = true,
       updatedAtIso = nowIso,
     )

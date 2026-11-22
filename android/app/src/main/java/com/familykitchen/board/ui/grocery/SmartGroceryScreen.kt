@@ -25,10 +25,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -52,6 +54,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.familykitchen.board.domain.BaseUnit
 import com.familykitchen.board.domain.CustomGroceryItem
+import com.familykitchen.board.domain.GroceryAndCatalogEditAction
 import com.familykitchen.board.domain.GroceryListItem
 import com.familykitchen.board.domain.GrocerySortMode
 import com.familykitchen.board.domain.HouseholdProfile
@@ -115,6 +118,9 @@ private val SUPERMARKET_AISLES: List<AisleSpec> = listOf(
  * @param isExportingPdf `true` while a scoped multi-page Grocery PDF export is writing on IO.
  * @param onCopyListToClipboard Copies the plain-text shopping list to the system clipboard.
  * @param onSaveListAsPdf Launches scoped `CreateDocument("application/pdf")` for the shopping list.
+ * @param catalogById Household catalog lookup map supplying pack size and price inside edit sheets.
+ * @param dismissedItemCount Count of items skipped on this shopping trip (`> 0` renders restore bar).
+ * @param onEditGroceryOrCatalog Dispatches [GroceryAndCatalogEditAction] mutations in `O(1)` writes.
  * @param modifier Optional Compose [Modifier].
  */
 @Composable
@@ -145,6 +151,9 @@ fun SmartGroceryScreen(
   isExportingPdf: Boolean = false,
   onCopyListToClipboard: () -> Unit = {},
   onSaveListAsPdf: () -> Unit = {},
+  catalogById: Map<String, IngredientCatalogItem> = emptyMap(),
+  dismissedItemCount: Int = 0,
+  onEditGroceryOrCatalog: (GroceryAndCatalogEditAction) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -153,6 +162,9 @@ fun SmartGroceryScreen(
   var quickCustomInput by rememberSaveable { mutableStateOf("") }
   var checkedAccordionOpen by rememberSaveable { mutableStateOf(true) }
   var inStoreFocusMode by rememberSaveable { mutableStateOf(false) }
+  // Track open item-edit modal bottom sheets as Bundle-safe String IDs across recreation.
+  var editingCatalogItemId by rememberSaveable { mutableStateOf<String?>(null) }
+  var editingCustomItemId by rememberSaveable { mutableStateOf<String?>(null) }
 
   // Partition catalog and custom grocery rows into active unchecked vs completed checked buckets.
   val effectiveCheckedIds = remember(groceryDiff.groceryItems, checkedGroceryItemIds) {
@@ -254,6 +266,16 @@ fun SmartGroceryScreen(
           )
         }
 
+        // Surface skipped-items restore banner whenever >= 1 item was skipped for this trip.
+        if (dismissedItemCount > 0) {
+          item(key = "grocery_skipped_notice") {
+            SkippedGroceryNoticeBanner(
+              skippedCount = dismissedItemCount,
+              onRestoreClick = { onEditGroceryOrCatalog(GroceryAndCatalogEditAction.RestoreDismissedGroceryItems) },
+            )
+          }
+        }
+
         // Expandable quick custom note + local-market preset drawer.
         if (showAddDrawer) {
           item(key = "grocery_quick_custom_drawer") {
@@ -346,6 +368,10 @@ fun SmartGroceryScreen(
                       onRestockCheckedItems(listOf(RestockDelta(item.ingredientId, item.restockQuantity, reset)))
                     },
                     onRemoveManualQueue = { onRemoveManualQueue(item.ingredientId) },
+                    onEditItem = { editingCatalogItemId = item.ingredientId },
+                    onSkipForTrip = {
+                      onEditGroceryOrCatalog(GroceryAndCatalogEditAction.DismissGroceryItemForTrip(item.ingredientId))
+                    },
                     currencySymbol = currencySymbol,
                   )
                 }
@@ -356,6 +382,7 @@ fun SmartGroceryScreen(
                   CustomGroceryItemRow(
                     item = custom,
                     onToggleChecked = { onToggleItemChecked(custom.customId) },
+                    onEditCustomItem = { editingCustomItemId = custom.customId },
                   )
                 }
               }
@@ -385,6 +412,10 @@ fun SmartGroceryScreen(
                     onRestockCheckedItems(listOf(RestockDelta(item.ingredientId, item.restockQuantity, reset)))
                   },
                   onRemoveManualQueue = { onRemoveManualQueue(item.ingredientId) },
+                  onEditItem = { editingCatalogItemId = item.ingredientId },
+                  onSkipForTrip = {
+                    onEditGroceryOrCatalog(GroceryAndCatalogEditAction.DismissGroceryItemForTrip(item.ingredientId))
+                  },
                   currencySymbol = currencySymbol,
                 )
               }
@@ -395,6 +426,7 @@ fun SmartGroceryScreen(
                 CustomGroceryItemRow(
                   item = custom,
                   onToggleChecked = { onToggleItemChecked(custom.customId) },
+                  onEditCustomItem = { editingCustomItemId = custom.customId },
                 )
               }
             }
@@ -433,6 +465,36 @@ fun SmartGroceryScreen(
           modifier = Modifier
             .align(Alignment.BottomCenter)
             .padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+      }
+
+      // Modal bottom sheet for editing any catalog shopping item's quantity, name, or store pack.
+      val activeEditCatalogItem = editingCatalogItemId?.let { targetId ->
+        groceryDiff.groceryItems.firstOrNull { it.ingredientId == targetId }
+      }
+      if (activeEditCatalogItem != null) {
+        EditGroceryCatalogItemSheet(
+          item = activeEditCatalogItem,
+          catalogItem = catalogById[activeEditCatalogItem.ingredientId],
+          currencySymbol = currencySymbol,
+          onDispatchEditAction = onEditGroceryOrCatalog,
+          onQuickRestockOne = {
+            val reset = if (activeEditCatalogItem.tier == IngredientTier.TIER_2_STAPLE) StapleStatus.PLENTY else null
+            onRestockCheckedItems(listOf(RestockDelta(activeEditCatalogItem.ingredientId, activeEditCatalogItem.restockQuantity, reset)))
+          },
+          onDismiss = { editingCatalogItemId = null },
+        )
+      }
+
+      // Modal bottom sheet for editing or deleting a user-added custom shopping note.
+      val activeEditCustomItem = editingCustomItemId?.let { targetId ->
+        customGroceryItems.firstOrNull { it.customId == targetId }
+      }
+      if (activeEditCustomItem != null) {
+        EditCustomGroceryItemSheet(
+          item = activeEditCustomItem,
+          onDispatchEditAction = onEditGroceryOrCatalog,
+          onDismiss = { editingCustomItemId = null },
         )
       }
     }
@@ -483,9 +545,13 @@ private fun AisleSectionHeader(title: String, dotColor: Color, itemCount: Int) {
   }
 }
 
-// Checkable 24.dp ceramic card with 48.dp touch box and 1.5.dp unchecked outline for custom items.
+// Checkable 24.dp ceramic card with 48.dp touch box and 1-tap 48.dp Edit button for custom items.
 @Composable
-private fun CustomGroceryItemRow(item: CustomGroceryItem, onToggleChecked: () -> Unit) {
+private fun CustomGroceryItemRow(
+  item: CustomGroceryItem,
+  onToggleChecked: () -> Unit,
+  onEditCustomItem: (() -> Unit)? = null,
+) {
   val extendedColors = KitchenTheme.extendedColors
   Card(
     modifier = Modifier.fillMaxWidth(),
@@ -512,7 +578,7 @@ private fun CustomGroceryItemRow(item: CustomGroceryItem, onToggleChecked: () ->
             .border(1.5.dp, MaterialTheme.colorScheme.outline, CircleShape),
         )
       }
-      Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+      Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
         Text(
           text = item.displayName,
           style = MaterialTheme.typography.titleSmall,
@@ -527,6 +593,16 @@ private fun CustomGroceryItemRow(item: CustomGroceryItem, onToggleChecked: () ->
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
         )
+      }
+      if (onEditCustomItem != null) {
+        IconButton(onClick = onEditCustomItem, modifier = Modifier.size(48.dp)) {
+          Icon(
+            imageVector = Icons.Filled.Edit,
+            contentDescription = "Edit ${item.displayName}",
+            tint = extendedColors.herbalSage,
+            modifier = Modifier.size(19.dp),
+          )
+        }
       }
     }
   }

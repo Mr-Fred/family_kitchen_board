@@ -1,5 +1,6 @@
 package com.familykitchen.board.domain
 
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -43,6 +44,8 @@ fun sortSlotsChronologically(slots: List<MealSlot>): List<MealSlot> =
  * @param aiAddedGroceryIds Manually queued or AI-suggested catalog IDs forced onto the list.
  * @param checkedGroceryItemIds Optional set of checked grocery item IDs from `KitchenSnapshot`.
  * @param grocerySortMode Optional ordering mode (`AISLE_SORTED`, `BY_RECIPE`, or `URGENCY_FIRST`).
+ * @param groceryQuantityOverrides Optional custom buy-quantity overrides in canonical [BaseUnit] keyed by `ingredientId`.
+ * @param dismissedGroceryItemIds Optional set of `ingredientId`s skipped for the current shopping trip.
  * @return Complete [WeeklyGroceryDiff] containing per-slot shortages, grouped items, and deltas.
  */
 fun computeWeeklyGroceryDiff(
@@ -54,6 +57,8 @@ fun computeWeeklyGroceryDiff(
   aiAddedGroceryIds: Set<String> = emptySet(),
   checkedGroceryItemIds: Set<String> = emptySet(),
   grocerySortMode: GrocerySortMode = GrocerySortMode.AISLE_SORTED,
+  groceryQuantityOverrides: Map<String, Double> = emptyMap(),
+  dismissedGroceryItemIds: Set<String> = emptySet(),
 ): WeeklyGroceryDiff {
   val recipeById = recipes.associateBy { it.recipeId }
   val catalogById = indexCatalogById(catalog)
@@ -158,14 +163,26 @@ fun computeWeeklyGroceryDiff(
     val currentStockQty = initialStock[ingredientId] ?: 0.0
     val netDeficit = max(0.0, totalReservedQty - currentStockQty)
     if (netDeficit <= 0.0) continue
+    // Suppress items explicitly skipped by the shopper for this trip without altering reservations.
+    if (ingredientId in dismissedGroceryItemIds) continue
 
     val catalogItem = catalogById[ingredientId]
     val category = catalogItem?.category ?: IngredientCategory.PRODUCE
     val baseUnit = catalogItem?.baseUnit ?: BaseUnit.COUNT
     val pkgQty = safePackageQuantity(catalogItem)
+    // Ceiling-round uncovered weekly deficit to whole store packages before checking overrides.
     val packagesToBuy = ceil(netDeficit / pkgQty).toInt().coerceAtLeast(1)
-    val restockQuantity = packagesToBuy.toDouble() * pkgQty
     val unitPkgPrice = safePackagePriceUsd(catalogItem, category, IngredientTier.TIER_1_QUANTITATIVE)
+    // Apply any active shopper buy-quantity override (e.g. 4 kg -> 2 kg) and prorate package cost.
+    val buyTerms = resolveEffectiveGroceryBuyTerms(
+      basePackagesToBuy = packagesToBuy,
+      pkgQty = pkgQty,
+      unitPkgPrice = unitPkgPrice,
+      baseUnit = baseUnit,
+      category = category,
+      tier = IngredientTier.TIER_1_QUANTITATIVE,
+      rawOverrideQty = groceryQuantityOverrides[ingredientId],
+    )
 
     rawGroceryItems.add(
       GroceryListItem(
@@ -178,18 +195,23 @@ fun computeWeeklyGroceryDiff(
         currentStockQuantity = currentStockQty,
         netDeficit = netDeficit,
         defaultPackageQuantity = pkgQty,
-        packagesToBuy = packagesToBuy,
-        restockQuantity = restockQuantity,
+        packagesToBuy = buyTerms.effectivePackages,
+        restockQuantity = buyTerms.effectiveRestockQty,
         isManuallyQueued = ingredientId in aiAddedGroceryIds,
         mealUsageLabels = usageLabelsByIngredientId[ingredientId]?.toList().orEmpty(),
-        estimatedCostUsd = roundGroceryUsd(packagesToBuy * unitPkgPrice),
-        packageDescriptor = formatPackageDescriptor(packagesToBuy, restockQuantity, baseUnit, category, IngredientTier.TIER_1_QUANTITATIVE),
+        estimatedCostUsd = buyTerms.effectiveCostUsd,
+        packageDescriptor = buyTerms.descriptor,
         isChecked = ingredientId in checkedGroceryItemIds,
+        isQuantityOverridden = buyTerms.isOverridden,
+        plannedRestockQuantity = buyTerms.plannedRestockQty,
       ),
     )
     includedGroceryIds.add(ingredientId)
-    boughtPackagesByIngredientId[ingredientId] = packagesToBuy
-    restockDeltas.add(RestockDelta(ingredientId = ingredientId, addedBaseQuantity = restockQuantity))
+    boughtPackagesByIngredientId[ingredientId] = buyTerms.effectivePackages
+    // Emit effectiveRestockQty so 1-tap Restock adds the exact edited quantity into Pantry.
+    restockDeltas.add(
+      RestockDelta(ingredientId = ingredientId, addedBaseQuantity = buyTerms.effectiveRestockQty),
+    )
   }
 
   // Step 2: Queue 1 default package for any Tier-2 staple marked LOW or OUT (EC-11).
@@ -200,7 +222,8 @@ fun computeWeeklyGroceryDiff(
   }
 
   for (ingredientId in candidateStapleIds) {
-    if (ingredientId in includedGroceryIds) continue
+    // Skip Tier-2 staples already covered above or dismissed for the current shopping trip.
+    if (ingredientId in includedGroceryIds || ingredientId in dismissedGroceryItemIds) continue
     val pantryEntry = pantryById[ingredientId] ?: continue
     if (pantryEntry.tier != IngredientTier.TIER_2_STAPLE) continue
 
@@ -215,6 +238,15 @@ fun computeWeeklyGroceryDiff(
     val baseUnit = catalogItem?.baseUnit ?: BaseUnit.MILLILITER
     val pkgQty = safePackageQuantity(catalogItem)
     val unitPkgPrice = safePackagePriceUsd(catalogItem, category, IngredientTier.TIER_2_STAPLE)
+    val buyTerms = resolveEffectiveGroceryBuyTerms(
+      basePackagesToBuy = 1,
+      pkgQty = pkgQty,
+      unitPkgPrice = unitPkgPrice,
+      baseUnit = baseUnit,
+      category = category,
+      tier = IngredientTier.TIER_2_STAPLE,
+      rawOverrideQty = groceryQuantityOverrides[ingredientId],
+    )
     val usageLabels = usageLabelsByIngredientId[ingredientId]?.toList()
       ?.takeIf { it.isNotEmpty() } ?: listOf("for Pantry Staple Restock")
 
@@ -229,25 +261,35 @@ fun computeWeeklyGroceryDiff(
         currentStockQuantity = pantryEntry.currentQuantity,
         netDeficit = pkgQty,
         defaultPackageQuantity = pkgQty,
-        packagesToBuy = 1,
-        restockQuantity = pkgQty,
+        packagesToBuy = buyTerms.effectivePackages,
+        restockQuantity = buyTerms.effectiveRestockQty,
         stapleStatus = pantryEntry.stapleStatus,
         isManuallyQueued = ingredientId in aiAddedGroceryIds,
         mealUsageLabels = usageLabels,
-        estimatedCostUsd = roundGroceryUsd(unitPkgPrice),
-        packageDescriptor = formatPackageDescriptor(1, pkgQty, baseUnit, category, IngredientTier.TIER_2_STAPLE),
+        estimatedCostUsd = buyTerms.effectiveCostUsd,
+        packageDescriptor = buyTerms.descriptor,
         isChecked = ingredientId in checkedGroceryItemIds,
+        isQuantityOverridden = buyTerms.isOverridden,
+        plannedRestockQuantity = buyTerms.plannedRestockQty,
       ),
     )
     includedGroceryIds.add(ingredientId)
-    boughtPackagesByIngredientId[ingredientId] = 1
-    restockDeltas.add(RestockDelta(ingredientId, pkgQty, StapleStatus.PLENTY))
+    boughtPackagesByIngredientId[ingredientId] = buyTerms.effectivePackages
+    restockDeltas.add(
+      RestockDelta(
+        ingredientId = ingredientId,
+        addedBaseQuantity = buyTerms.effectiveRestockQty,
+        newStapleStatus = StapleStatus.PLENTY,
+      ),
+    )
   }
 
   // Step 3: Append manually queued or AI-suggested items (`aiAddedGroceryIds`) not already covered.
   // Supports 1-tap "+ Need to Buy" in Pantry and "+ Add Suggested Ingredients" in AI Chef.
   for (manualId in aiAddedGroceryIds) {
-    if (manualId.isBlank() || manualId in includedGroceryIds) continue
+    if (manualId.isBlank() || manualId in includedGroceryIds || manualId in dismissedGroceryItemIds) {
+      continue
+    }
     val catalogItem = catalogById[manualId]
     val pantryEntry = pantryById[manualId]
     val tier = pantryEntry?.tier ?: catalogItem?.tier ?: IngredientTier.TIER_1_QUANTITATIVE
@@ -255,6 +297,15 @@ fun computeWeeklyGroceryDiff(
     val baseUnit = catalogItem?.baseUnit ?: BaseUnit.GRAM
     val pkgQty = safePackageQuantity(catalogItem)
     val unitPkgPrice = safePackagePriceUsd(catalogItem, category, tier)
+    val buyTerms = resolveEffectiveGroceryBuyTerms(
+      basePackagesToBuy = 1,
+      pkgQty = pkgQty,
+      unitPkgPrice = unitPkgPrice,
+      baseUnit = baseUnit,
+      category = category,
+      tier = tier,
+      rawOverrideQty = groceryQuantityOverrides[manualId],
+    )
     val currentStock = when {
       pantryEntry == null || pantryEntry.isOutOfStock -> 0.0
       else -> max(0.0, pantryEntry.currentQuantity)
@@ -273,20 +324,28 @@ fun computeWeeklyGroceryDiff(
         currentStockQuantity = currentStock,
         netDeficit = pkgQty,
         defaultPackageQuantity = pkgQty,
-        packagesToBuy = 1,
-        restockQuantity = pkgQty,
+        packagesToBuy = buyTerms.effectivePackages,
+        restockQuantity = buyTerms.effectiveRestockQty,
         stapleStatus = pantryEntry?.stapleStatus,
         isManuallyQueued = true,
         mealUsageLabels = manualLabels,
-        estimatedCostUsd = roundGroceryUsd(unitPkgPrice),
-        packageDescriptor = formatPackageDescriptor(1, pkgQty, baseUnit, category, tier),
+        estimatedCostUsd = buyTerms.effectiveCostUsd,
+        packageDescriptor = buyTerms.descriptor,
         isChecked = manualId in checkedGroceryItemIds,
+        isQuantityOverridden = buyTerms.isOverridden,
+        plannedRestockQuantity = buyTerms.plannedRestockQty,
       ),
     )
     includedGroceryIds.add(manualId)
-    boughtPackagesByIngredientId[manualId] = 1
+    boughtPackagesByIngredientId[manualId] = buyTerms.effectivePackages
     val resetStatus = if (tier == IngredientTier.TIER_2_STAPLE) StapleStatus.PLENTY else null
-    restockDeltas.add(RestockDelta(manualId, pkgQty, resetStatus))
+    restockDeltas.add(
+      RestockDelta(
+        ingredientId = manualId,
+        addedBaseQuantity = buyTerms.effectiveRestockQty,
+        newStapleStatus = resetStatus,
+      ),
+    )
   }
 
   // Step 4: Quantify automatic pantry deduplication count and USD savings across planned meals.
@@ -370,6 +429,60 @@ private fun formatSlotAttributionLabel(
   return "for $dayName $slotName • $recipeTitle"
 }
 
+private data class EffectiveGroceryBuyTerms(
+  val effectivePackages: Int,
+  val effectiveRestockQty: Double,
+  val plannedRestockQty: Double,
+  val effectiveCostUsd: Double,
+  val descriptor: String,
+  val isOverridden: Boolean,
+)
+
+// Resolves custom buy-quantity overrides, prorated package cost, and whole-pack vs custom labels.
+private fun resolveEffectiveGroceryBuyTerms(
+  basePackagesToBuy: Int,
+  pkgQty: Double,
+  unitPkgPrice: Double,
+  baseUnit: BaseUnit,
+  category: IngredientCategory,
+  tier: IngredientTier,
+  rawOverrideQty: Double?,
+): EffectiveGroceryBuyTerms {
+  val plannedRestockQty = basePackagesToBuy.toDouble() * pkgQty
+  val overrideQty = rawOverrideQty?.takeIf { it.isFinite() && it > 0.0 }
+  if (overrideQty == null) {
+    // Preserve baseline ceiling-rounded packages, planned quantity, and un-overridden cost.
+    return EffectiveGroceryBuyTerms(
+      effectivePackages = basePackagesToBuy,
+      effectiveRestockQty = plannedRestockQty,
+      plannedRestockQty = plannedRestockQty,
+      effectiveCostUsd = roundGroceryUsd(basePackagesToBuy * unitPkgPrice),
+      descriptor = formatPackageDescriptor(basePackagesToBuy, plannedRestockQty, baseUnit, category, tier),
+      isOverridden = false,
+    )
+  }
+
+  // Prorate price linearly by (overrideQty / pkgQty) so 2000g or 1500g reflects exact market cost.
+  val effectiveRestockQty = overrideQty
+  val effectivePackages = ceil(effectiveRestockQty / pkgQty).toInt().coerceAtLeast(1)
+  val effectiveCostUsd = roundGroceryUsd((effectiveRestockQty / pkgQty) * unitPkgPrice)
+  val isOverridden = abs(effectiveRestockQty - plannedRestockQty) >= 0.01
+  // Use standard pack noun when override lands on an exact pack multiple, otherwise Custom label.
+  val descriptor = when {
+    abs(effectiveRestockQty - effectivePackages.toDouble() * pkgQty) < 0.01 ->
+      formatPackageDescriptor(effectivePackages, effectiveRestockQty, baseUnit, category, tier)
+    else -> formatCustomQuantityDescriptor(effectiveRestockQty, baseUnit)
+  }
+  return EffectiveGroceryBuyTerms(
+    effectivePackages = effectivePackages,
+    effectiveRestockQty = effectiveRestockQty,
+    plannedRestockQty = plannedRestockQty,
+    effectiveCostUsd = effectiveCostUsd,
+    descriptor = descriptor,
+    isOverridden = isOverridden,
+  )
+}
+
 private fun formatPackageDescriptor(
   packagesToBuy: Int,
   restockQuantity: Double,
@@ -387,13 +500,27 @@ private fun formatPackageDescriptor(
     else -> "pack"
   }
   val pkgLabel = if (packagesToBuy == 1) singularNoun else "${singularNoun}s"
-  val qtyRounded = (restockQuantity * 100.0).roundToInt() / 100.0
-  val qtyText = if (qtyRounded == qtyRounded.toLong().toDouble()) {
+  val qtyText = formatQuantityNumber(restockQuantity)
+  return "$packagesToBuy $pkgLabel ($qtyText ${baseUnit.wireCode})"
+}
+
+// Formats non-integer-multiple buy overrides such as "Custom (1500 g)" for clear shopper scanning.
+private fun formatCustomQuantityDescriptor(
+  restockQuantity: Double,
+  baseUnit: BaseUnit,
+): String {
+  val qtyText = formatQuantityNumber(restockQuantity)
+  return "Custom ($qtyText ${baseUnit.wireCode})"
+}
+
+private fun formatQuantityNumber(quantity: Double): String {
+  // Round to 2 decimal places and drop ".0" on exact integers (e.g. 1500.0 -> "1500").
+  val qtyRounded = (quantity * 100.0).roundToInt() / 100.0
+  return if (qtyRounded == qtyRounded.toLong().toDouble()) {
     qtyRounded.toLong().toString()
   } else {
     qtyRounded.toString()
   }
-  return "$packagesToBuy $pkgLabel ($qtyText ${baseUnit.wireCode})"
 }
 
 private fun sortGroceryItems(
@@ -432,6 +559,8 @@ object GroceryDiffEngine {
     aiAddedGroceryIds: Set<String> = emptySet(),
     checkedGroceryItemIds: Set<String> = emptySet(),
     grocerySortMode: GrocerySortMode = GrocerySortMode.AISLE_SORTED,
+    groceryQuantityOverrides: Map<String, Double> = emptyMap(),
+    dismissedGroceryItemIds: Set<String> = emptySet(),
   ): WeeklyGroceryDiff =
     com.familykitchen.board.domain.computeWeeklyGroceryDiff(
       board = board,
@@ -442,5 +571,7 @@ object GroceryDiffEngine {
       aiAddedGroceryIds = aiAddedGroceryIds,
       checkedGroceryItemIds = checkedGroceryItemIds,
       grocerySortMode = grocerySortMode,
+      groceryQuantityOverrides = groceryQuantityOverrides,
+      dismissedGroceryItemIds = dismissedGroceryItemIds,
     )
 }

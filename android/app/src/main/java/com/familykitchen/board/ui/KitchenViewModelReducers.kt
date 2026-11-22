@@ -7,6 +7,7 @@ import com.familykitchen.board.domain.CookOwner
 import com.familykitchen.board.domain.CookedDeductionPayload
 import com.familykitchen.board.domain.CookedDeductionResult
 import com.familykitchen.board.domain.DEFAULT_TIMESTAMP_ISO
+import com.familykitchen.board.domain.GroceryAndCatalogEditAction
 import com.familykitchen.board.domain.GroceryDiffEngine
 import com.familykitchen.board.domain.HouseholdProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
@@ -22,11 +23,14 @@ import com.familykitchen.board.domain.PantryLedgerEngine
 import com.familykitchen.board.domain.PantryLedgerEntry
 import com.familykitchen.board.domain.Recipe
 import com.familykitchen.board.domain.RestockDelta
+import com.familykitchen.board.domain.SchemaValidator
 import com.familykitchen.board.domain.StapleStatus
 import com.familykitchen.board.domain.StorageLocation
 import com.familykitchen.board.domain.WeeklyBoard
+import com.familykitchen.board.domain.WeeklyGroceryDiff
 import com.familykitchen.board.domain.WorkoutTiming
 import com.familykitchen.board.domain.computeCalibratedMorningMinutes
+import com.familykitchen.board.domain.requireDomainValid
 import com.familykitchen.board.ports.KitchenSnapshot
 import com.familykitchen.board.ui.sheets.QaEdgeCaseScenario
 
@@ -509,3 +513,223 @@ private fun noSlotOutcome(snapshot: KitchenSnapshot, code: String): QaScenarioEx
     shouldPersist = false,
     statusMessage = "$code: Reset Household State to Seed first so planned slots are available.",
   )
+
+/**
+ * Pure reducer applying Smart Grocery List buy-quantity overrides, pack stepping, trip skipping,
+ * custom item edits/deletions, and global catalog ingredient renames in a single `O(1)` snapshot
+ * transformation.
+ *
+ * @param snapshot Current immutable household [KitchenSnapshot].
+ * @param currentDiff Currently derived [WeeklyGroceryDiff] providing active pack counts and sizes.
+ * @param action User edit action dispatched from `SmartGroceryScreen` or `SmartPantryScreen`.
+ * @param nowIso Deterministic ISO-8601 commit timestamp stamped when state mutates.
+ * @return Pair of `(updatedSnapshot, confirmationToast)` ready for `saveSnapshotBatch`.
+ */
+fun reduceGroceryAndCatalogEdit(
+  snapshot: KitchenSnapshot,
+  currentDiff: WeeklyGroceryDiff,
+  action: GroceryAndCatalogEditAction,
+  nowIso: String = DEFAULT_TIMESTAMP_ISO,
+): Pair<KitchenSnapshot, String> =
+  when (action) {
+    is GroceryAndCatalogEditAction.SaveGroceryCatalogItemEdit ->
+      reduceSaveGroceryCatalogItemEdit(snapshot, action, nowIso)
+    is GroceryAndCatalogEditAction.StepGroceryItemPacks ->
+      reduceStepGroceryItemPacks(snapshot, currentDiff, action, nowIso)
+    is GroceryAndCatalogEditAction.ResetGroceryItemOverride -> {
+      requireDomainValid(action.ingredientId.isNotBlank(), "ResetGroceryItemOverride") {
+        "ingredientId: must be non-blank"
+      }
+      val label = resolveEditedIngredientLabel(snapshot, currentDiff, action.ingredientId)
+      val candidate = snapshot.copy(
+        groceryQuantityOverrides = snapshot.groceryQuantityOverrides - action.ingredientId,
+        dismissedGroceryItemIds = snapshot.dismissedGroceryItemIds - action.ingredientId,
+      )
+      stampSnapshotIfChanged(snapshot, candidate, nowIso) to
+        "Reset $label to weekly meal plan amount."
+    }
+    is GroceryAndCatalogEditAction.DismissGroceryItemForTrip -> {
+      requireDomainValid(action.ingredientId.isNotBlank(), "DismissGroceryItemForTrip") {
+        "ingredientId: must be non-blank"
+      }
+      val label = resolveEditedIngredientLabel(snapshot, currentDiff, action.ingredientId)
+      // Remove manual queue, checked flag, and stale buy override when skipping for this trip.
+      val candidate = snapshot.copy(
+        dismissedGroceryItemIds = snapshot.dismissedGroceryItemIds + action.ingredientId,
+        aiAddedGroceryIds = snapshot.aiAddedGroceryIds - action.ingredientId,
+        checkedGroceryItemIds = snapshot.checkedGroceryItemIds - action.ingredientId,
+        groceryQuantityOverrides = snapshot.groceryQuantityOverrides - action.ingredientId,
+      )
+      stampSnapshotIfChanged(snapshot, candidate, nowIso) to
+        "Skipped $label for this shopping trip."
+    }
+    is GroceryAndCatalogEditAction.RestoreDismissedGroceryItems -> {
+      val candidate = snapshot.copy(dismissedGroceryItemIds = emptySet())
+      stampSnapshotIfChanged(snapshot, candidate, nowIso) to
+        "Restored skipped items to your Shopping List."
+    }
+    is GroceryAndCatalogEditAction.SaveCustomGroceryItemEdit -> {
+      requireDomainValid(action.item.customId.isNotBlank(), "SaveCustomGroceryItemEdit") {
+        "customId: must be non-blank"
+      }
+      val cleanName = action.item.displayName.trim()
+      requireDomainValid(cleanName.isNotEmpty(), "SaveCustomGroceryItemEdit") {
+        "displayName: must be non-blank"
+      }
+      val cleanQtyNote = action.item.quantityNote.trim().ifEmpty { "1 item" }
+      val updatedCustom = action.item.copy(displayName = cleanName, quantityNote = cleanQtyNote)
+      // Preserve row order when editing an existing custom item, or append if newly created.
+      val mergedCustomItems = when {
+        snapshot.customGroceryItems.any { it.customId == updatedCustom.customId } ->
+          snapshot.customGroceryItems.map { existing ->
+            if (existing.customId == updatedCustom.customId) updatedCustom else existing
+          }
+        else -> snapshot.customGroceryItems + updatedCustom
+      }
+      val candidate = snapshot.copy(customGroceryItems = mergedCustomItems)
+      stampSnapshotIfChanged(snapshot, candidate, nowIso) to "Updated '$cleanName'."
+    }
+    is GroceryAndCatalogEditAction.DeleteCustomGroceryItem -> {
+      requireDomainValid(action.customId.isNotBlank(), "DeleteCustomGroceryItem") {
+        "customId: must be non-blank"
+      }
+      val candidate = snapshot.copy(
+        customGroceryItems = snapshot.customGroceryItems.filterNot { it.customId == action.customId },
+        checkedGroceryItemIds = snapshot.checkedGroceryItemIds - action.customId,
+      )
+      stampSnapshotIfChanged(snapshot, candidate, nowIso) to "Removed item from Shopping List."
+    }
+    is GroceryAndCatalogEditAction.UpdateCatalogIngredientDetails ->
+      reduceUpdateCatalogIngredientDetails(snapshot, action, nowIso)
+  }
+
+// Validates and applies global catalog name/pack edits plus an optional trip buy-quantity override.
+private fun reduceSaveGroceryCatalogItemEdit(
+  snapshot: KitchenSnapshot,
+  action: GroceryAndCatalogEditAction.SaveGroceryCatalogItemEdit,
+  nowIso: String,
+): Pair<KitchenSnapshot, String> {
+  // Reject blank IDs, blank names, non-positive pack sizes/overrides, and negative prices up front.
+  requireDomainValid(action.ingredientId.isNotBlank(), "SaveGroceryCatalogItemEdit") { "ingredientId: must be non-blank" }
+  val cleanName = action.updatedDisplayName.trim()
+  requireDomainValid(cleanName.isNotEmpty(), "SaveGroceryCatalogItemEdit") { "displayName: must be non-blank" }
+  if (action.updatedDefaultPackageQuantity != null) {
+    val pkg = action.updatedDefaultPackageQuantity
+    requireDomainValid(pkg.isFinite() && pkg > 0.0, "SaveGroceryCatalogItemEdit") { "defaultPackageQuantity: must be finite and > 0" }
+  }
+  if (action.updatedPackagePriceUsd != null) {
+    val price = action.updatedPackagePriceUsd
+    requireDomainValid(price.isFinite() && price >= 0.0, "SaveGroceryCatalogItemEdit") { "estimatedPackagePriceUsd: must be finite and >= 0" }
+  }
+  if (action.overrideBuyQuantity != null) {
+    val buyQty = action.overrideBuyQuantity
+    requireDomainValid(buyQty.isFinite() && buyQty > 0.0, "SaveGroceryCatalogItemEdit") { "overrideBuyQuantity: must be finite and > 0" }
+  }
+
+  // Update catalog displayName and optional store package metadata so Pantry, Plan, and Shop stay in sync.
+  val updatedIngredients = snapshot.ingredients.map { item ->
+    when {
+      item.ingredientId != action.ingredientId -> item
+      else -> SchemaValidator.validateIngredientCatalogItem(
+        item.copy(
+          displayName = cleanName,
+          defaultPackageQuantity = action.updatedDefaultPackageQuantity ?: item.defaultPackageQuantity,
+          estimatedPackagePriceUsd = action.updatedPackagePriceUsd ?: item.estimatedPackagePriceUsd,
+        ),
+      )
+    }
+  }
+  // Store positive trip override or clear back to planned rounding when overrideBuyQuantity is null.
+  val nextOverrides = when {
+    action.overrideBuyQuantity != null && action.overrideBuyQuantity > 0.0 ->
+      snapshot.groceryQuantityOverrides + (action.ingredientId to action.overrideBuyQuantity)
+    else -> snapshot.groceryQuantityOverrides - action.ingredientId
+  }
+  val candidate = snapshot.copy(
+    ingredients = updatedIngredients,
+    groceryQuantityOverrides = nextOverrides,
+    dismissedGroceryItemIds = snapshot.dismissedGroceryItemIds - action.ingredientId,
+  )
+  return stampSnapshotIfChanged(snapshot, candidate, nowIso) to
+    "Updated '$cleanName' on your Shopping List."
+}
+
+// Steps whole-pack buy quantity (clamped to 1..99 packs) for 1-tap grocery card adjustments.
+private fun reduceStepGroceryItemPacks(
+  snapshot: KitchenSnapshot,
+  currentDiff: WeeklyGroceryDiff,
+  action: GroceryAndCatalogEditAction.StepGroceryItemPacks,
+  nowIso: String,
+): Pair<KitchenSnapshot, String> {
+  requireDomainValid(action.ingredientId.isNotBlank(), "StepGroceryItemPacks") { "ingredientId: must be non-blank" }
+  // Prefer active GroceryListItem pack count/size and fall back to catalog metadata if needed.
+  val item = currentDiff.groceryItems.firstOrNull { it.ingredientId == action.ingredientId }
+  val cat = snapshot.catalogById[action.ingredientId]
+  val label = item?.displayName ?: cat?.displayName ?: action.ingredientId
+  val pkgQty = (item?.defaultPackageQuantity ?: cat?.defaultPackageQuantity ?: 1.0)
+    .takeIf { it.isFinite() }
+    ?.coerceAtLeast(0.01) ?: 1.0
+  val currentPacks = item?.packagesToBuy ?: 1
+  val nextPacks = (currentPacks + action.deltaPacks).coerceIn(1, 99)
+  val candidate = snapshot.copy(
+    groceryQuantityOverrides = snapshot.groceryQuantityOverrides +
+      (action.ingredientId to (nextPacks.toDouble() * pkgQty)),
+    dismissedGroceryItemIds = snapshot.dismissedGroceryItemIds - action.ingredientId,
+  )
+  return stampSnapshotIfChanged(snapshot, candidate, nowIso) to
+    "Updated $label to $nextPacks pack(s)."
+}
+
+// Updates global catalog display name, optional aisle category, and store pack details from Pantry.
+private fun reduceUpdateCatalogIngredientDetails(
+  snapshot: KitchenSnapshot,
+  action: GroceryAndCatalogEditAction.UpdateCatalogIngredientDetails,
+  nowIso: String,
+): Pair<KitchenSnapshot, String> {
+  requireDomainValid(action.ingredientId.isNotBlank(), "UpdateCatalogIngredientDetails") { "ingredientId: must be non-blank" }
+  val cleanName = action.updatedDisplayName.trim()
+  requireDomainValid(cleanName.isNotEmpty(), "UpdateCatalogIngredientDetails") { "displayName: must be non-blank" }
+  // Ensure the target ingredientId exists in the household catalog before applying updates.
+  requireDomainValid(
+    snapshot.ingredients.any { it.ingredientId == action.ingredientId },
+    "UpdateCatalogIngredientDetails",
+  ) {
+    "ingredientId: unknown catalog reference '${action.ingredientId}'"
+  }
+  // Validate updated IngredientCatalogItem invariants via SchemaValidator before committing.
+  val updatedIngredients = snapshot.ingredients.map { item ->
+    when {
+      item.ingredientId != action.ingredientId -> item
+      else -> SchemaValidator.validateIngredientCatalogItem(
+        item.copy(
+          displayName = cleanName,
+          category = action.updatedCategory ?: item.category,
+          defaultPackageQuantity = action.updatedDefaultPackageQuantity ?: item.defaultPackageQuantity,
+          estimatedPackagePriceUsd = action.updatedPackagePriceUsd ?: item.estimatedPackagePriceUsd,
+        ),
+      )
+    }
+  }
+  val candidate = snapshot.copy(ingredients = updatedIngredients)
+  return stampSnapshotIfChanged(snapshot, candidate, nowIso) to "Updated ingredient '$cleanName'."
+}
+
+private fun resolveEditedIngredientLabel(
+  snapshot: KitchenSnapshot,
+  currentDiff: WeeklyGroceryDiff,
+  ingredientId: String,
+): String =
+  snapshot.catalogById[ingredientId]?.displayName
+    ?: currentDiff.groceryItems.firstOrNull { it.ingredientId == ingredientId }?.displayName
+    ?: ingredientId
+
+// Stamps updatedAtIso only when domain state actually changed so no-op taps avoid extra batch writes.
+private fun stampSnapshotIfChanged(
+  previous: KitchenSnapshot,
+  candidateWithoutTimestamp: KitchenSnapshot,
+  nowIso: String,
+): KitchenSnapshot =
+  when {
+    candidateWithoutTimestamp == previous -> previous
+    else -> candidateWithoutTimestamp.copy(updatedAtIso = nowIso)
+  }

@@ -378,6 +378,8 @@ fun deriveKitchenUiState(
     aiAddedGroceryIds = snapshot.aiAddedGroceryIds,
     checkedGroceryItemIds = snapshot.checkedGroceryItemIds,
     grocerySortMode = snapshot.grocerySortMode,
+    groceryQuantityOverrides = snapshot.groceryQuantityOverrides,
+    dismissedGroceryItemIds = snapshot.dismissedGroceryItemIds,
   )
 
   // Consolidate PLANNED slots into the 4-station Weekly Meal Prep Session plan.

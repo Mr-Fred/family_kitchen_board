@@ -918,6 +918,8 @@ data class CustomGroceryItem(
  * @property estimatedCostUsd Estimated cost in USD (`packagesToBuy * estimatedPackagePriceUsd`).
  * @property packageDescriptor Human-readable package string (`"2 cartons (24 count)"`).
  * @property isChecked Whether this item is checked off in `KitchenSnapshot.checkedGroceryItemIds`.
+ * @property isQuantityOverridden `true` when the shopper customized the buy amount away from plan.
+ * @property plannedRestockQuantity Un-overridden whole-package quantity required by the meal plan.
  */
 @Serializable
 data class GroceryListItem(
@@ -938,6 +940,8 @@ data class GroceryListItem(
   val estimatedCostUsd: Double = 0.0,
   val packageDescriptor: String = "",
   val isChecked: Boolean = false,
+  val isQuantityOverridden: Boolean = false,
+  val plannedRestockQuantity: Double = restockQuantity,
 ) {
   /** Currency-neutral alias for [estimatedCostUsd] (`PHP` `₱` default). */
   val estimatedCost: Double
@@ -948,6 +952,115 @@ data class GroceryListItem(
     currency: HouseholdCurrency = HouseholdCurrency.PHP,
     includeDecimals: Boolean = false,
   ): String = currency.formatAmount(estimatedCostUsd, includeDecimals)
+}
+
+/**
+ * Pure user-intent actions for editing Smart Grocery List buy quantities, custom shopping items,
+ * trip-level item skips, and global household catalog ingredient names and package metadata.
+ */
+@Serializable
+sealed interface GroceryAndCatalogEditAction {
+  // Persists global catalog rename/pack edits alongside an optional trip buy-quantity override.
+  /**
+   * Updates a catalog-backed Smart Grocery List item's name, optional store package metadata, and
+   * optional custom buy quantity override for the active shopping trip.
+   *
+   * @property ingredientId Target catalog `ingredientId` to update.
+   * @property updatedDisplayName New non-blank household ingredient display name.
+   * @property overrideBuyQuantity Optional custom buy quantity in canonical [BaseUnit] (`null` resets to plan).
+   * @property updatedDefaultPackageQuantity Optional updated store package size (`> 0.0`).
+   * @property updatedPackagePriceUsd Optional updated store package price (`>= 0.0`).
+   */
+  @Serializable
+  data class SaveGroceryCatalogItemEdit(
+    val ingredientId: String,
+    val updatedDisplayName: String,
+    val overrideBuyQuantity: Double? = null,
+    val updatedDefaultPackageQuantity: Double? = null,
+    val updatedPackagePriceUsd: Double? = null,
+  ) : GroceryAndCatalogEditAction
+
+  // Adjusts whole-package count (1..99) in 1 tap without leaving the Smart Grocery List.
+  /**
+   * Steps a Smart Grocery List item's whole-package buy count up or down (`1..99` packs).
+   *
+   * @property ingredientId Target catalog `ingredientId` on the Smart Grocery List.
+   * @property deltaPacks Signed pack delta (for example, `-1` or `+1`).
+   */
+  @Serializable
+  data class StepGroceryItemPacks(
+    val ingredientId: String,
+    val deltaPacks: Int,
+  ) : GroceryAndCatalogEditAction
+
+  // Clears any custom buy-quantity override or trip skip back to the weekly meal plan deficit.
+  /**
+   * Resets any custom buy-quantity override on [ingredientId] back to the weekly meal plan amount.
+   *
+   * @property ingredientId Target catalog `ingredientId` to restore to planned rounding.
+   */
+  @Serializable
+  data class ResetGroceryItemOverride(
+    val ingredientId: String,
+  ) : GroceryAndCatalogEditAction
+
+  // Suppresses an item for the current shopping trip without altering recipes or pantry balances.
+  /**
+   * Skips [ingredientId] on the current shopping trip without modifying planned weekly recipes.
+   *
+   * @property ingredientId Target catalog `ingredientId` to hide for this shopping trip.
+   */
+  @Serializable
+  data class DismissGroceryItemForTrip(
+    val ingredientId: String,
+  ) : GroceryAndCatalogEditAction
+
+  // Restores all trip-skipped catalog items back onto the active Smart Grocery List at once.
+  /** Restores all skipped grocery items back onto the Smart Grocery List. */
+  @Serializable
+  data object RestoreDismissedGroceryItems : GroceryAndCatalogEditAction
+
+  // Upserts edited name, quantity note, and aisle category on a free-form CustomGroceryItem.
+  /**
+   * Saves edits to a user-added or voice-dictated [CustomGroceryItem].
+   *
+   * @property item Updated custom shopping item record to upsert by `customId`.
+   */
+  @Serializable
+  data class SaveCustomGroceryItemEdit(
+    val item: CustomGroceryItem,
+  ) : GroceryAndCatalogEditAction
+
+  // Deletes a free-form CustomGroceryItem from the Smart Grocery List and checked IDs.
+  /**
+   * Removes a [CustomGroceryItem] from the Smart Grocery List.
+   *
+   * @property customId Identifier of the custom shopping item to remove.
+   */
+  @Serializable
+  data class DeleteCustomGroceryItem(
+    val customId: String,
+  ) : GroceryAndCatalogEditAction
+
+  // Updates global catalog name, aisle category, and store pack details from Smart Pantry.
+  /**
+   * Renames a household catalog ingredient or updates its aisle category, package size, and price
+   * across Pantry, Shop, Plan, and Recipes.
+   *
+   * @property ingredientId Target catalog `ingredientId` in `KitchenSnapshot.ingredients`.
+   * @property updatedDisplayName New non-blank household ingredient display name.
+   * @property updatedCategory Optional updated [IngredientCategory] store aisle grouping.
+   * @property updatedDefaultPackageQuantity Optional updated store package size (`> 0.0`).
+   * @property updatedPackagePriceUsd Optional updated store package price (`>= 0.0`).
+   */
+  @Serializable
+  data class UpdateCatalogIngredientDetails(
+    val ingredientId: String,
+    val updatedDisplayName: String,
+    val updatedCategory: IngredientCategory? = null,
+    val updatedDefaultPackageQuantity: Double? = null,
+    val updatedPackagePriceUsd: Double? = null,
+  ) : GroceryAndCatalogEditAction
 }
 
 /**

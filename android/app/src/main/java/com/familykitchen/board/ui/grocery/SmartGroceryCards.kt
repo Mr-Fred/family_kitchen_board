@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Inventory2
@@ -374,8 +375,8 @@ fun StoreSortAndQuickAddBar(
 
 /**
  * Checkable Smart Grocery item card with `48.dp` check target (`1.5.dp` visible unchecked border),
- * `maxLines = 2` title, humanized `kg`/`L` package + price line, full-width single-line meal
- * attribution (`"Mon Dinner · Dish Title"`), and `48.dp` `MoreVert` menu (`<= 3` metadata elements).
+ * `maxLines = 2` title, humanized `kg`/`L` package + price line (`" · Edited"` when overridden),
+ * single-line meal attribution, 1-tap `48.dp` `Edit` button, and `48.dp` `MoreVert` menu.
  */
 @Composable
 fun GroceryCheckableItemCard(
@@ -384,13 +385,16 @@ fun GroceryCheckableItemCard(
   onToggleChecked: () -> Unit,
   onQuickRestockOne: () -> Unit,
   onRemoveManualQueue: () -> Unit,
+  onEditItem: (() -> Unit)? = null,
+  onSkipForTrip: (() -> Unit)? = null,
   currencySymbol: String = "₱",
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
   var menuExpanded by remember { mutableStateOf(false) }
-  // Combine humanized package text and currency estimate onto Metadata Line #1.
-  val pkgAndPriceLine = "${humanizeGroceryPackageLabel(item)} · ${formatGroceryCurrency(item.estimatedCostUsd, currencySymbol)}"
+  val editedSuffix = if (item.isQuantityOverridden) " · Edited" else ""
+  // Combine humanized package text, currency estimate, and optional override badge on Line #1.
+  val pkgAndPriceLine = "${humanizeGroceryPackageLabel(item)} · ${formatGroceryCurrency(item.estimatedCostUsd, currencySymbol)}$editedSuffix"
   // Give meal attribution 100% of column width on Line #2 so dish titles never clip to "for Mon...".
   val primaryAttribution = item.mealUsageLabels.firstOrNull()?.let { firstLabel ->
     val clean = shortenMealAttribution(firstLabel)
@@ -425,56 +429,59 @@ fun GroceryCheckableItemCard(
       Column(modifier = Modifier.weight(1f).padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         // Line 1: Up to 2 lines so market ingredient names ("Ripe Avocados (Antipolo Market)") breathe.
         Text(
-          text = item.displayName,
-          style = MaterialTheme.typography.titleSmall,
-          fontWeight = FontWeight.SemiBold,
+          text = item.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
           textDecoration = if (isChecked) TextDecoration.LineThrough else TextDecoration.None,
-          maxLines = 2,
-          overflow = TextOverflow.Ellipsis,
+          maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
-        // Line 2: Humanized whole-package restock quantity paired with estimated PHP ₱ price.
+        // Line 2: Humanized whole-package or overridden buy quantity paired with PHP ₱ price.
         Text(
-          text = pkgAndPriceLine,
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
+          text = pkgAndPriceLine, style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         // Line 3: Full-width meal attribution ("Mon Dinner · Dish Title") avoiding "for Mon..." clip.
         if (primaryAttribution != null) {
           Text(
-            text = primaryAttribution,
-            style = MaterialTheme.typography.bodySmall,
-            color = extendedColors.herbalSage,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth(),
+            text = primaryAttribution, style = MaterialTheme.typography.bodySmall, color = extendedColors.herbalSage,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(),
           )
         }
       }
 
-      // Trailing 48.dp overflow button offering 1-item restock or manual queue removal.
+      // 1-tap 48.dp Edit icon button right beside the 48.dp overflow menu trigger.
+      if (onEditItem != null) {
+        IconButton(onClick = onEditItem, modifier = Modifier.size(48.dp)) {
+          Icon(Icons.Filled.Edit, contentDescription = "Edit ${item.displayName}", tint = extendedColors.herbalSage, modifier = Modifier.size(19.dp))
+        }
+      }
+
+      // Trailing 48.dp overflow button offering edit, 1-item restock, trip-skip, or manual removal.
       Box {
         IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(48.dp)) {
           Icon(Icons.Filled.MoreVert, contentDescription = "More options for ${item.displayName}", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
         }
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+          if (onEditItem != null) {
+            DropdownMenuItem(
+              text = { Text("Edit Quantity & Name") },
+              onClick = { menuExpanded = false; onEditItem() },
+            )
+          }
           // Restocks this single item immediately when picked up early at a neighborhood stall.
           DropdownMenuItem(
             text = { Text("Restock into Pantry Now") },
-            onClick = {
-              menuExpanded = false
-              onQuickRestockOne()
-            },
+            onClick = { menuExpanded = false; onQuickRestockOne() },
           )
+          if (onSkipForTrip != null) {
+            DropdownMenuItem(
+              text = { Text("Skip on This Trip") },
+              onClick = { menuExpanded = false; onSkipForTrip() },
+            )
+          }
           // Only offer manual-queue removal when the item was added ad-hoc rather than from meal BOMs.
           if (item.isManuallyQueued) {
             DropdownMenuItem(
               text = { Text("Remove Manual Queue") },
-              onClick = {
-                menuExpanded = false
-                onRemoveManualQueue()
-              },
+              onClick = { menuExpanded = false; onRemoveManualQueue() },
             )
           }
         }
@@ -711,17 +718,18 @@ private fun CheckedRowPill(title: String, rightStatus: String, onUncheck: () -> 
   }
 }
 
-// Humanizes raw gram/ml package strings ("4 packs · 4 kg") for clean supermarket scanning.
+// Humanizes raw gram/ml package strings ("4 packs · 4 kg" or "Custom · 1.5 kg") for aisle scanning.
 internal fun humanizeGroceryPackageLabel(item: GroceryListItem): String {
   val humanTotal = formatHumanGroceryQty(item.restockQuantity, item.baseUnit)
   val rawDesc = item.packageDescriptor.trim()
-  // Use Char code 40 ('(') so both Kotlin stdlib and regex static analyzers stay balanced.
+  // Use Char code 40 (open-paren) so both Kotlin stdlib and regex static analyzers stay balanced.
   val openParen = 40.toChar()
   return when {
     rawDesc.isEmpty() -> {
       val pkgWord = if (item.packagesToBuy == 1) "1 pack" else "${item.packagesToBuy} packs"
       "$pkgWord · $humanTotal"
     }
+    rawDesc.startsWith("Custom") && rawDesc.contains(openParen) -> "Custom · $humanTotal"
     rawDesc.contains(openParen) && (item.restockQuantity >= 1000.0 && item.baseUnit != BaseUnit.COUNT) ->
       "${rawDesc.substringBefore(openParen).trim()} · $humanTotal"
     else -> rawDesc.replace("•", "·")

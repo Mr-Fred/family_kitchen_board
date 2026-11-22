@@ -17,6 +17,7 @@ import com.familykitchen.board.domain.CustomGroceryItem
 import com.familykitchen.board.domain.EdgeDeviceProfile
 import com.familykitchen.board.domain.ExpiringPantryCardModel
 import com.familykitchen.board.domain.FirstRunOnboardingDraft
+import com.familykitchen.board.domain.GroceryAndCatalogEditAction
 import com.familykitchen.board.domain.GrocerySortMode
 import com.familykitchen.board.domain.HouseholdCurrency
 import com.familykitchen.board.domain.HouseholdProfile
@@ -590,6 +591,15 @@ class KitchenBoardViewModel(
   fun clearCheckedGroceryItems() = launchDomainGuarded {
     storagePort.clearCheckedGroceryItems(mutableUiState.value.snapshot, nowIso())
     postToast("Cleared checked grocery items.")
+  }
+
+  /** Applies a Smart Grocery or Pantry catalog edit (`rename`, `qty override`, `skip`, `restore`) in 1 `O(1)` write. */
+  fun onGroceryAndCatalogEdit(action: GroceryAndCatalogEditAction) = launchDomainGuarded {
+    // Purely reduces edit action and commits 1 O(1) snapshot write only when state changed.
+    val current = mutableUiState.value
+    val (nextSnapshot, toast) = reduceGroceryAndCatalogEdit(current.snapshot, current.weeklyGroceryDiff, action, nowIso())
+    if (nextSnapshot != current.snapshot) storagePort.saveSnapshotBatch(nextSnapshot)
+    postToast(toast)
   }
 
   /** Starts offline voice dictation (`en-US` / `fr-FR`) targeting the Smart Grocery List. */

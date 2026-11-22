@@ -37,6 +37,7 @@ import com.familykitchen.board.domain.CookedDeductionPayload
 import com.familykitchen.board.domain.CustomGroceryItem
 import com.familykitchen.board.domain.ExpiringPantryCardModel
 import com.familykitchen.board.domain.FirstRunOnboardingDraft
+import com.familykitchen.board.domain.GroceryAndCatalogEditAction
 import com.familykitchen.board.domain.GrocerySortMode
 import com.familykitchen.board.domain.HouseholdCurrency
 import com.familykitchen.board.domain.HouseholdProfile
@@ -168,6 +169,7 @@ fun KitchenScaffold(
     onSelectGrocerySortMode = viewModel::setGrocerySortMode,
     onAddCustomGroceryItem = viewModel::addCustomGroceryItem,
     onClearCheckedGrocery = viewModel::clearCheckedGroceryItems,
+    onGroceryCatalogEdit = viewModel::onGroceryAndCatalogEdit,
     onStartGroceryVoiceDictation = { runWithAudioPermission { viewModel.startGroceryVoiceDictation() } },
     onOpenRecipeInReader = viewModel::openRecipeInReader, onSelectRecipeInReader = viewModel::selectRecipe,
     onToggleSavedRecipe = viewModel::toggleSavedRecipe,
@@ -260,6 +262,7 @@ fun KitchenScaffoldContent(
   onSelectGrocerySortMode: (GrocerySortMode) -> Unit = {},
   onAddCustomGroceryItem: (CustomGroceryItem) -> Unit = {},
   onClearCheckedGrocery: () -> Unit = {},
+  onGroceryCatalogEdit: (GroceryAndCatalogEditAction) -> Unit = {},
   onStartGroceryVoiceDictation: () -> Unit = {},
   onOpenRecipeInReader: (String) -> Unit = {},
   onSelectRecipeInReader: (String) -> Unit = {},
@@ -544,6 +547,7 @@ fun KitchenScaffoldContent(
                       currencySymbol = currencySymbol, isExportingPdf = exportController.isExportingPdf,
                       onCopyPantryToClipboard = exportController.onCopyPantryInventory,
                       onSavePantryAsPdf = exportController.onSavePantryPdf,
+                      onEditCatalogIngredient = onGroceryCatalogEdit,
                     )
                   }
 
@@ -597,6 +601,9 @@ fun KitchenScaffoldContent(
                       isExportingPdf = exportController.isExportingPdf,
                       onCopyListToClipboard = exportController.onCopyGroceryList,
                       onSaveListAsPdf = exportController.onSaveGroceryPdf,
+                      catalogById = uiState.snapshot.catalogById,
+                      dismissedItemCount = uiState.snapshot.dismissedGroceryItemIds.size,
+                      onEditGroceryOrCatalog = onGroceryCatalogEdit,
                     )
                   }
                 }

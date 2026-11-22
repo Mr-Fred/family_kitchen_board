@@ -42,6 +42,7 @@ import com.familykitchen.board.domain.BaseUnit
 import com.familykitchen.board.domain.BomLine
 import com.familykitchen.board.domain.CookOwner
 import com.familykitchen.board.domain.ExpiringPantryCardModel
+import com.familykitchen.board.domain.GroceryAndCatalogEditAction
 import com.familykitchen.board.domain.IngredientCatalogItem
 import com.familykitchen.board.domain.IngredientCategory
 import com.familykitchen.board.domain.IngredientTier
@@ -55,6 +56,7 @@ import com.familykitchen.board.domain.StorageLocation
 import com.familykitchen.board.domain.indexCatalogById
 import com.familykitchen.board.domain.indexPantryById
 import com.familykitchen.board.ui.export.KitchenExportActionRow
+import com.familykitchen.board.ui.grocery.EditCatalogIngredientSheet
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
 
@@ -90,6 +92,7 @@ import com.familykitchen.board.ui.theme.KitchenTheme
  * @param isExportingPdf `true` while a scoped multi-page Pantry PDF export is writing on IO.
  * @param onCopyPantryToClipboard Copies the plain-text pantry inventory to the system clipboard.
  * @param onSavePantryAsPdf Launches scoped `CreateDocument("application/pdf")` for Pantry stock.
+ * @param onEditCatalogIngredient Dispatches [GroceryAndCatalogEditAction] to rename/edit catalog items.
  * @param modifier Optional Compose [Modifier].
  */
 @Composable
@@ -117,14 +120,16 @@ fun SmartPantryScreen(
   isExportingPdf: Boolean = false,
   onCopyPantryToClipboard: () -> Unit = {},
   onSavePantryAsPdf: () -> Unit = {},
+  onEditCatalogIngredient: (GroceryAndCatalogEditAction) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
-  // Persist filter enum name and dismiss state as Bundle-safe primitives across recreation.
+  // Persist filter enum name, sheet target ID, and dismiss state across recreation.
   var activeFilterName by rememberSaveable { mutableStateOf(PantryCategoryFilter.ALL.name) }
   val activeFilter = PantryCategoryFilter.entries.find { it.name == activeFilterName }
     ?: PantryCategoryFilter.ALL
   var showAddCard by rememberSaveable { mutableStateOf(false) }
   var isRescueBannerDismissed by rememberSaveable { mutableStateOf(false) }
+  var editingIngredientId by rememberSaveable { mutableStateOf<String?>(null) }
   val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
   val listState = rememberLazyListState()
 
@@ -281,6 +286,7 @@ fun SmartPantryScreen(
               onAdjustQuantity = { delta -> onAdjustPantryQuantity(item.ingredientId, delta) },
               onToggleLocallyAvailable = { next -> onToggleLocalAvailability(item.ingredientId, next) },
               onToggleManualQueue = { onToggleManualGroceryQueue(item.ingredientId) },
+              onEditIngredient = { editingIngredientId = item.ingredientId },
             )
           }
         }
@@ -305,6 +311,7 @@ fun SmartPantryScreen(
               pair = pair,
               onSelectStapleStatus = onSetStapleStatus,
               onAdjustQuantity = onAdjustPantryQuantity,
+              onEditIngredientById = { id -> editingIngredientId = id },
             )
           }
         }
@@ -329,6 +336,7 @@ fun SmartPantryScreen(
               pair = pair,
               onSelectStapleStatus = onSetStapleStatus,
               onAdjustQuantity = onAdjustPantryQuantity,
+              onEditIngredientById = { id -> editingIngredientId = id },
             )
           }
         }
@@ -349,6 +357,7 @@ fun SmartPantryScreen(
               onSelectStapleStatus = { status -> onSetStapleStatus(item.ingredientId, status) },
               onToggleLocallyAvailable = { next -> onToggleLocalAvailability(item.ingredientId, next) },
               onToggleManualQueue = { onToggleManualGroceryQueue(item.ingredientId) },
+              onEditIngredient = { editingIngredientId = item.ingredientId },
             )
           }
         }
@@ -366,6 +375,17 @@ fun SmartPantryScreen(
           modifier = Modifier
             .align(Alignment.BottomCenter)
             .padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+      }
+
+      // Modal bottom sheet letting users rename any catalog ingredient or adjust pack size/price.
+      val activeEditingIngredient = editingIngredientId?.let { id -> catalogById[id] }
+      if (activeEditingIngredient != null) {
+        EditCatalogIngredientSheet(
+          catalogItem = activeEditingIngredient,
+          currencySymbol = currencySymbol,
+          onDispatchEditAction = onEditCatalogIngredient,
+          onDismiss = { editingIngredientId = null },
         )
       }
     }
