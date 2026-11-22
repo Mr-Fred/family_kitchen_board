@@ -483,7 +483,7 @@ fun distillActionIntoElephantMemory(
         val packSuffix = observation.defaultPackageQuantity?.takeIf { it.isFinite() && it > 0.0 }?.let { qty ->
           val priceText = observation.packagePricePhp?.takeIf { it.isFinite() && it > 0.0 }
             ?.let { " @ ${HouseholdCurrency.PHP.formatAmount(it)}" }.orEmpty()
-          " (${formatHumanizedUnitQuantity(qty, observation.baseUnit)} pack$priceText)"
+          " (${formatEgmHumanizedQuantity(qty, observation.baseUnit)} pack$priceText)"
         }.orEmpty()
         val prevClause = observation.previousDisplayName.trim()
           .takeIf { it.isNotEmpty() && !it.equals(cleanUpdated, ignoreCase = true) }
@@ -498,8 +498,8 @@ fun distillActionIntoElephantMemory(
       if (!observation.overriddenQuantity.isFinite() || observation.overriddenQuantity <= 0.0) {
         memory
       } else {
-        val humanOverride = formatHumanizedUnitQuantity(observation.overriddenQuantity, observation.baseUnit)
-        val humanPlanned = formatHumanizedUnitQuantity(observation.plannedQuantity, observation.baseUnit)
+        val humanOverride = formatEgmHumanizedQuantity(observation.overriddenQuantity, observation.baseUnit)
+        val humanPlanned = formatEgmHumanizedQuantity(observation.plannedQuantity, observation.baseUnit)
         val summary = "Preferred Shop buy quantity for '${observation.displayName}' (${observation.ingredientId}) " +
           "is $humanOverride instead of planned $humanPlanned."
         upsertSemanticFact(memory, ElephantFactCategory.PACK_SIZE_PREFERENCE, observation.ingredientId, summary, nowIso)
@@ -512,7 +512,7 @@ fun distillActionIntoElephantMemory(
         memory
       } else {
         val parts = observation.overriddenQuantities.entries.take(4).joinToString(", ") { (ingId, qty) ->
-          "$ingId=${formatHumanizedUnitQuantity(qty, observation.unitsByIngredientId[ingId] ?: BaseUnit.GRAM)}"
+          "$ingId=${formatEgmHumanizedQuantity(qty, observation.unitsByIngredientId[ingId] ?: BaseUnit.GRAM)}"
         }
         val summary = "Saved household recipe BOM ratio on '${observation.recipeTitle}' (${observation.recipeId}): $parts."
         upsertSemanticFact(memory, ElephantFactCategory.TASTE_AND_TEXTURE, observation.recipeId, summary, nowIso)
@@ -738,7 +738,7 @@ private fun upsertSemanticFact(
 }
 
 // Humanize 2000 g -> "2 kg", 1500 g -> "1.5 kg", 1000 ml -> "1 L" for crisp Elephant summaries.
-internal fun formatHumanizedUnitQuantity(quantity: Double, unit: BaseUnit): String {
+private fun formatEgmHumanizedQuantity(quantity: Double, unit: BaseUnit): String {
   val safe = if (quantity.isFinite() && quantity >= 0.0) quantity else 0.0
   return when {
     unit == BaseUnit.GRAM && safe >= 1000.0 -> "${formatTrimmedDecimal(safe / 1000.0)} kg"
