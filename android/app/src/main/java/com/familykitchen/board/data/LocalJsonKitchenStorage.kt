@@ -71,12 +71,7 @@ class LocalJsonKitchenStorage(
     storageDirectory = (context.applicationContext ?: context).filesDir,
     fileName = fileName,
     ioDispatcher = ioDispatcher,
-    onUserDataChanged = {
-      val pkg = (context.applicationContext ?: context).packageName
-      if (!pkg.isNullOrBlank()) {
-        runCatching { BackupManager.dataChanged(pkg) }
-      }
-    },
+    onUserDataChanged = buildBackupDataChangedCallback(context),
   )
 
   // Coroutine Mutex serializes concurrent load, save, and reset calls without blocking threads.
@@ -345,5 +340,16 @@ class LocalJsonKitchenStorage(
 
     /** Temporary staging suffix used for atomic write-and-rename persistence. */
     const val TEMP_FILE_SUFFIX: String = ".tmp"
+
+    // Builds an Activity-leak-free BackupManager callback outside secondary-constructor <this> scope.
+    private fun buildBackupDataChangedCallback(context: Context): () -> Unit {
+      val appCtx = context.applicationContext ?: context
+      return {
+        val pkg = appCtx.packageName
+        if (!pkg.isNullOrBlank()) {
+          kotlin.runCatching { BackupManager.dataChanged(pkg) }
+        }
+      }
+    }
   }
 }
