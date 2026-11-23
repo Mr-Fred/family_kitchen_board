@@ -407,10 +407,14 @@ class CatalogUntangleAndToastTimingTest {
     val manifestDoc = parseSecureXml(manifestText)
     val appElement = manifestDoc.getElementsByTagName("application").item(0) as Element
 
-    // Confirm <application> wires both standard and round adaptive launcher mipmaps + security flags.
+    // Confirm <application> wires adaptive launcher mipmaps, HTTPS network config, fragile-data
+    // uninstall retention, and allowlist-only backup rules (kitchen_snapshot_v1.json only).
     assertEquals("@mipmap/ic_launcher", appElement.getAttributeNS(androidNs, "icon"))
     assertEquals("@mipmap/ic_launcher_round", appElement.getAttributeNS(androidNs, "roundIcon"))
-    assertEquals("false", appElement.getAttributeNS(androidNs, "allowBackup"))
+    assertEquals("true", appElement.getAttributeNS(androidNs, "allowBackup"))
+    assertEquals("true", appElement.getAttributeNS(androidNs, "hasFragileUserData"))
+    assertEquals("@xml/backup_rules", appElement.getAttributeNS(androidNs, "fullBackupContent"))
+    assertEquals("@xml/data_extraction_rules", appElement.getAttributeNS(androidNs, "dataExtractionRules"))
     assertEquals("@xml/network_security_config", appElement.getAttributeNS(androidNs, "networkSecurityConfig"))
 
     // Confirm both mipmap-anydpi-v26 XML descriptors bind background, foreground, and monochrome layers.
