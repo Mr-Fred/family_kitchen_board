@@ -652,11 +652,10 @@ internal fun uiStateV2TransformBoardContainingSlot(
   // Route slot edits to nextWeekBoard when viewingNextWeek or when slotId lives exclusively there.
   // Also hydrate allHouseholdRecipes so any newly scheduled heritage dish persists on snapshot.
   val nextBoard = current.nextWeekBoard
-  val livesInNextWeek = nextBoard != null &&
-    (viewingNextWeek || nextBoard.slots.any { it.slotId == slotId }) &&
-    (viewingNextWeek || current.weeklyBoard.slots.none { it.slotId == slotId })
   return when {
-    livesInNextWeek && nextBoard != null ->
+    nextBoard != null &&
+      (viewingNextWeek || nextBoard.slots.any { it.slotId == slotId }) &&
+      (viewingNextWeek || current.weeklyBoard.slots.none { it.slotId == slotId }) ->
       current.copy(recipes = current.allHouseholdRecipes, nextWeekBoard = transform(nextBoard), updatedAtIso = nowIso)
     else ->
       current.copy(recipes = current.allHouseholdRecipes, weeklyBoard = transform(current.weeklyBoard), updatedAtIso = nowIso)

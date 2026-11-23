@@ -133,7 +133,7 @@ class RecipeStudioMenusAndCuisineMarketTest {
     val snapshot = KitchenSnapshot.fromSeedCatalog(seed)
     assertEquals(12, HERITAGE_AND_WORLD_RECIPES.size)
     assertEquals(42, snapshot.allHouseholdRecipes.size)
-    assertTrue(HERITAGE_AND_WORLD_RECIPES.all { it.toddlerPrepTip.isNotBlank() && it.baseServings == 4 })
+    assertTrue(HERITAGE_AND_WORLD_RECIPES.all { !it.toddlerPrepTip.isNullOrBlank() && it.baseServings == 4 })
 
     // Verify rankMenusForHousehold places French and Yoruba Family Week #1 for default household.
     val rankedDefault = rankMenusForHousehold(DEFAULT_STARTER_MENU_TEMPLATES, defaultProfile)

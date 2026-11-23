@@ -506,7 +506,7 @@ fun PantryLedgerItemCard(
   val activeStapleStatus = pantryEntry?.stapleStatus ?: StapleStatus.PLENTY
   val isDepleted = pantryEntry == null || pantryCardIsDepleted(pantryEntry)
   // Omit countdown suffix whenever the item is depleted so 0g rows never show stale days left.
-  val liveDays = if (isDepleted || pantryEntry == null) null else computeRemainingShelfLifeDays(pantryEntry, todayIso)
+  val liveDays = pantryEntry?.takeUnless { isDepleted }?.let { computeRemainingShelfLifeDays(it, todayIso) }
   val pulseStep = if (catalogItem.baseUnit == BaseUnit.COUNT) 1.0 else 100.0
 
   // Terracotta border warns when `isLocallyAvailable == false` (triggering EC-02 hide or EC-03 swap).
