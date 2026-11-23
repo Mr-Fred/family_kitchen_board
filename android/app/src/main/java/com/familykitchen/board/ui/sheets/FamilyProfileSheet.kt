@@ -23,7 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.FamilyRestroom
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Shield
@@ -131,6 +133,9 @@ fun FamilyProfileSheet(
   onToggleWideLayout: () -> Unit = {},
   onRelaunchOnboarding: () -> Unit = {},
   onOpenQaLab: () -> Unit = {},
+  isBackupBusy: Boolean = false,
+  onSaveKitchenBackup: () -> Unit = {},
+  onRestoreKitchenBackup: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   // Expand immediately so Preferred Family Cuisines and display toggles appear without extra drag.
@@ -156,6 +161,9 @@ fun FamilyProfileSheet(
         onDismiss()
         onOpenQaLab()
       },
+      isBackupBusy = isBackupBusy,
+      onSaveKitchenBackup = onSaveKitchenBackup,
+      onRestoreKitchenBackup = onRestoreKitchenBackup,
     )
   }
 }
@@ -193,6 +201,9 @@ fun FamilyProfileSheetContent(
   onToggleWideLayout: () -> Unit = {},
   onRelaunchOnboarding: () -> Unit = {},
   onOpenQaLab: () -> Unit = {},
+  isBackupBusy: Boolean = false,
+  onSaveKitchenBackup: () -> Unit = {},
+  onRestoreKitchenBackup: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -298,6 +309,38 @@ fun FamilyProfileSheetContent(
           Icon(Icons.Filled.Restaurant, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(modifier = Modifier.width(6.dp))
           Text("Run Guided First-Run Setup", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+        }
+        HorizontalDivider(color = extendedColors.borderSubtle)
+        // Portable zero-permission JSON backup and restore actions surviving clean reinstalls.
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text("Kitchen Data Backup", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+          Text(
+            text = "Keep your cuisines, pantry, recipes, and meal plans safe across reinstalls",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+              onClick = onSaveKitchenBackup,
+              enabled = !isBackupBusy,
+              shape = CircleShape,
+              modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp),
+            ) {
+              Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Save Backup", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            }
+            OutlinedButton(
+              onClick = onRestoreKitchenBackup,
+              enabled = !isBackupBusy,
+              shape = CircleShape,
+              modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp),
+            ) {
+              Icon(Icons.Filled.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Restore Backup", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            }
+          }
         }
       }
     }

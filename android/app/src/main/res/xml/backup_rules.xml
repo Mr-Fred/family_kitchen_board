@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Allowlist-only Auto Backup: includes ONLY non-secret kitchen_snapshot_v1.json; excludes Keystore API vault, multi-GB .litertlm weights, and temp captures. -->
+<full-backup-content>
+  <include domain="file" path="kitchen_snapshot_v1.json" />
+</full-backup-content>

@@ -22,7 +22,17 @@ import com.familykitchen.board.domain.StapleStatus
 import com.familykitchen.board.domain.ValidationException
 import com.familykitchen.board.domain.WorkoutBoostModifier
 import com.familykitchen.board.domain.WorkoutTiming
+import com.familykitchen.board.ports.AiEdgePort
+import com.familykitchen.board.ports.AiRuntimeState
+import com.familykitchen.board.ports.FixedKitchenClock
 import com.familykitchen.board.ports.KitchenSnapshot
+import com.familykitchen.board.ports.SeedCatalogPort
+import com.familykitchen.board.ports.VoiceInputPort
+import com.familykitchen.board.ports.VoiceInputState
+import com.familykitchen.board.ports.buildSuggestedKitchenBackupFileName
+import com.familykitchen.board.ports.encodeKitchenBackupJson
+import com.familykitchen.board.ui.KitchenBoardViewModel
+import com.familykitchen.board.ui.TopLevelDestination
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
@@ -30,7 +40,15 @@ import java.io.InputStream
 import kotlin.io.path.Path
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.readText
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -362,16 +380,151 @@ class BatchStorageInvariantTest {
     }
   }
 
-  private fun readCanonicalSeedAssetText(): String {
+  /**
+   * Verifies Android 12+ reinstall data-retention configuration in `AndroidManifest.xml`,
+   * `backup_rules.xml`, and `data_extraction_rules.xml`: `android:hasFragileUserData="true"` and
+   * allowlist-only backup of `kitchen_snapshot_v1.json` (excluding API key vaults and `.litertlm`
+   * model weights).
+   */
+  @Test
+  fun reinstallRetentionManifestAndScopedBackupRules_preserveSnapshotAndExcludeVaultSecrets() {
+    val manifestXml = readAppFileText("src/main/AndroidManifest.xml")
+    val backupRulesXml = readAppFileText("src/main/res/xml/backup_rules.xml")
+    val extractionRulesXml = readAppFileText("src/main/res/xml/data_extraction_rules.xml")
+
+    assertTrue(manifestXml.contains("""android:hasFragileUserData="true""""))
+    assertTrue(manifestXml.contains("""android:allowBackup="true""""))
+    assertTrue(manifestXml.contains("""android:fullBackupContent="@xml/backup_rules""""))
+    assertTrue(manifestXml.contains("""android:dataExtractionRules="@xml/data_extraction_rules""""))
+
+    // Verify strict allowlist-only inclusion of kitchen_snapshot_v1.json across cloud and transfer.
+    assertTrue(backupRulesXml.contains("""<include domain="file" path="kitchen_snapshot_v1.json" />"""))
+    assertTrue(extractionRulesXml.contains("<cloud-backup>"))
+    assertTrue(extractionRulesXml.contains("<device-transfer>"))
+    assertTrue(extractionRulesXml.contains("""<include domain="file" path="kitchen_snapshot_v1.json" />"""))
+    assertFalse(backupRulesXml.contains("sharedpref"))
+    assertFalse(extractionRulesXml.contains("sharedpref"))
+    assertFalse(extractionRulesXml.contains("savor_cloud_ai_vault_v1"))
+  }
+
+  /**
+   * Verifies end-to-end portable `.json` backup export, `onUserDataChanged` notification hooks,
+   * raw `kitchen_snapshot_v1.json` compatibility, corrupt-file rejection, and `1`-write `O(1)`
+   * restore exiting First-Run Onboarding after a clean reinstall.
+   */
+  @OptIn(ExperimentalCoroutinesApi::class)
+  @Test
+  fun portableKitchenBackupAndRestore_roundTripsAcrossCleanReinstallInSingleO1BatchWrite() = runTest {
+    val testDispatcher = UnconfinedTestDispatcher(testScheduler)
+    Dispatchers.setMain(testDispatcher)
+    try {
+      var backupNotifyCount = 0
+      val sourceDir = tempFolder.newFolder("source_install_store")
+      val sourceStorage = LocalJsonKitchenStorage(
+        storageDirectory = sourceDir,
+        ioDispatcher = testDispatcher,
+        onUserDataChanged = { backupNotifyCount++ },
+      )
+      val initial = sourceStorage.loadOrInitialize(seedDataset)
+      // Cold initialization must not schedule spurious cloud backup notifications.
+      assertEquals(0, backupNotifyCount)
+
+      val customized = initial.copy(
+        householdProfile = initial.householdProfile.copy(
+          householdName = "Fred West African Bistro",
+          preferredCuisines = listOf("French", "Yoruba and West African"),
+        ),
+        savedRecipeIds = setOf(twelveItemFeastRecipe.recipeId),
+        hasCompletedOnboarding = true,
+      )
+      sourceStorage.saveSnapshotBatch(customized)
+      assertEquals(1, backupNotifyCount)
+
+      val suggestedName = buildSuggestedKitchenBackupFileName(
+        householdName = customized.householdProfile.householdName,
+        todayIso = "2026-11-23",
+      )
+      assertEquals("SavorAI_Backup_Fred_West_African_Bistro_2026-11-23.json", suggestedName)
+      val exportedEnvelopeJson = encodeKitchenBackupJson(customized, exportedAtIso = "2026-11-23")
+
+      // Simulate a fresh clean reinstall (no existing snapshot file -> isOnboardingActive == true).
+      val reinstallDir = tempFolder.newFolder("clean_reinstall_store")
+      val reinstallStorage = LocalJsonKitchenStorage(
+        storageDirectory = reinstallDir,
+        ioDispatcher = testDispatcher,
+      )
+      val viewModel = KitchenBoardViewModel(
+        seedCatalogPort = SeedCatalogPort { seedDataset },
+        storagePort = reinstallStorage,
+        aiEdgePort = NoOpBackupTestEdgePort(),
+        voiceInputPort = NoOpBackupTestVoicePort(),
+        clockPort = FixedKitchenClock("2026-11-23", currentHour24 = 18),
+      )
+      assertTrue(viewModel.uiState.value.isOnboardingActive)
+      assertEquals(0, reinstallStorage.batchWriteCallCount)
+
+      // Restore portable envelope -> exits onboarding onto PLAN in 1 O(1) atomic write!
+      viewModel.restoreHouseholdBackupFromJson(exportedEnvelopeJson)
+      assertFalse(viewModel.uiState.value.isOnboardingActive)
+      assertEquals(TopLevelDestination.PLAN, viewModel.uiState.value.activeDestination)
+      assertEquals(1, reinstallStorage.batchWriteCallCount)
+      assertEquals(
+        "Fred West African Bistro",
+        viewModel.uiState.value.snapshot.householdProfile.householdName,
+      )
+      assertEquals(
+        listOf("French", "Yoruba and West African"),
+        viewModel.uiState.value.snapshot.householdProfile.preferredCuisines,
+      )
+      assertTrue(twelveItemFeastRecipe.recipeId in viewModel.uiState.value.snapshot.savedRecipeIds)
+
+      // Raw kitchen_snapshot_v1.json pulled via adb also restores seamlessly; corrupt JSON is rejected.
+      val rawDiskJson = sourceStorage.snapshotFile.readText(Charsets.UTF_8)
+      viewModel.restoreHouseholdBackupFromJson(rawDiskJson)
+      assertEquals(2, reinstallStorage.batchWriteCallCount)
+
+      viewModel.restoreHouseholdBackupFromJson("{not_valid_json")
+      // Invalid backup leaves batchWriteCallCount and restored household state untouched.
+      assertEquals(2, reinstallStorage.batchWriteCallCount)
+      assertEquals(
+        "Fred West African Bistro",
+        viewModel.uiState.value.snapshot.householdProfile.householdName,
+      )
+    } finally {
+      Dispatchers.resetMain()
+    }
+  }
+
+  private fun readCanonicalSeedAssetText(): String = readAppFileText("src/main/assets/seed_catalog.json")
+
+  private fun readAppFileText(relativeUnderModule: String): String {
     // Support running JUnit from android/app (AGP module dir), android/, or repository root.
     val candidates = listOf(
-      Path("src/main/assets/seed_catalog.json"),
-      Path("app/src/main/assets/seed_catalog.json"),
-      Path("android/app/src/main/assets/seed_catalog.json"),
+      Path(relativeUnderModule),
+      Path("app/$relativeUnderModule"),
+      Path("android/app/$relativeUnderModule"),
     )
     val matched = requireNotNull(candidates.firstOrNull { it.isRegularFile() }) {
-      "Unable to locate canonical seed_catalog.json asset"
+      "Unable to locate '$relativeUnderModule'"
     }
     return matched.readText()
+  }
+
+  private class NoOpBackupTestEdgePort : AiEdgePort {
+    private val state = MutableStateFlow<AiRuntimeState>(AiRuntimeState.Uninitialized)
+    override val runtimeState: StateFlow<AiRuntimeState> = state.asStateFlow()
+    override suspend fun autoDiscoverAndInitialize(): AiRuntimeState = state.value
+    override suspend fun importAndLoadModel(sourceUriString: String, displayName: String?): AiRuntimeState = state.value
+    override suspend fun generateText(prompt: String): String = "{}"
+    override suspend fun analyzeImageWithPrompt(preprocessedImagePath: String, prompt: String): String = "{}"
+    override fun close() = Unit
+  }
+
+  private class NoOpBackupTestVoicePort : VoiceInputPort {
+    private val state = MutableStateFlow<VoiceInputState>(VoiceInputState.Idle)
+    override val voiceState: StateFlow<VoiceInputState> = state.asStateFlow()
+    override fun startListening(languageTag: String): Boolean = true
+    override fun stopListening() = Unit
+    override fun release() = Unit
   }
 }

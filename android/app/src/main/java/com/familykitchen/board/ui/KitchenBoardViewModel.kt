@@ -51,6 +51,7 @@ import com.familykitchen.board.ports.SeedCatalogPort
 import com.familykitchen.board.ports.SystemKitchenClockAdapter
 import com.familykitchen.board.ports.VoiceInputPort
 import com.familykitchen.board.ports.VoiceInputState
+import com.familykitchen.board.ports.restoreKitchenBackupBatch
 import com.familykitchen.board.ui.pacer.PacerMode
 import com.familykitchen.board.ui.sheets.CustomFamilyMealDraft
 import com.familykitchen.board.ui.sheets.QaEdgeCaseScenario
@@ -907,6 +908,22 @@ class KitchenBoardViewModel(
         lastQaScenarioStatusMessage = "Household state restored to canonical Antipolo–Marikina PHP seed.",
       ).withToast("Reset household state to canonical seed in 1 atomic write.")
       deriveKitchenUiState(resetUi, fresh, storagePort.batchWriteCallCount)
+    }
+  }
+
+  /** Validates and restores a portable `.json` kitchen backup in 1 `O(1)` atomic batch write. */
+  fun restoreHouseholdBackupFromJson(rawBackupJson: String) = vmCoreLaunchDomainGuarded {
+    lastUndoableSnapshot = null
+    val seed = cachedSeedCatalog ?: seedCatalogPort.loadSeedCatalog().also { cachedSeedCatalog = it }
+    // Validate, migrate, and commit restored snapshot atomically before closing setup/profile sheets.
+    val restored = storagePort.restoreKitchenBackupBatch(rawBackupJson, seed, vmCoreNowIso())
+    mutableUiState.update { current ->
+      val syncedUi = current.copy(
+        isOnboardingReplayOpen = false, isFamilyProfileSheetOpen = false, isSousChefSheetOpen = false,
+        activeDestination = TopLevelDestination.PLAN, viewingNextWeek = false,
+        canUndoLastAgentAction = false, lastAgentActionSummary = null, lastAgentActionAdjustTarget = null,
+      ).withToast("Restored ${restored.householdProfile.householdName} kitchen backup.")
+      deriveKitchenUiState(syncedUi, restored, storagePort.batchWriteCallCount)
     }
   }
 

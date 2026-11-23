@@ -3,6 +3,8 @@ package com.familykitchen.board.ui.export
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -46,9 +48,13 @@ import com.familykitchen.board.domain.ExportedKitchenDocument
 import com.familykitchen.board.domain.PantryExpiryEngine
 import com.familykitchen.board.domain.buildGroceryExportDocument
 import com.familykitchen.board.domain.buildPantryExportDocument
+import com.familykitchen.board.ports.MAX_KITCHEN_BACKUP_BYTES
+import com.familykitchen.board.ports.buildSuggestedKitchenBackupFileName
+import com.familykitchen.board.ports.encodeKitchenBackupJson
 import com.familykitchen.board.ui.KitchenUiState
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -70,6 +76,9 @@ private const val EXPORT_KIND_PANTRY: String = "PANTRY"
  * @property onSaveGroceryPdf Opens the system Save-As picker and writes the Grocery List PDF.
  * @property onCopyPantryInventory Copies the formatted Smart Pantry inventory to the clipboard.
  * @property onSavePantryPdf Opens the system Save-As picker and writes the Pantry Inventory PDF.
+ * @property isBackingUpOrRestoringJson `true` while streaming a portable `.json` backup or restore.
+ * @property onSaveKitchenBackup Opens the system Save-As picker to export a portable `.json` backup.
+ * @property onRestoreKitchenBackup Opens the system file picker to restore a `.json` kitchen backup.
  */
 @Immutable
 data class KitchenExportController(
@@ -78,23 +87,29 @@ data class KitchenExportController(
   val onSaveGroceryPdf: () -> Unit = {},
   val onCopyPantryInventory: () -> Unit = {},
   val onSavePantryPdf: () -> Unit = {},
+  val isBackingUpOrRestoringJson: Boolean = false,
+  val onSaveKitchenBackup: () -> Unit = {},
+  val onRestoreKitchenBackup: () -> Unit = {},
 )
 
 /**
- * Remembers a lifecycle-aware [KitchenExportController] backed by Android's `ClipboardManager` and
- * `ActivityResultContracts.CreateDocument("application/pdf")` with zero storage permissions.
+ * Remembers a lifecycle-aware [KitchenExportController] backed by Android's `ClipboardManager`,
+ * `ActivityResultContracts.CreateDocument("application/pdf")`, and portable `.json` backup/restore
+ * contracts with zero storage permissions.
  *
  * Returns a no-op [KitchenExportController] automatically when `LocalInspectionMode.current` is
  * `true` so Android Studio `@Preview`s render without an `ActivityResultRegistryOwner`.
  *
  * @param uiState Current immutable [KitchenUiState] observed from `KitchenBoardViewModel`.
  * @param onPostToast Callback surfacing confirmation or diagnostic export feedback banners.
+ * @param onRestoreBackupJson Callback validating and committing a restored `.json` backup payload.
  * @return Immutable [KitchenExportController] bound to the latest household state.
  */
 @Composable
 fun rememberKitchenDocumentExportController(
   uiState: KitchenUiState,
   onPostToast: (String) -> Unit,
+  onRestoreBackupJson: (String) -> Unit = {},
 ): KitchenExportController {
   // Bypass ActivityResult registration during headless Compose @Preview inspection.
   if (LocalInspectionMode.current) return KitchenExportController()
@@ -104,11 +119,13 @@ fun rememberKitchenDocumentExportController(
   // Capture latest state & toast lambdas so SAF callbacks never read stale snapshot closures.
   val latestUiState by rememberUpdatedState(uiState)
   val latestOnPostToast by rememberUpdatedState(onPostToast)
+  val latestOnRestoreBackupJson by rememberUpdatedState(onRestoreBackupJson)
 
   // Hold the prepared document in memory and persist kind name across device orientation changes.
   var pendingPdfDocument by remember { mutableStateOf<ExportedKitchenDocument?>(null) }
   var pendingExportKind by rememberSaveable { mutableStateOf<String?>(null) }
   var isExportingPdf by remember { mutableStateOf(false) }
+  var isBackingUpJson by remember { mutableStateOf(false) }
 
   // Register scoped SAF document creator requiring zero READ/WRITE_EXTERNAL_STORAGE permissions.
   val createPdfLauncher = rememberLauncherForActivityResult(
@@ -163,8 +180,68 @@ fun rememberKitchenDocumentExportController(
     }
   }
 
+  // Scoped SAF CreateDocument("application/json") launcher exporting zero-secret KitchenSnapshot.
+  val createBackupJsonLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.CreateDocument("application/json"),
+  ) { uri: Uri? ->
+    if (uri == null) return@rememberLauncherForActivityResult
+    isBackingUpJson = true
+    coroutineScope.launch {
+      try {
+        val state = latestUiState
+        val suggestedName = buildSuggestedKitchenBackupFileName(
+          householdName = state.snapshot.householdProfile.householdName,
+          todayIso = state.realTodayIso,
+        )
+        withContext(Dispatchers.IO) {
+          val payloadBytes = encodeKitchenBackupJson(
+            snapshot = state.snapshot,
+            exportedAtIso = state.realTodayIso,
+          ).toByteArray(Charsets.UTF_8)
+          val outStream = context.contentResolver.openOutputStream(uri, "w")
+            ?: throw IOException("Backup destination stream unavailable.")
+          outStream.use { stream ->
+            stream.write(payloadBytes)
+            stream.flush()
+          }
+        }
+        latestOnPostToast("Saved kitchen backup: $suggestedName")
+      } catch (cancel: CancellationException) {
+        throw cancel
+      } catch (err: Throwable) {
+        val detail = err.message?.trim()?.takeIf { it.isNotEmpty() } ?: "storage write failed."
+        latestOnPostToast("Unable to save backup: $detail")
+      } finally {
+        isBackingUpJson = false
+      }
+    }
+  }
+
+  // Scoped SAF OpenDocument launcher reading bounded <= 8 MB UTF-8 JSON backup files safely.
+  val openBackupJsonLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.OpenDocument(),
+  ) { uri: Uri? ->
+    if (uri == null) return@rememberLauncherForActivityResult
+    isBackingUpJson = true
+    coroutineScope.launch {
+      try {
+        val rawJson = withContext(Dispatchers.IO) {
+          readBoundedBackupUtf8FromUri(context, uri)
+        }
+        latestOnRestoreBackupJson(rawJson)
+      } catch (cancel: CancellationException) {
+        throw cancel
+      } catch (err: Throwable) {
+        val detail = err.message?.trim()?.takeIf { it.isNotEmpty() } ?: "unable to read file."
+        latestOnPostToast("Unable to restore backup: $detail")
+      } finally {
+        isBackingUpJson = false
+      }
+    }
+  }
+
   // Memoize controller wrapper while reading live State-backed snapshots inside each action lambda.
-  return remember(isExportingPdf, context, createPdfLauncher) {
+  return remember(isExportingPdf, isBackingUpJson, context, createPdfLauncher, createBackupJsonLauncher, openBackupJsonLauncher) {
     KitchenExportController(
       isExportingPdf = isExportingPdf,
       onCopyGroceryList = {
@@ -214,6 +291,33 @@ fun rememberKitchenDocumentExportController(
             pendingExportKind = null
             val detail = err.message?.trim()?.takeIf { it.isNotEmpty() } ?: "picker unavailable."
             latestOnPostToast("Unable to save PDF: $detail")
+          }
+        }
+      },
+      isBackingUpOrRestoringJson = isBackingUpJson,
+      onSaveKitchenBackup = {
+        if (!isBackingUpJson) {
+          val state = latestUiState
+          val fileName = buildSuggestedKitchenBackupFileName(
+            householdName = state.snapshot.householdProfile.householdName,
+            todayIso = state.realTodayIso,
+          )
+          try {
+            createBackupJsonLauncher.launch(fileName)
+          } catch (err: Throwable) {
+            val detail = err.message?.trim()?.takeIf { it.isNotEmpty() } ?: "picker unavailable."
+            latestOnPostToast("Unable to open backup Save picker: $detail")
+          }
+        }
+      },
+      onRestoreKitchenBackup = {
+        if (!isBackingUpJson) {
+          try {
+            // Accept application/json and fallback MIME tags used by OEM DownloadManagers on .json.
+            openBackupJsonLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+          } catch (err: Throwable) {
+            val detail = err.message?.trim()?.takeIf { it.isNotEmpty() } ?: "picker unavailable."
+            latestOnPostToast("Unable to open backup file picker: $detail")
           }
         }
       },
@@ -418,6 +522,38 @@ private fun copyDocumentToClipboard(
     val detail = err.message?.trim()?.takeIf { it.isNotEmpty() } ?: "clipboard unavailable."
     onPostToast("Unable to copy to clipboard: $detail")
   }
+}
+
+// Streams at most MAX_KITCHEN_BACKUP_BYTES from a SAF Uri so large binaries never exhaust heap RAM.
+private fun readBoundedBackupUtf8FromUri(context: Context, uri: Uri): String {
+  val declaredSize = runCatching {
+    context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+      if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else -1L
+    } ?: -1L
+  }.getOrDefault(-1L)
+  if (declaredSize > MAX_KITCHEN_BACKUP_BYTES) {
+    throw IOException("Selected file exceeds the 8 MB kitchen backup limit.")
+  }
+  val inputStream = context.contentResolver.openInputStream(uri)
+    ?: throw IOException("Unable to open selected backup file.")
+  val bytes = inputStream.use { input ->
+    val out = ByteArrayOutputStream()
+    val buf = ByteArray(16 * 1024)
+    var total = 0
+    while (true) {
+      val n = input.read(buf)
+      if (n < 0) break
+      if (n > 0) {
+        total += n
+        if (total > MAX_KITCHEN_BACKUP_BYTES) {
+          throw IOException("Selected file exceeds the 8 MB kitchen backup limit.")
+        }
+        out.write(buf, 0, n)
+      }
+    }
+    out.toByteArray()
+  }
+  return String(bytes, Charsets.UTF_8)
 }
 
 /** Warm Daylight `@Preview` showcasing idle and active PDF export states of [KitchenExportActionRow]. */

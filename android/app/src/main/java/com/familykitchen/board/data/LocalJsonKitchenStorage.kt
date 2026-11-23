@@ -1,5 +1,6 @@
 package com.familykitchen.board.data
 
+import android.app.backup.BackupManager
 import android.content.Context
 import com.familykitchen.board.domain.DEFAULT_STARTER_MENU_TEMPLATES
 import com.familykitchen.board.domain.SchemaValidator
@@ -43,17 +44,20 @@ import kotlinx.serialization.json.Json
  * @param fileName Persisted JSON snapshot filename (`"kitchen_snapshot_v1.json"`).
  * @param ioDispatcher Background I/O dispatcher used for filesystem reads, fsync, and renames.
  * @param jsonCodec Strict JSON serializer enforcing `encodeDefaults = true` and finite floats.
+ * @param onUserDataChanged Optional hook notifying Android's `BackupManager` after user batch commits.
  */
 class LocalJsonKitchenStorage(
   private val storageDirectory: File,
   private val fileName: String = SNAPSHOT_FILE_NAME,
   private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
   private val jsonCodec: Json = SchemaValidator.strictJson,
+  private val onUserDataChanged: () -> Unit = {},
 ) : KitchenStoragePort {
 
   /**
    * Production convenience constructor resolving `File(context.filesDir, fileName)` via
-   * `applicationContext` so Activity contexts are never retained.
+   * `applicationContext` so Activity contexts are never retained, and scheduling scoped Android
+   * Auto Backup notifications on user commits.
    *
    * @param context Android context providing app-private `filesDir`.
    * @param fileName Persisted JSON snapshot filename (`"kitchen_snapshot_v1.json"`).
@@ -67,6 +71,12 @@ class LocalJsonKitchenStorage(
     storageDirectory = (context.applicationContext ?: context).filesDir,
     fileName = fileName,
     ioDispatcher = ioDispatcher,
+    onUserDataChanged = {
+      val pkg = (context.applicationContext ?: context).packageName
+      if (!pkg.isNullOrBlank()) {
+        runCatching { BackupManager.dataChanged(pkg) }
+      }
+    },
   )
 
   // Coroutine Mutex serializes concurrent load, save, and reset calls without blocking threads.
@@ -304,6 +314,8 @@ class LocalJsonKitchenStorage(
       mutableSnapshotFlow.value = snapshot
       if (incrementWriteCounter) {
         writeCounter.incrementAndGet()
+        // Notify Android BackupManager so allowlist-only kitchen_snapshot_v1.json queues for backup.
+        runCatching { onUserDataChanged() }
       }
     } catch (ioError: IOException) {
       // Remove any incomplete .tmp artifact so future launches never observe torn writes.

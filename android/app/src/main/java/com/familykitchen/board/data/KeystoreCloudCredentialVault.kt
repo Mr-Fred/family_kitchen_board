@@ -42,7 +42,7 @@ import kotlinx.coroutines.withContext
  * `{ivBase64}:{ciphertextBase64}` ciphertext records and non-secret routing preferences
  * (`executionMode`, `activeProvider`, `modelIdByProvider`, and `•••• 1234` masked badges) are stored
  * inside `MODE_PRIVATE` `SharedPreferences` (`savor_cloud_ai_vault_v1`, excluded from backups by
- * `android:allowBackup="false"`).
+ * allowlist-only `@xml/data_extraction_rules` and `@xml/backup_rules`).
  *
  * @param context Android context resolved to `applicationContext` to avoid Activity leaks.
  * @param ioDispatcher Background dispatcher serializing Keystore IPC and `SharedPreferences` commits.

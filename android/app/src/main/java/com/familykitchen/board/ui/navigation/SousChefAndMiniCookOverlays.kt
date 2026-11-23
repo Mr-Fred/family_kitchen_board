@@ -75,6 +75,7 @@ import com.familykitchen.board.ui.board.CookedOverrideSheet
 import com.familykitchen.board.ui.board.SavedMenusSheet
 import com.familykitchen.board.ui.board.StartNewWeekSheet
 import com.familykitchen.board.ui.cookmode.PostCookCompletionSheet
+import com.familykitchen.board.ui.export.KitchenExportController
 import com.familykitchen.board.ui.grocery.UnpackGroceriesSheet
 import com.familykitchen.board.ui.preview.PreviewFixtures
 import com.familykitchen.board.ui.recipes.AddOrEditRecipeSheet
@@ -368,6 +369,7 @@ internal fun SavorModalSheetsOverlay(
   onRelaunchFirstRunOnboarding: () -> Unit, onOpenQaLab: () -> Unit, onDismissQaLab: () -> Unit,
   onSelectClockHour: (Int) -> Unit, onResetHouseholdToSeed: () -> Unit,
   onTriggerQaScenario: (QaEdgeCaseScenario) -> Unit,
+  exportController: KitchenExportController = KitchenExportController(),
 ) {
   val profile = uiState.snapshot.householdProfile
   val currencySymbol = profile.currency.symbol
@@ -481,7 +483,7 @@ internal fun SavorModalSheetsOverlay(
     )
   }
 
-  // Sheet 9: Family Profile, Preferred Cuisines, Market Settings, & QA Lab Link.
+  // Sheet 9: Family Profile, Preferred Cuisines, Market Settings, Backup, & QA Lab Link.
   if (uiState.isFamilyProfileSheetOpen) {
     FamilyProfileSheet(
       householdProfile = profile, onSaveProfile = onSaveHouseholdProfile,
@@ -492,6 +494,9 @@ internal fun SavorModalSheetsOverlay(
       onToggleDarkTheme = onToggleDarkTheme, onToggleWideLayout = onToggleWideLayout,
       onRelaunchOnboarding = onRelaunchFirstRunOnboarding,
       onOpenQaLab = { onDismissFamilyProfile(); onOpenQaLab() },
+      isBackupBusy = exportController.isBackingUpOrRestoringJson,
+      onSaveKitchenBackup = exportController.onSaveKitchenBackup,
+      onRestoreKitchenBackup = exportController.onRestoreKitchenBackup,
       onDismiss = onDismissFamilyProfile,
     )
   }

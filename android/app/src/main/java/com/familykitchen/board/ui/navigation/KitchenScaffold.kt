@@ -191,9 +191,11 @@ fun KitchenScaffold(
     viewModel.minimizeCookMode()
   }
 
-  // Remember zero-permission Clipboard + SAF CreateDocument("application/pdf") export controller.
+  // Remember zero-permission Clipboard + SAF PDF and JSON kitchen backup export controller.
   val exportController = rememberKitchenDocumentExportController(
-    uiState = uiState, onPostToast = viewModel::postExportFeedback,
+    uiState = uiState,
+    onPostToast = viewModel::postExportFeedback,
+    onRestoreBackupJson = viewModel::restoreHouseholdBackupFromJson,
   )
 
   // Forward immutable UI state slices and explicit ViewModel method references into stateless shell.
@@ -439,6 +441,7 @@ fun KitchenScaffoldContent(
             toastEventId = uiState.toastEventId, onDismissToast = onDismissToast, onAiChefAction = onAiChefAction,
             onCompleteOnboarding = onCompleteFirstRunOnboarding, onSkipWithDemoKitchen = onSkipFirstRunOnboarding,
             onDismissReplay = onDismissOnboardingReplay,
+            onRestoreKitchenBackup = exportController.onRestoreKitchenBackup,
           )
         }
       }
@@ -704,6 +707,7 @@ fun KitchenScaffoldContent(
           onRelaunchFirstRunOnboarding = onRelaunchFirstRunOnboarding, onOpenQaLab = onOpenQaLab,
           onDismissQaLab = onDismissQaLab, onSelectClockHour = onSelectClockHour,
           onResetHouseholdToSeed = onResetHouseholdToSeed, onTriggerQaScenario = onTriggerQaScenario,
+          exportController = exportController,
         )
       }
     }

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -132,6 +133,7 @@ fun FirstRunOnboardingHost(
   onCompleteOnboarding: (FirstRunOnboardingDraft) -> Unit = {},
   onSkipWithDemoKitchen: () -> Unit = {},
   onDismissReplay: () -> Unit = {},
+  onRestoreKitchenBackup: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   // Detect Compose @Preview inspection so ActivityResultContracts and BackHandler stay hermetic.
@@ -215,6 +217,7 @@ fun FirstRunOnboardingHost(
     onLaunchModelPicker = launchModelPicker, onDismissImportNotice = { importNotice = null },
     onDismissToast = onDismissToast, onCompleteOnboarding = onCompleteOnboarding,
     onSkipWithDemoKitchen = onSkipWithDemoKitchen, onDismissReplay = onDismissReplay,
+    onRestoreKitchenBackup = onRestoreKitchenBackup,
     modifier = modifier,
   )
 }
@@ -269,6 +272,7 @@ fun FirstRunOnboardingScreen(
   onCompleteOnboarding: (FirstRunOnboardingDraft) -> Unit = {},
   onSkipWithDemoKitchen: () -> Unit = {},
   onDismissReplay: () -> Unit = {},
+  onRestoreKitchenBackup: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -299,6 +303,47 @@ fun FirstRunOnboardingScreen(
           modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth()
             .verticalScroll(scrollState).padding(horizontal = 18.dp, vertical = 18.dp),
         ) {
+          // Offer 1-tap portable backup restore right at the top of Step 1 after clean reinstalls.
+          if (safeStep == 0 && !isReplayMode && onRestoreKitchenBackup != null) {
+            Surface(
+              shape = RoundedCornerShape(16.dp),
+              color = extendedColors.sageContainer,
+              border = BorderStroke(1.dp, extendedColors.herbalSage.copy(alpha = 0.4f)),
+              modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+            ) {
+              Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+                  Text(
+                    text = "Reinstalling SavorAI",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = extendedColors.onSageContainer,
+                  )
+                  Text(
+                    text = "Restore your saved kitchen backup",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = extendedColors.onSageContainer,
+                  )
+                }
+                OutlinedButton(
+                  onClick = onRestoreKitchenBackup,
+                  enabled = !isSavingBatch,
+                  shape = CircleShape,
+                  contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                  modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                ) {
+                  Icon(Icons.Filled.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text("Restore Backup", maxLines = 1, softWrap = false)
+                }
+              }
+            }
+          }
+
           // Route each step index cleanly to its stateless domain-aligned section card.
           when (safeStep) {
             0 -> OnboardingHouseholdStepSection(draft = draft, onDraftChange = onDraftChange)
