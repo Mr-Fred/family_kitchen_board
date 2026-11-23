@@ -213,73 +213,81 @@ fun computeWeeklyGroceryDiff(
     )
   }
 
-  // Step 2: Queue 1 default package for any Tier-2 staple marked LOW or OUT (EC-11).
-  val candidateStapleIds = linkedSetOf<String>().apply {
-    addAll(pantryById.keys)
-    addAll(boardTouchedIngredients)
-  }
+  // Step 2: Queue 1 default package for any Tier-2 staple marked LOW or OUT when at least 1 meal
+  // is planned (EC-11). Calm-start 0-slot Blank Week boards omit automatic staple restocks unless
+  // explicitly queued via aiAddedGroceryIds in Step 3.
+  if (plannedMealCount > 0) {
+    val candidateStapleIds = linkedSetOf<String>().apply {
+      addAll(pantryById.keys)
+      addAll(boardTouchedIngredients)
+    }
 
-  for (ingredientId in candidateStapleIds) {
-    if (ingredientId in includedGroceryIds || ingredientId in dismissedGroceryItemIds) continue
-    val pantryEntry = pantryById[ingredientId] ?: continue
-    if (pantryEntry.tier != IngredientTier.TIER_2_STAPLE) continue
+    for (ingredientId in candidateStapleIds) {
+      if (ingredientId in includedGroceryIds || ingredientId in dismissedGroceryItemIds) continue
+      val pantryEntry = pantryById[ingredientId] ?: continue
+      if (pantryEntry.tier != IngredientTier.TIER_2_STAPLE) continue
 
-    val needsRestock =
-      pantryEntry.stapleStatus == StapleStatus.LOW ||
-        pantryEntry.stapleStatus == StapleStatus.OUT ||
-        pantryEntry.isOutOfStock
-    if (!needsRestock) continue
+      val needsRestock =
+        pantryEntry.stapleStatus == StapleStatus.LOW ||
+          pantryEntry.stapleStatus == StapleStatus.OUT ||
+          pantryEntry.isOutOfStock
+      if (!needsRestock) continue
 
-    val catalogItem = catalogById[ingredientId]
-    val category = catalogItem?.category ?: IngredientCategory.PANTRY_STAPLE
-    val baseUnit = catalogItem?.baseUnit ?: BaseUnit.MILLILITER
-    val pkgQty = groceryCoreSafePackageQuantity(catalogItem)
-    val unitPkgPrice = groceryCoreSafePackagePriceUsd(catalogItem, category, IngredientTier.TIER_2_STAPLE)
-    val buyTerms = groceryCoreResolveBuyTerms(
-      basePackagesToBuy = 1,
-      pkgQty = pkgQty,
-      unitPkgPrice = unitPkgPrice,
-      baseUnit = baseUnit,
-      category = category,
-      tier = IngredientTier.TIER_2_STAPLE,
-      rawOverrideQty = groceryQuantityOverrides[ingredientId],
-    )
-    val usageLabels = usageLabelsByIngredientId[ingredientId]?.toList()
-      ?.takeIf { it.isNotEmpty() } ?: listOf("for Pantry Staple Restock")
-
-    rawGroceryItems.add(
-      GroceryListItem(
-        ingredientId = ingredientId,
-        displayName = catalogItem?.displayName ?: ingredientId,
+      val catalogItem = catalogById[ingredientId]
+      val category = catalogItem?.category ?: IngredientCategory.PANTRY_STAPLE
+      val baseUnit = catalogItem?.baseUnit ?: BaseUnit.MILLILITER
+      val pkgQty = groceryCoreSafePackageQuantity(catalogItem)
+      val unitPkgPrice = groceryCoreSafePackagePriceUsd(
+        catalogItem = catalogItem,
         category = category,
         tier = IngredientTier.TIER_2_STAPLE,
+      )
+      val buyTerms = groceryCoreResolveBuyTerms(
+        basePackagesToBuy = 1,
+        pkgQty = pkgQty,
+        unitPkgPrice = unitPkgPrice,
         baseUnit = baseUnit,
-        totalReservedQuantity = 0.0,
-        currentStockQuantity = pantryEntry.currentQuantity,
-        netDeficit = pkgQty,
-        defaultPackageQuantity = pkgQty,
-        packagesToBuy = buyTerms.effectivePackages,
-        restockQuantity = buyTerms.effectiveRestockQty,
-        stapleStatus = pantryEntry.stapleStatus,
-        isManuallyQueued = ingredientId in aiAddedGroceryIds,
-        mealUsageLabels = usageLabels,
-        estimatedCostUsd = buyTerms.effectiveCostUsd,
-        packageDescriptor = buyTerms.descriptor,
-        isChecked = ingredientId in checkedGroceryItemIds,
-        isQuantityOverridden = buyTerms.isOverridden,
-        plannedRestockQuantity = buyTerms.plannedRestockQty,
-        marketVenue = groceryCoreResolveVenue(catalogItem, category),
-      ),
-    )
-    includedGroceryIds.add(ingredientId)
-    boughtPackagesByIngredientId[ingredientId] = buyTerms.effectivePackages
-    restockDeltas.add(
-      RestockDelta(
-        ingredientId = ingredientId,
-        addedBaseQuantity = buyTerms.effectiveRestockQty,
-        newStapleStatus = StapleStatus.PLENTY,
-      ),
-    )
+        category = category,
+        tier = IngredientTier.TIER_2_STAPLE,
+        rawOverrideQty = groceryQuantityOverrides[ingredientId],
+      )
+      val usageLabels = usageLabelsByIngredientId[ingredientId]?.toList()
+        ?.takeIf { it.isNotEmpty() } ?: listOf("for Pantry Staple Restock")
+
+      rawGroceryItems.add(
+        GroceryListItem(
+          ingredientId = ingredientId,
+          displayName = catalogItem?.displayName ?: ingredientId,
+          category = category,
+          tier = IngredientTier.TIER_2_STAPLE,
+          baseUnit = baseUnit,
+          totalReservedQuantity = 0.0,
+          currentStockQuantity = pantryEntry.currentQuantity,
+          netDeficit = pkgQty,
+          defaultPackageQuantity = pkgQty,
+          packagesToBuy = buyTerms.effectivePackages,
+          restockQuantity = buyTerms.effectiveRestockQty,
+          stapleStatus = pantryEntry.stapleStatus,
+          isManuallyQueued = ingredientId in aiAddedGroceryIds,
+          mealUsageLabels = usageLabels,
+          estimatedCostUsd = buyTerms.effectiveCostUsd,
+          packageDescriptor = buyTerms.descriptor,
+          isChecked = ingredientId in checkedGroceryItemIds,
+          isQuantityOverridden = buyTerms.isOverridden,
+          plannedRestockQuantity = buyTerms.plannedRestockQty,
+          marketVenue = groceryCoreResolveVenue(catalogItem, category),
+        ),
+      )
+      includedGroceryIds.add(ingredientId)
+      boughtPackagesByIngredientId[ingredientId] = buyTerms.effectivePackages
+      restockDeltas.add(
+        RestockDelta(
+          ingredientId = ingredientId,
+          addedBaseQuantity = buyTerms.effectiveRestockQty,
+          newStapleStatus = StapleStatus.PLENTY,
+        ),
+      )
+    }
   }
 
   // Step 3: Append manually queued or AI-suggested items (`aiAddedGroceryIds`) not already covered.

@@ -17,7 +17,6 @@ import com.familykitchen.board.domain.HouseholdProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
 import com.familykitchen.board.domain.IngredientTier
 import com.familykitchen.board.domain.KitchenDomainToolState
-import com.familykitchen.board.domain.LOCAL_MARKET_PRESET_INGREDIENTS
 import com.familykitchen.board.domain.MealSlotStatus
 import com.familykitchen.board.domain.MenuTemplate
 import com.familykitchen.board.domain.PantryLedgerEntry
@@ -38,6 +37,7 @@ import com.familykitchen.board.domain.defaultShelfLifeDaysFor
 import com.familykitchen.board.domain.defaultStorageLocationFor
 import com.familykitchen.board.domain.indexCatalogById
 import com.familykitchen.board.domain.indexPantryById
+import com.familykitchen.board.domain.matchExistingOrPresetCatalogItem
 import com.familykitchen.board.domain.mergeHeritageRecipesIntoLibrary
 import com.familykitchen.board.domain.synthesizeCatalogItemFromLabel
 import kotlinx.coroutines.flow.StateFlow
@@ -861,20 +861,16 @@ private fun storageV2ReduceGroceryUnpackBatch(
   )
 }
 
-// Match an existing household or preset item by label first, or synthesize a clean catalog item.
-// Prevents duplicate catalog entries when a user types a known food name as a quick custom note.
+// Match an existing household or preset item by label or plural stem first, or synthesize a clean item.
+// Prevents duplicate catalog entries when a user types a known food name (e.g. "Carabao Mangoes").
 // Defaults synthesized custom items to Tier-1 COUNT packages with category-aware storage zones.
 private fun storageV2ResolveOrSynthesizePromotedItem(
   custom: CustomGroceryItem,
   existingCatalog: List<IngredientCatalogItem>,
 ): IngredientCatalogItem {
   val cleanLabel = custom.displayName.trim()
-  // Reuse an existing household catalog item if its displayName matches case-insensitively.
-  existingCatalog.firstOrNull { it.displayName.equals(cleanLabel, ignoreCase = true) }?.let { return it }
-  // Otherwise check curated local market presets before synthesizing a brand-new item.
-  LOCAL_MARKET_PRESET_INGREDIENTS
-    .firstOrNull { it.displayName.equals(cleanLabel, ignoreCase = true) }
-    ?.let { return it }
+  // Reuse an existing household or local-market preset item matched by exact name or plural stem.
+  matchExistingOrPresetCatalogItem(cleanLabel, existingCatalog)?.let { return it }
   synthesizeCatalogItemFromLabel(cleanLabel)?.let { return it }
 
   // Fallback deterministic Tier-1 count item when label has no preset keyword match.

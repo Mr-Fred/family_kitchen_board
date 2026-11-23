@@ -333,7 +333,9 @@ fun synthesizeCatalogItemFromLabel(rawLabel: String): IngredientCatalogItem? {
   if (slug.isEmpty()) return null
   val ingredientId = "ing_custom_$slug"
 
-  val spec = classifySynthesizedCulinaryItem(displayName.lowercase(), words.toSet())
+  // Include plural-normalized stems (e.g. "mangoes" -> "mango") so produce/protein nouns match Tier-1.
+  val stemmedWordSet = words.flatMap { listOf(it, normalizeIngredientTokenStem(it)) }.toSet()
+  val spec = classifySynthesizedCulinaryItem(displayName.lowercase(), stemmedWordSet)
   val candidate = IngredientCatalogItem(
     ingredientId = ingredientId, displayName = displayName, category = spec.category,
     tier = spec.tier, baseUnit = spec.baseUnit, defaultPackageQuantity = spec.defaultPackageQuantity,
@@ -341,6 +343,33 @@ fun synthesizeCatalogItemFromLabel(rawLabel: String): IngredientCatalogItem? {
     estimatedPackagePriceUsd = spec.estimatedPricePhp,
   )
   return SchemaValidator.validateIngredientCatalogItem(candidate)
+}
+
+/**
+ * Resolves a raw shopping or kitchen label against [existingCatalog] first and curated
+ * [LOCAL_MARKET_PRESET_INGREDIENTS] second, checking case-insensitive exact `displayName` matches
+ * before plural-stemmed token grounding via `matchCatalogItemFromVisualLabel`.
+ *
+ * @param rawLabel Raw custom shopping item or pantry label entered by the user.
+ * @param existingCatalog Active household ingredient catalog list.
+ * @return Matched [IngredientCatalogItem] when grounded, or `null` if no catalog or preset item fits.
+ */
+fun matchExistingOrPresetCatalogItem(
+  rawLabel: String,
+  existingCatalog: List<IngredientCatalogItem>,
+): IngredientCatalogItem? {
+  // Trim surrounding whitespace and fast-exit on blank labels without scanning catalogs.
+  val clean = rawLabel.trim().takeIf { it.isNotEmpty() } ?: return null
+
+  // Check exact case-insensitive displayName equality on household items and market presets first.
+  existingCatalog.firstOrNull { it.displayName.equals(clean, ignoreCase = true) }?.let { return it }
+  LOCAL_MARKET_PRESET_INGREDIENTS.firstOrNull { it.displayName.equals(clean, ignoreCase = true) }?.let { return it }
+
+  // Fall back to plural-stemmed token grounding against household catalog, then market presets.
+  return matchCatalogItemFromVisualLabel(null, clean, existingCatalog, indexCatalogById(existingCatalog))
+    ?: matchCatalogItemFromVisualLabel(
+      null, clean, LOCAL_MARKET_PRESET_INGREDIENTS, indexCatalogById(LOCAL_MARKET_PRESET_INGREDIENTS),
+    )
 }
 
 /**
@@ -851,27 +880,18 @@ private fun matchesCatalogIngredientText(
 
 // Match catalog items referenced by display name or plural-normalized stem in user text.
 private fun findMentionedCatalogItems(promptLower: String, catalog: List<IngredientCatalogItem>): List<IngredientCatalogItem> {
-  val promptStems = tokenizeIngredientWords(promptLower)
-    .filter { it.length >= 3 }
-    .map(::normalizeIngredientTokenStem)
-    .toSet()
+  val promptStems = tokenizeIngredientWords(promptLower).filter { it.length >= 3 }.map(::normalizeIngredientTokenStem).toSet()
   return catalog.filter { item -> matchesCatalogIngredientText(promptLower, promptStems, item) }
 }
 
 // Resolve a vision model's raw label or candidate ID against known household catalog records.
 private fun matchCatalogItemFromVisualLabel(
-  candidateId: String?,
-  rawLabel: String,
-  catalog: List<IngredientCatalogItem>,
-  catalogById: Map<String, IngredientCatalogItem>,
+  candidateId: String?, rawLabel: String,
+  catalog: List<IngredientCatalogItem>, catalogById: Map<String, IngredientCatalogItem>,
 ): IngredientCatalogItem? {
   if (candidateId != null) catalogById[candidateId]?.let { return it }
-  val labelLower = rawLabel.trim().lowercase()
-  if (labelLower.isEmpty()) return null
-  val labelStems = tokenizeIngredientWords(labelLower)
-    .filter { it.length >= 3 }
-    .map(::normalizeIngredientTokenStem)
-    .toSet()
+  val labelLower = rawLabel.trim().lowercase().takeIf { it.isNotEmpty() } ?: return null
+  val labelStems = tokenizeIngredientWords(labelLower).filter { it.length >= 3 }.map(::normalizeIngredientTokenStem).toSet()
   return catalog.firstOrNull { item -> matchesCatalogIngredientText(labelLower, labelStems, item) }
 }
 

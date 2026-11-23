@@ -435,8 +435,8 @@ fun answerCookStepQuestion(
   val step = recipe.morningSteps.getOrNull(stepIndex.coerceAtLeast(0)) ?: recipe.morningSteps.firstOrNull()
   val lower = question.trim().lowercase()
 
-  // 1. Child / toddler choking-safety & texture questions (EC-08).
-  if (Regex("toddler|baby|kid|2yo|child|chok|safe|bébé|enfant").containsMatchIn(lower)) {
+  // 1. Child / toddler choking-safety & texture questions (EC-08), ignoring culinary "baby <produce>".
+  if (cookQaIsChildSafetyQuestion(lower)) {
     val adapted = youngestStage.formatPrepTip(recipe.toddlerPrepTip)
     return adapted ?: "${youngestStage.badgePrefix}: ${youngestStage.prepGuidance}"
   }
@@ -542,6 +542,21 @@ private data class CookQaTargetIngredient(
   val catalogId: String?,
   val substituteGroups: Set<String>,
 )
+
+// Strip culinary "baby <produce>" phrases (e.g. "baby spinach") before matching EC-08 child-safety terms.
+private fun cookQaIsChildSafetyQuestion(lower: String): Boolean {
+  val babyProduceRegex = Regex(
+    "\\bbaby\\s+(?:spinach|kale|bok|pak|carrot\\w*|potato\\w*|corn|greens?|" +
+      "arugula|leaf|leaves|bella\\w*|tomato\\w*|cucumber\\w*|zucchini\\w*)\\b",
+  )
+  val childSafetyRegex = Regex(
+    "\\b(?:toddler\\w*|baby|babies|kid|kids|2yo|6-12m|" +
+      "child\\w*|chok\\w*|safe\\w*|bébé\\w*|enfant\\w*)\\b",
+  )
+  // Replace culinary produce collocations with whitespace so real child/toddler words still match.
+  val sanitized = lower.replace(babyProduceRegex, " ")
+  return childSafetyRegex.containsMatchIn(sanitized)
+}
 
 // Detect missing-stock or culinary swap prompts in English and French so step text is never echoed.
 private fun cookQaIsMissingOrSubstituteQuestion(lower: String): Boolean =
