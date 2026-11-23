@@ -122,6 +122,7 @@ fun defaultMarketRegionForCurrency(currency: HouseholdCurrency): String =
  * @property marketRegionLabel Local wet-market or neighborhood grocer label.
  * @property pantryMode Selected starting pantry mode (`CURATED_BASICS` default).
  * @property selectedBasicIngredientIds Checked `ingredientId`s stocked when [pantryMode] is `CURATED_BASICS`.
+ * @property preferredCuisines Preferred household culinary traditions (`French` & `Yoruba and West African` default).
  */
 @Serializable
 data class FirstRunOnboardingDraft(
@@ -136,6 +137,7 @@ data class FirstRunOnboardingDraft(
   val marketRegionLabel: String = "Antipolo & Marikina, PH",
   val pantryMode: StartingPantryMode = StartingPantryMode.CURATED_BASICS,
   val selectedBasicIngredientIds: Set<String> = DEFAULT_SELECTED_BASIC_INGREDIENT_IDS,
+  val preferredCuisines: List<String> = DEFAULT_PREFERRED_CUISINES,
 ) {
   companion object {
     /**
@@ -174,6 +176,13 @@ data class FirstRunOnboardingDraft(
         .map { it.ingredientId }
         .toSet()
 
+      // Preserve saved household cuisine traditions, falling back cleanly when blank.
+      val resolvedCuisines = profile.preferredCuisines
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+        .ifEmpty { DEFAULT_PREFERRED_CUISINES }
+
       return FirstRunOnboardingDraft(
         householdName = profile.householdName.trim().ifEmpty { "Our Family Kitchen" },
         template = profile.activeTemplate,
@@ -188,6 +197,7 @@ data class FirstRunOnboardingDraft(
         },
         pantryMode = StartingPantryMode.CURATED_BASICS,
         selectedBasicIngredientIds = DEFAULT_SELECTED_BASIC_INGREDIENT_IDS - blockedPresetIds,
+        preferredCuisines = resolvedCuisines,
       )
     }
   }
@@ -198,7 +208,7 @@ data class FirstRunOnboardingDraft(
  *
  * @property householdProfile Configured household profile with template, cook names, currency, and allergens.
  * @property pantryEntries Initialized two-tier pantry stock records matching the chosen [StartingPantryMode].
- * @property weeklyBoard Freshly auto-drafted 21-slot board respecting `EC-01`–`EC-03` and target servings.
+ * @property weeklyBoard Drafted 21-slot board (or calm 0-slot Blank Week on `EMPTY_KITCHEN`).
  * @property rescuedExpiringMealsCount Initial waste-rescue baseline (`12` for sample demo, `0` otherwise).
  */
 @Serializable
@@ -211,14 +221,15 @@ data class FirstRunOnboardingOutcome(
 
 /**
  * Pure deterministic reducer transforming a 4-step [FirstRunOnboardingDraft] into a tailored
- * [HouseholdProfile], two-tier [PantryLedgerEntry] ledger, and 21-slot [WeeklyBoard].
+ * [HouseholdProfile], two-tier [PantryLedgerEntry] ledger, and [WeeklyBoard].
  *
  * Enforces `EC-01` (`<= 25m` weekday breakfast cap), `EC-02`/`EC-03` (allergen exclusions and
  * pantry-aware substitute tie-breaking), `EC-08` (child growth-stage texture safety), and `EC-11`
- * (Tier-2 `PLENTY`/`OUT` staple status alignment).
+ * (Tier-2 `PLENTY`/`OUT` staple status alignment), while giving `EMPTY_KITCHEN` a calm `0`-slot
+ * Blank Week instead of pre-filling uncookable slots.
  *
  * @param catalog Household ingredient catalog (`44` canonical items).
- * @param recipes Household recipe library (`30` canonical recipes).
+ * @param recipes Household recipe library (`30` canonical recipes + heritage library).
  * @param seedPantry Pre-stocked demo pantry ledger used for [StartingPantryMode.SAMPLE_DEMO_KITCHEN].
  * @param currentBoard Current weekly board providing stable `boardId`, `householdId`, and `weekStartDateIso`.
  * @param draft User-configured 4-step first-run onboarding selections.
@@ -234,12 +245,20 @@ fun computeFirstRunOnboardingOutcome(
   nowIso: String = DEFAULT_TIMESTAMP_ISO,
 ): FirstRunOnboardingOutcome {
   val safeNowIso = nowIso.trim().ifEmpty { DEFAULT_TIMESTAMP_ISO }
+  val baseDateIso = safeNowIso.take(10)
   // Normalize allergen tags once so profile filtering, staple exclusion, and board drafting agree.
   val cleanAllergens = draft.selectedAllergens
     .map { it.trim().uppercase() }
     .filter { it.isNotEmpty() }
     .distinct()
   val cleanAllergensSet = cleanAllergens.toSet()
+
+  // Normalize preferred cuisine traditions so profile and board drafting stay synchronized.
+  val cleanCuisines = draft.preferredCuisines
+    .map { it.trim() }
+    .filter { it.isNotEmpty() }
+    .distinct()
+    .ifEmpty { DEFAULT_PREFERRED_CUISINES }
 
   val cleanHouseholdName = draft.householdName.trim().ifEmpty { "Our Family Kitchen" }
   val cleanMorningLead = draft.morningLeadName.trim().ifEmpty { "Morning Cook" }
@@ -260,6 +279,7 @@ fun computeFirstRunOnboardingOutcome(
     eveningLeadName = cleanEveningLead,
     currency = draft.currency,
     marketRegionLabel = cleanRegion,
+    preferredCuisines = cleanCuisines,
   )
 
   val resolvedHouseholdId = currentBoard.householdId.trim().ifEmpty { templated.householdId }
@@ -283,7 +303,7 @@ fun computeFirstRunOnboardingOutcome(
         member.copy(memberName = nextName, ageYears = safeOlderKidAge)
       }
       "YOUNGEST" -> member.copy(
-        memberName = youngestMemberLabelForStage(effectiveYoungestStage),
+        memberName = onboardCoreYoungestLabelForStage(effectiveYoungestStage),
         growthStage = effectiveYoungestStage,
       )
       else -> member
@@ -296,6 +316,7 @@ fun computeFirstRunOnboardingOutcome(
     olderKidAgeYears = safeOlderKidAge,
     members = updatedMembers,
     householdAllergens = cleanAllergens,
+    preferredCuisines = cleanCuisines,
   )
 
   // Materialize initial two-tier pantry ledger and waste-rescue counter for the chosen pantry mode.
@@ -303,14 +324,15 @@ fun computeFirstRunOnboardingOutcome(
   val rescuedExpiringMealsCount: Int
   when (draft.pantryMode) {
     StartingPantryMode.SAMPLE_DEMO_KITCHEN -> {
+      // Return seedPantry verbatim when non-empty so sample demo tests verify exact seed parity.
       pantryEntries = when {
         seedPantry.isNotEmpty() -> seedPantry
-        else -> catalog.map { item -> buildStockedPantryEntry(item, safeNowIso) }
+        else -> catalog.map { item -> onboardCoreBuildStockedPantryEntry(item, safeNowIso, baseDateIso) }
       }
       rescuedExpiringMealsCount = 12
     }
     StartingPantryMode.EMPTY_KITCHEN -> {
-      pantryEntries = catalog.map { item -> buildZeroStockPantryEntry(item, safeNowIso) }
+      pantryEntries = catalog.map { item -> onboardCoreBuildZeroStockPantryEntry(item, safeNowIso) }
       rescuedExpiringMealsCount = 0
     }
     StartingPantryMode.CURATED_BASICS -> {
@@ -326,25 +348,46 @@ fun computeFirstRunOnboardingOutcome(
 
       pantryEntries = catalog.map { item ->
         when {
-          item.ingredientId in safeSelectedIds -> buildStockedPantryEntry(item, safeNowIso)
-          else -> buildZeroStockPantryEntry(item, safeNowIso)
+          item.ingredientId in safeSelectedIds -> onboardCoreBuildStockedPantryEntry(item, safeNowIso, baseDateIso)
+          else -> onboardCoreBuildZeroStockPantryEntry(item, safeNowIso)
         }
       }
       rescuedExpiringMealsCount = 0
     }
   }
 
-  // Auto-draft all 21 weekly slots calibrated to target servings, allergens, and initial pantry.
-  val draftedBoard = autoDraftWeeklyBoard(
-    boardId = currentBoard.boardId.trim().ifEmpty { "board_week_1" },
-    householdId = configuredProfile.householdId,
-    weekStartDateIso = currentBoard.weekStartDateIso.trim().ifEmpty { "2026-10-26" },
-    recipes = recipes,
-    catalog = catalog,
-    householdAllergens = cleanAllergens,
-    defaultServings = configuredProfile.effectiveTargetServings,
-    pantry = pantryEntries,
-  )
+  val safeBoardId = currentBoard.boardId.trim().ifEmpty { "board_week_1" }
+  val safeWeekStart = currentBoard.weekStartDateIso.trim().ifEmpty { "2026-10-26" }
+
+  // Give EMPTY_KITCHEN a calm Blank Week (0 uncookable slots) while drafting 21 cuisine-ranked
+  // slots for CURATED_BASICS and SAMPLE_DEMO_KITCHEN.
+  val draftedBoard = when (draft.pantryMode) {
+    // Empty pantry starts with 0 scheduled slots so users never see 21 red uncookable shortages.
+    StartingPantryMode.EMPTY_KITCHEN ->
+      currentBoard.copy(
+        boardId = safeBoardId,
+        householdId = configuredProfile.householdId,
+        weekStartDateIso = safeWeekStart,
+        slots = emptyList(),
+      )
+    // Curated basics and sample demo kitchens auto-draft all 21 slots led by preferred cuisines.
+    StartingPantryMode.CURATED_BASICS,
+    StartingPantryMode.SAMPLE_DEMO_KITCHEN -> {
+      val cuisineRankedRecipes = recipes.sortedByDescending { recipe ->
+        doesRecipeMatchPreferredCuisines(recipe, cleanCuisines)
+      }
+      autoDraftWeeklyBoard(
+        boardId = safeBoardId,
+        householdId = configuredProfile.householdId,
+        weekStartDateIso = safeWeekStart,
+        recipes = cuisineRankedRecipes,
+        catalog = catalog,
+        householdAllergens = cleanAllergens,
+        defaultServings = configuredProfile.effectiveTargetServings,
+        pantry = pantryEntries,
+      )
+    }
+  }
 
   return FirstRunOnboardingOutcome(
     householdProfile = configuredProfile,
@@ -354,10 +397,11 @@ fun computeFirstRunOnboardingOutcome(
   )
 }
 
-// Stock 1 full default package with PLENTY status and baseline USDA FoodKeeper shelf life.
-private fun buildStockedPantryEntry(
+// Stock 1 full default package with PLENTY status, USDA shelf life, and calendar expiryDateIso.
+private fun onboardCoreBuildStockedPantryEntry(
   item: IngredientCatalogItem,
   nowIso: String,
+  baseDateIso: String,
 ): PantryLedgerEntry =
   PantryLedgerEntry(
     ingredientId = item.ingredientId,
@@ -368,11 +412,12 @@ private fun buildStockedPantryEntry(
     updatedAtIso = nowIso,
     storageLocation = item.defaultStorageLocation,
     expiresInDays = item.defaultShelfLifeDays,
+    expiryDateIso = addDaysIso(baseDateIso, item.defaultShelfLifeDays),
     purchasedDaysAgo = 0,
   )
 
 // Initialize a depleted 0-stock record so planned weekly meals queue exact packages onto Grocery.
-private fun buildZeroStockPantryEntry(
+private fun onboardCoreBuildZeroStockPantryEntry(
   item: IngredientCatalogItem,
   nowIso: String,
 ): PantryLedgerEntry =
@@ -389,7 +434,7 @@ private fun buildZeroStockPantryEntry(
   )
 
 // Map youngest feeding stage to a clear 1-pot plating card member label.
-private fun youngestMemberLabelForStage(stage: ChildGrowthStage): String =
+private fun onboardCoreYoungestLabelForStage(stage: ChildGrowthStage): String =
   when (stage) {
     ChildGrowthStage.BABY_6_12M -> "Baby (6-12m)"
     ChildGrowthStage.TODDLER_1_2Y -> "2yo Toddler"

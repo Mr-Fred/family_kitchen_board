@@ -371,7 +371,7 @@ internal fun CookModeHandsFreeAiCard(
         }
         Surface(shape = CircleShape, color = extendedColors.sageContainer) {
           Text(
-            text = if (sessionState.isHandsFreeVoiceActive) "Listening" else "EN / FR",
+            text = if (sessionState.isHandsFreeVoiceActive) "Listening" else "EN · FR",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = extendedColors.onSageContainer,

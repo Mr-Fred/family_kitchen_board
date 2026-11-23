@@ -16,6 +16,7 @@ import com.familykitchen.board.domain.MealSlotStatus
 import com.familykitchen.board.domain.MealSlotType
 import com.familykitchen.board.domain.MorningStep
 import com.familykitchen.board.domain.PantryLedgerEntry
+import com.familykitchen.board.domain.PostCookCompletionSummary
 import com.familykitchen.board.domain.Recipe
 import com.familykitchen.board.domain.RecipeDifficulty
 import com.familykitchen.board.domain.ResolvedMealCard
@@ -408,6 +409,7 @@ object PreviewFixtures {
   )
 
   /** Complete sample recipe list spanning `<= 25m` breakfasts and heritage/bistro lunches & dinners. */
+  // Keep 6 representative dishes covering breakfast cap, in-stock swaps, and salmon sear steps.
   val recipes: List<Recipe> = listOf(
     breakfastTartineRecipe,
     overnightOatsRecipe,
@@ -418,6 +420,7 @@ object PreviewFixtures {
   )
 
   /** Lookup map of [recipes] keyed by `recipeId`. */
+  // Constant-time map avoids repeated linear scans across preview card builders.
   val recipesById: Map<String, Recipe> = recipes.associateBy { it.recipeId }
 
   // Stock 2 full packages of every Tier-1 item and stamp 3 realistic expiring items (salmon 1d,
@@ -551,6 +554,7 @@ object PreviewFixtures {
       }
 
   /** Station-grouped [WeeklyPrepSessionPlan] spanning all 4 kitchen batch-prep stations. */
+  // Pre-marks the grains station completed so preview progress bars show realistic partial progress.
   val weeklyPrepPlan: WeeklyPrepSessionPlan = buildWeeklyMealPrepSessionPlan(
     board = weeklyBoard,
     recipes = recipes,
@@ -593,4 +597,16 @@ object PreviewFixtures {
       ),
     )
   }
+
+  /** Sample 2x batch [PostCookCompletionSummary] showcasing 1-tap `0`-BOM Leftover Lunch toggle. */
+  // Models an 8-serving double batch for a Family of 4 leaving 4 surplus portions for tomorrow lunch.
+  val postCookSalmonSummary: PostCookCompletionSummary = PostCookCompletionSummary(
+    recipeId = dinnerSalmonRecipe.recipeId,
+    recipeTitle = dinnerSalmonRecipe.title,
+    cookedSlotId = "board_week_preview_day_0_dinner",
+    cookedDayIndex = 0,
+    cookedServings = 8,
+    householdServings = 4,
+    extraLeftoverServings = 4,
+  )
 }

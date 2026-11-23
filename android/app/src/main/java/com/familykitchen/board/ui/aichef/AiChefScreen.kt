@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -82,6 +81,7 @@ import com.familykitchen.board.domain.EdgeDeviceProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
 import com.familykitchen.board.domain.IngredientCategory
 import com.familykitchen.board.domain.IngredientTier
+import com.familykitchen.board.domain.LOCAL_MARKET_PRESET_INGREDIENTS
 import com.familykitchen.board.domain.MealSlotType
 import com.familykitchen.board.domain.NutritionFocusTag
 import com.familykitchen.board.domain.Recipe
@@ -95,10 +95,11 @@ import com.familykitchen.board.ports.VoiceInputState
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
 import com.familykitchen.board.ui.theme.SavorBrandBadge
+import java.io.File
 
-// SavorAI Sous-Chef Screen featuring a decluttered conversational viewport, editorial welcome
-// card, quiet single-line AgentStatusPill, interactive structured artifacts, 1-tap Undo bar,
-// and a 2-tier persistent bottom SavorAgentComposer eliminating 360dp wrap & cursor glitches.
+// SavorAI Sous-Chef Screen featuring a decluttered conversational viewport, time-aware editorial
+// welcome card, Tonight Dinner recipe scheduling, dynamic culinary substitution resolution,
+// 1-tap Undo bar, and a 2-tier persistent bottom SavorAgentComposer.
 
 // Quick-action suggestion chips docked right above the composer when idle.
 private val SAVOR_QUICK_ACTION_PROMPTS: List<String> = listOf(
@@ -106,53 +107,139 @@ private val SAVOR_QUICK_ACTION_PROMPTS: List<String> = listOf(
   "20-min kids breakfast", "Import recipe text",
 )
 
+// Canonical culinary keyword aliases resolving substitution tips to real household catalog IDs.
+private val CHEF_SWAP_KEYWORD_ALIASES: List<Pair<String, List<String>>> = listOf(
+  "ing_greek_yogurt" to listOf("greek yogurt", "plain yogurt", "yogurt"), "ing_butter" to listOf("creamery butter", "cultured butter", "butter"),
+  "ing_milk" to listOf("fresh milk", "whole milk", "milk"), "ing_cheese" to listOf("cheddar cheese", "aged cheddar", "cheese"),
+  "ing_gata" to listOf("coconut milk", "fresh gata", "gata"), "ing_red_palm_oil" to listOf("red palm oil", "palm oil", "zomi"),
+  "ing_olive_oil" to listOf("extra-virgin olive oil", "extra virgin olive oil", "olive oil"), "ing_amaranth_greens" to listOf("amaranth greens", "amaranth", "kulitis"),
+  "ing_malunggay_pechay" to listOf("malunggay leaves", "malunggay", "moringa"), "ing_kangkong" to listOf("water spinach", "kangkong"),
+  "ing_pechay" to listOf("fresh pechay", "pechay", "bok choy"), "ing_kale" to listOf("curly kale", "kale"),
+  "ing_spinach" to listOf("baby spinach", "spinach"), "ing_bangus" to listOf("boneless dagupan bangus", "milkfish", "bangus"),
+  "ing_tilapia" to listOf("tilapia fillets", "tilapia"), "ing_salmon" to listOf("atlantic salmon", "salmon fillet", "salmon"),
+  "ing_shrimp" to listOf("suahe shrimp", "shrimp", "hipon"), "ing_tofu" to listOf("firm tokwa", "tokwa", "tofu"),
+  "ing_turkey_breast" to listOf("turkey breast"), "ing_turkey_ham" to listOf("turkey ham"),
+  "ing_chicken" to listOf("chicken thighs", "chicken"), "ing_calamansi" to listOf("calamansi citrus", "calamansi"),
+  "ing_lemon" to listOf("fresh lemons", "lemon"), "ing_saba_banana" to listOf("saba bananas", "saba banana", "saba"),
+  "ing_plantain" to listOf("ripe plantains", "plantain"), "ing_banana" to listOf("cavendish bananas", "banana"),
+  "ing_sweet_potato" to listOf("orange kamote", "sweet potato", "kamote"), "ing_cassava" to listOf("kamoteng kahoy", "cassava"),
+  "ing_lentils" to listOf("red lentils", "lentils"), "ing_monggo_beans" to listOf("monggo beans", "monggo", "mung beans"),
+  "ing_pumpkin_seeds" to listOf("pumpkin seeds", "pepitas"),
+)
+
+// Dairy and primary-protein lookup tables preventing accidental protein-for-dairy swaps.
+private val DAIRY_SWAP_TARGETS: List<String> = listOf("ing_butter", "ing_milk", "ing_cheese")
+private val PRIMARY_PROTEIN_IDS: Set<String> = setOf(
+  "ing_salmon", "ing_chicken", "ing_fish", "ing_bangus",
+  "ing_turkey_breast", "ing_turkey_ham", "ing_egg", "ing_tofu",
+)
+
 /**
- * Stateless Material 3 Sous-Chef screen (`Chef` tab) featuring a decluttered chat canvas,
- * transparent agency pills, structured interactive recipe/intake artifacts, and a 2-tier
+ * Resolves the `(fromIngredientId, toIngredientId)` substitution pair described by [tipText] on
+ * [recipe] against [catalog], avoiding hardcoded `"ing_greek_yogurt"` swaps when another local or
+ * pantry substitute (such as `ing_kangkong`, `ing_amaranth_greens`, `ing_bangus`, `ing_calamansi`,
+ * `ing_red_palm_oil`, or `ing_gata`) is named.
+ */
+fun resolveChefSubstitutionPair(
+  recipe: Recipe,
+  tipText: String,
+  catalog: List<IngredientCatalogItem> = emptyList(),
+): Pair<String, String>? {
+  if (recipe.bomLines.isEmpty()) return null
+  val tipLower = tipText.removePrefix("Sous-Chef Rule:").trim().lowercase()
+  val effectiveCatalog = (catalog + LOCAL_MARKET_PRESET_INGREDIENTS).distinctBy { it.ingredientId }
+  val catalogById = effectiveCatalog.associateBy { it.ingredientId }
+  val bomIds = recipe.bomLines.map { it.ingredientId }.toSet()
+
+  // Collect character match offsets for catalog items and canonical culinary aliases in tipLower.
+  val matchedById = LinkedHashMap<String, Int>()
+  for (item in effectiveCatalog) {
+    if (!item.isLocallyAvailable && item.ingredientId !in bomIds) continue
+    val cleanName = item.displayName.substringBefore('(').trim().lowercase()
+    val idx = if (cleanName.length >= 3) tipLower.indexOf(cleanName) else -1
+    if (idx >= 0) matchedById[item.ingredientId] = idx
+  }
+  for ((id, phrases) in CHEF_SWAP_KEYWORD_ALIASES) {
+    if (id in matchedById) continue
+    val avail = catalogById[id]?.isLocallyAvailable ?: true
+    if (!avail && id !in bomIds) continue
+    val hit = phrases.map { tipLower.indexOf(it) }.filter { it >= 0 }.minOrNull()
+    if (hit != null) matchedById[id] = hit
+  }
+
+  val withClauseIdx = tipLower.indexOf("with ")
+  val outsideBom = matchedById.entries.filter { it.key !in bomIds }
+  val insideBom = matchedById.entries.filter { it.key in bomIds }.sortedBy { it.value }
+
+  // Prefer the replacement named after "with " when present; otherwise earliest non-BOM mention.
+  val explicitToId = when {
+    outsideBom.isEmpty() -> null
+    withClauseIdx >= 0 ->
+      outsideBom.filter { it.value >= withClauseIdx }.minByOrNull { it.value }?.key
+        ?: outsideBom.minByOrNull { it.value }?.key
+    else -> outsideBom.minByOrNull { it.value }?.key
+  }
+
+  if (explicitToId != null) {
+    // Match source BOM line by explicit mention, shared substituteGroupId, or dairy/non-protein rule.
+    val targetGroups = catalogById[explicitToId]?.substituteGroupIds.orEmpty().toSet()
+    val resolvedFromId = insideBom.firstOrNull { it.key != explicitToId }?.key
+      ?: recipe.bomLines.firstOrNull {
+        !it.substituteGroupId.isNullOrBlank() && it.substituteGroupId in targetGroups && it.ingredientId != explicitToId
+      }?.ingredientId
+      ?: when (explicitToId) {
+        "ing_greek_yogurt", "ing_gata", "ing_milk" -> chefScreenResolveDairyOrNonProteinId(recipe.bomLines, explicitToId)
+        else -> recipe.bomLines.firstOrNull { it.ingredientId != explicitToId }?.ingredientId
+      }
+    return resolvedFromId?.let { fromId -> fromId to explicitToId }
+  }
+
+  // Fallback to substituteGroupId partner when tip has no explicit non-BOM name.
+  val subBom = recipe.bomLines.firstOrNull { !it.substituteGroupId.isNullOrBlank() }
+  if (subBom != null) {
+    val group = subBom.substituteGroupId.orEmpty()
+    val alt = effectiveCatalog.firstOrNull {
+      group in it.substituteGroupIds && it.ingredientId != subBom.ingredientId && it.isLocallyAvailable
+    }
+    if (alt != null) return subBom.ingredientId to alt.ingredientId
+  }
+
+  // Fall back to Greek yogurt strictly when the tip explicitly mentions yogurt.
+  return when {
+    tipLower.contains("yogurt") ->
+      chefScreenResolveDairyOrNonProteinId(recipe.bomLines, "ing_greek_yogurt")?.let { it to "ing_greek_yogurt" }
+    else -> null
+  }
+}
+
+/**
+ * Stateless Material 3 Sous-Chef screen (`Chef` entry) featuring a decluttered chat canvas,
+ * time-of-day aware greeting, structured interactive recipe and intake artifacts, and a 2-tier
  * persistent bottom agent bar (`SavorAgentComposer`).
  */
 @Composable
 fun AiChefScreen(
-  turnHistory: List<AiChatTurn>,
-  runtimeState: AiRuntimeState,
-  voiceState: VoiceInputState,
-  activeDeviceProfile: EdgeDeviceProfile,
-  attachedImagePath: String?,
-  attachedImageLabel: String?,
-  onAction: (AiChefAction) -> Unit,
-  onLaunchGalleryPicker: () -> Unit,
-  onLaunchCameraCapture: () -> Unit,
-  onRequestVoiceInput: (languageTag: String) -> Unit,
-  onLaunchModelPicker: () -> Unit,
-  expiringSoonCount: Int = 3,
-  plannedDinnerCount: Int = 2,
-  savedRecipeIds: Set<String> = emptySet(),
-  isContextBannerDismissed: Boolean = false,
-  isGenerating: Boolean = false,
-  isPreprocessingImage: Boolean = false,
-  preprocessingImageLabel: String? = null,
-  isGeneratingVisionTurn: Boolean = false,
-  permissionNotice: String? = null,
-  onDismissPermissionNotice: () -> Unit = {},
-  previewThumbnailBitmap: ImageBitmap? = null,
-  appliedSwapProposalIds: Set<String> = emptySet(),
-  queuedIngredientProposalIds: Set<String> = emptySet(),
-  confirmedVisualTurnIds: Set<String> = emptySet(),
-  onOpenFamilyGoals: () -> Unit = {},
-  onNavigateToBoard: () -> Unit = {},
-  onNavigateToGroceryList: () -> Unit = {},
-  currencySymbol: String = "₱",
-  canUndoLastAgentAction: Boolean = false,
+  turnHistory: List<AiChatTurn>, runtimeState: AiRuntimeState, voiceState: VoiceInputState,
+  activeDeviceProfile: EdgeDeviceProfile, attachedImagePath: String?, attachedImageLabel: String?,
+  onAction: (AiChefAction) -> Unit, onLaunchGalleryPicker: () -> Unit, onLaunchCameraCapture: () -> Unit,
+  onRequestVoiceInput: (languageTag: String) -> Unit, onLaunchModelPicker: () -> Unit,
+  expiringSoonCount: Int = 3, plannedDinnerCount: Int = 2, savedRecipeIds: Set<String> = emptySet(),
+  isContextBannerDismissed: Boolean = false, isGenerating: Boolean = false,
+  isPreprocessingImage: Boolean = false, preprocessingImageLabel: String? = null,
+  isGeneratingVisionTurn: Boolean = false, permissionNotice: String? = null,
+  onDismissPermissionNotice: () -> Unit = {}, previewThumbnailBitmap: ImageBitmap? = null,
+  appliedSwapProposalIds: Set<String> = emptySet(), queuedIngredientProposalIds: Set<String> = emptySet(),
+  confirmedVisualTurnIds: Set<String> = emptySet(), onOpenFamilyGoals: () -> Unit = {},
+  onNavigateToBoard: () -> Unit = {}, onNavigateToGroceryList: () -> Unit = {},
+  currencySymbol: String = "₱", canUndoLastAgentAction: Boolean = false,
   lastAgentActionSummary: String? = null,
   onUndoLastAgentAction: () -> Unit = { onAction(AiChefAction.UndoLastAgentAction) },
   onDismissAgentActionBanner: () -> Unit = { onAction(AiChefAction.DismissAgentActionBanner) },
-  onAdjustLastAgentAction: (() -> Unit)? = null,
-  isModelSetupExpanded: Boolean? = null,
-  onToggleModelSetup: (() -> Unit)? = null,
-  cloudConfig: CloudLlmConfig = CloudLlmConfig(),
-  isVerifyingCloudKey: Boolean = false,
-  isRefreshingCloudModels: Boolean = false,
-  modifier: Modifier = Modifier,
+  onAdjustLastAgentAction: (() -> Unit)? = null, isModelSetupExpanded: Boolean? = null,
+  onToggleModelSetup: (() -> Unit)? = null, cloudConfig: CloudLlmConfig = CloudLlmConfig(),
+  isVerifyingCloudKey: Boolean = false, isRefreshingCloudModels: Boolean = false,
+  currentHour24: Int = 12, todayDayIndex: Int = 0,
+  catalog: List<IngredientCatalogItem> = emptyList(), modifier: Modifier = Modifier,
 ) {
   var composerText by rememberSaveable { mutableStateOf("") }
   var internalSetupExpanded by rememberSaveable { mutableStateOf(false) }
@@ -164,9 +251,9 @@ fun AiChefScreen(
   val setupExpanded = isModelSetupExpanded ?: internalSetupExpanded
   val toggleSetup: () -> Unit = onToggleModelSetup ?: { internalSetupExpanded = !internalSetupExpanded }
   // Defensively disambiguate any legacy duplicate turnIds so LazyColumn keys never collide.
-  val safeTurnHistory = remember(turnHistory) { ensureUniqueTurnIds(turnHistory) }
+  val safeTurnHistory = remember(turnHistory) { chefScreenEnsureUniqueTurnIds(turnHistory) }
 
-  // Smoothly bring item 0 (AI Model & Cloud Key Setup) into view after 1-tap Cloud Vision switch.
+  // Smoothly bring item 0 into view after 1-tap Cloud Vision switch.
   LaunchedEffect(scrollToSetupTrigger) {
     if (scrollToSetupTrigger > 0) listState.animateScrollToItem(0)
   }
@@ -188,7 +275,7 @@ fun AiChefScreen(
 
   val hasAttachedPhoto = !attachedImagePath.isNullOrBlank()
   val visionSupported = isRuntimeVisionCapable(runtimeState)
-  // Hard UI Vision Gate: block Send while a photo is attached on any non-vision runtime.
+  // Hard UI Vision Gate blocks Send while a photo is attached on any non-vision runtime.
   val blockedByVisionGate = hasAttachedPhoto && !visionSupported
   val canSubmitTurn = !isGenerating && !isPreprocessingImage && !blockedByVisionGate &&
     (composerText.isNotBlank() || hasAttachedPhoto)
@@ -202,14 +289,13 @@ fun AiChefScreen(
 
   Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
     Column(modifier = Modifier.fillMaxSize()) {
-      // Main scrollable Sous-Chef transcript kept free of top utility & prompt chrome clutter.
+      // Main scrollable Sous-Chef transcript kept free of top utility chrome clutter.
       LazyColumn(
-        state = listState,
-        modifier = Modifier.weight(1f).fillMaxWidth(),
+        state = listState, modifier = Modifier.weight(1f).fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
       ) {
-        // Render AI setup panel when toggled from top bar / chip, during SAF copy, or cloud sync.
+        // Render AI setup panel when toggled open or while background model sync is active.
         if (setupExpanded || runtimeState.isBackgroundBusy || isVerifyingCloudKey || isRefreshingCloudModels) {
           item(key = "savor_edge_ai_setup") {
             EdgeAiRuntimeSetupPanel(
@@ -223,30 +309,32 @@ fun AiChefScreen(
           }
         }
 
-        // Surface camera, mic, or SAF file-extension guidance banners only when relevant.
         if (!permissionNotice.isNullOrBlank()) {
           item(key = "savor_permission_notice") {
             PermissionFeedbackBanner(message = permissionNotice, onDismiss = onDismissPermissionNotice)
           }
         }
 
-        // Editorial empty-state welcome card with 1-line live context pill and AI Setup chip.
+        // Time-of-day aware editorial welcome card when no conversation turns exist yet.
         if (safeTurnHistory.isEmpty()) {
           item(key = "savor_welcome_card") {
             SavorWelcomeBanner(
-              expiringSoonCount, plannedDinnerCount, runtimeState, setupExpanded, toggleSetup, cloudConfig,
+              expiringSoonCount = expiringSoonCount, plannedDinnerCount = plannedDinnerCount,
+              runtimeState = runtimeState, isSetupExpanded = setupExpanded,
+              onToggleSetup = toggleSetup, cloudConfig = cloudConfig, currentHour24 = currentHour24,
             )
           }
         }
 
-        // Conversational Feed: warm charcoal User bubbles + Restaurant-avatar Sous-Chef artifacts.
+        // Conversational feed of User bubbles and Sous-Chef grounded artifacts.
         items(items = safeTurnHistory, key = { "turn_${it.turnId}" }) { turn ->
-          SavorChatTurnView(
+          chefScreenChatTurnView(
             turn = turn, savedRecipeIds = savedRecipeIds,
             isSwapsApplied = turn.proposal?.proposalId in appliedSwapProposalIds,
             isIngredientsQueued = turn.proposal?.proposalId in queuedIngredientProposalIds,
             isVisualRestockConfirmed = turn.turnId in confirmedVisualTurnIds,
-            currencySymbol = currencySymbol, onAction = onAction,
+            currencySymbol = currencySymbol, todayDayIndex = todayDayIndex, catalog = catalog,
+            onAction = onAction,
             onQuickPromptFill = { prompt ->
               composerText = prompt
               onAction(AiChefAction.SelectQuickPrompt(prompt))
@@ -255,18 +343,17 @@ fun AiChefScreen(
           )
         }
 
-        // Quiet single-line 36.dp AgentStatusPill replaces bulky generating cards during inference.
         if (isGenerating) {
           item(key = "savor_generating") { AgentStatusPill(isVisionTurn = isGeneratingVisionTurn) }
         }
       }
 
-      // Docked Bottom Zone: Undo Bar, Vision Gate, Progress, Quick-Action Chips, & 2-Tier Composer.
+      // Docked Bottom Zone: Undo Bar, Vision Gate, Progress, Quick-Action Chips, and Composer.
       Column(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        // 1-tap Undo & View bar with smooth fade/shrink exit docked above composer.
+        // 1-tap Undo and View bar with smooth fade and shrink exit docked above composer.
         val isUndoVisible = canUndoLastAgentAction && !lastAgentActionSummary.isNullOrBlank()
         var lastUndoSummary by remember { mutableStateOf(lastAgentActionSummary.orEmpty()) }
         if (!lastAgentActionSummary.isNullOrBlank()) lastUndoSummary = lastAgentActionSummary
@@ -281,7 +368,7 @@ fun AiChefScreen(
           )
         }
 
-        // Non-silent multimodal Vision Gate blocks Send until Gemma 4, Cloud Vision, or .litertlm loads.
+        // Non-silent multimodal Vision Gate blocks Send until Gemma 4 or Cloud Vision is Ready.
         if (blockedByVisionGate) {
           VisionUnsupportedGateBanner(
             runtimeState = runtimeState,
@@ -292,7 +379,6 @@ fun AiChefScreen(
             },
             onRemovePhoto = { onAction(AiChefAction.ClearAttachedImage) },
             onUseCloudApiKey = {
-              // Switch to Cloud API Key mode, expand setup drawer, and scroll smoothly to item 0.
               onAction(AiChefAction.SelectAiExecutionMode(AiExecutionMode.CLOUD_API))
               if (!setupExpanded) toggleSetup()
               scrollToSetupTrigger += 1
@@ -302,31 +388,23 @@ fun AiChefScreen(
           )
         }
 
-        // Keep Gemma download, SAF copy, or OpenCL shader progress visible above composer.
         if (!blockedByVisionGate && (runtimeState is AiRuntimeState.Importing || runtimeState is AiRuntimeState.Loading)) {
-          ModelOperationProgressBanner(
-            runtimeState = runtimeState,
-            onCancelDownload = { onAction(AiChefAction.CancelActiveModelDownload) },
-          )
+          ModelOperationProgressBanner(runtimeState = runtimeState, onCancelDownload = { onAction(AiChefAction.CancelActiveModelDownload) })
         }
 
         if (isPreprocessingImage) ImagePreprocessingBanner(imageLabel = preprocessingImageLabel)
 
-        VoiceInputStatusStrip(
-          voiceState = voiceState, activeLocale = selectedVoiceLocale,
-          onStopListening = { onAction(AiChefAction.StopVoiceInput) },
-        )
+        VoiceInputStatusStrip(voiceState = voiceState, activeLocale = selectedVoiceLocale, onStopListening = { onAction(AiChefAction.StopVoiceInput) })
 
         // Docked quick-action suggestion chips shown directly above composer when input is empty.
         if (composerText.isEmpty() && attachedImagePath == null && !isGenerating) {
-          SavorQuickPromptChipRow { prompt ->
+          chefScreenQuickPromptChipRow { prompt ->
             composerText = prompt
             onAction(AiChefAction.SelectQuickPrompt(prompt))
           }
         }
 
-        // Persistent 2-tier SavorAgentComposer placing full-width input above 48.dp media controls.
-        SavorAgentComposer(
+        chefScreenAgentComposer(
           composerText = composerText, onComposerTextChange = { composerText = it },
           attachedImagePath = attachedImagePath, attachedImageLabel = attachedImageLabel,
           visionSupported = visionSupported, previewThumbnailBitmap = previewThumbnailBitmap,
@@ -336,14 +414,15 @@ fun AiChefScreen(
           onRemovePhoto = { onAction(AiChefAction.ClearAttachedImage) },
           onLaunchCameraCapture = onLaunchCameraCapture, onLaunchGalleryPicker = onLaunchGalleryPicker,
           onToggleVoice = {
-            if (voiceState is VoiceInputState.Listening) onAction(AiChefAction.StopVoiceInput)
-            else onRequestVoiceInput(selectedVoiceLocale)
+            when {
+              voiceState is VoiceInputState.Listening -> onAction(AiChefAction.StopVoiceInput)
+              else -> onRequestVoiceInput(selectedVoiceLocale)
+            }
           },
           onToggleLocale = {
-            selectedVoiceLocale = if (selectedVoiceLocale == VoiceInputPort.LOCALE_EN_US) {
-              VoiceInputPort.LOCALE_FR_FR
-            } else {
-              VoiceInputPort.LOCALE_EN_US
+            selectedVoiceLocale = when (selectedVoiceLocale) {
+              VoiceInputPort.LOCALE_EN_US -> VoiceInputPort.LOCALE_FR_FR
+              else -> VoiceInputPort.LOCALE_EN_US
             }
           },
           onResetConversation = { onAction(AiChefAction.ResetConversation) },
@@ -354,10 +433,10 @@ fun AiChefScreen(
   }
 }
 
+// Horizontal row of 44.dp+ quick-prompt pills docking above the empty composer.
 @Composable
-private fun SavorQuickPromptChipRow(onSelectPrompt: (String) -> Unit) {
+private fun chefScreenQuickPromptChipRow(onSelectPrompt: (String) -> Unit) {
   val extendedColors = KitchenTheme.extendedColors
-  // 36.dp visual pills inside 44.dp+ vertical touch area with 1.dp warm border and 0.dp shadow.
   Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
     SAVOR_QUICK_ACTION_PROMPTS.forEach { prompt ->
       Box(modifier = Modifier.defaultMinSize(minHeight = 44.dp).clip(CircleShape).clickable { onSelectPrompt(prompt) }, contentAlignment = Alignment.Center) {
@@ -375,32 +454,18 @@ private fun SavorQuickPromptChipRow(onSelectPrompt: (String) -> Unit) {
   }
 }
 
-/**
- * 2-tier persistent bottom agent composer (`RoundedCornerShape(24.dp)`, `1.dp` warm border, `0.dp`
- * shadow): optional staged photo row + Row 1 `100%`-width `BasicTextField` (`maxLines = 1`
- * placeholder preventing 360dp 3-line wrap and mid-word line-2 cursor glitches) + Row 2 `48.dp`
- * tactile Camera, Photo, Voice + EN/FR, Reset, and Send controls.
- */
+// 2-tier persistent bottom composer separating full-width text entry from 48.dp media controls.
 @Composable
-private fun SavorAgentComposer(
-  composerText: String,
-  onComposerTextChange: (String) -> Unit,
-  attachedImagePath: String?,
-  attachedImageLabel: String?,
-  visionSupported: Boolean,
-  previewThumbnailBitmap: ImageBitmap?,
-  isGenerating: Boolean,
-  isPreprocessingImage: Boolean,
-  isListening: Boolean,
-  selectedLocale: String,
-  hasConversationHistory: Boolean,
-  canSubmitTurn: Boolean,
-  onRemovePhoto: () -> Unit,
-  onLaunchCameraCapture: () -> Unit,
-  onLaunchGalleryPicker: () -> Unit,
-  onToggleVoice: () -> Unit,
-  onToggleLocale: () -> Unit,
-  onResetConversation: () -> Unit,
+private fun chefScreenAgentComposer(
+  composerText: String, onComposerTextChange: (String) -> Unit,
+  attachedImagePath: String?, attachedImageLabel: String?,
+  visionSupported: Boolean, previewThumbnailBitmap: ImageBitmap?,
+  isGenerating: Boolean, isPreprocessingImage: Boolean,
+  isListening: Boolean, selectedLocale: String,
+  hasConversationHistory: Boolean, canSubmitTurn: Boolean,
+  onRemovePhoto: () -> Unit, onLaunchCameraCapture: () -> Unit,
+  onLaunchGalleryPicker: () -> Unit, onToggleVoice: () -> Unit,
+  onToggleLocale: () -> Unit, onResetConversation: () -> Unit,
   onSubmitPrompt: () -> Unit,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -417,7 +482,6 @@ private fun SavorAgentComposer(
       modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 6.dp),
       verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-      // Staged photo preview row right inside top of composer card with 48.dp remove target.
       if (attachedImagePath != null) {
         AttachedImageThumbnailCard(
           imagePath = attachedImagePath, displayLabel = attachedImageLabel ?: "Attached Photo",
@@ -434,11 +498,7 @@ private fun SavorAgentComposer(
         keyboardActions = KeyboardActions(onSend = { onSubmitPrompt() }),
         maxLines = 4,
         decorationBox = { innerTextField ->
-          // CenterStart 1-line box guarantees cursor lands at column 0 on line 1 when focused empty.
-          Box(
-            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 28.dp).padding(start = 2.dp, end = 6.dp),
-            contentAlignment = Alignment.CenterStart,
-          ) {
+          Box(modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 28.dp).padding(start = 2.dp, end = 6.dp), contentAlignment = Alignment.CenterStart) {
             if (composerText.isEmpty()) {
               Text(
                 text = if (hasAttachedPhoto) "Add note for photo scan…" else "Ask sous-chef, scan fridge, or swap meal…",
@@ -452,31 +512,18 @@ private fun SavorAgentComposer(
         modifier = Modifier.fillMaxWidth(),
       )
 
-      // Row 2: 48.dp tactile Camera, Photo, Voice + EN/FR locale pill, Reset, and circular Send.
+      // Row 2: 48.dp tactile Camera, Photo, Voice, EN or FR locale pill, Reset, and circular Send.
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-          // Camera action writes full-resolution JPEG via scoped FileProvider in cacheDir/captures/.
           IconButton(onClick = onLaunchCameraCapture, enabled = mediaButtonsEnabled, modifier = Modifier.size(48.dp)) {
-            Icon(
-              imageVector = Icons.Filled.CameraAlt, contentDescription = "Take kitchen photo",
-              tint = if (mediaButtonsEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline,
-              modifier = Modifier.size(22.dp),
-            )
+            Icon(Icons.Filled.CameraAlt, contentDescription = "Take kitchen photo", tint = if (mediaButtonsEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline, modifier = Modifier.size(22.dp))
           }
-
-          // Photo Picker action swaps icon for 18.dp spinner while EXIF bitmap downscaling runs.
           IconButton(onClick = onLaunchGalleryPicker, enabled = mediaButtonsEnabled, modifier = Modifier.size(48.dp)) {
             when {
               isPreprocessingImage -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
-              else -> Icon(
-                imageVector = Icons.Filled.PhotoLibrary, contentDescription = "Pick photo from gallery",
-                tint = if (mediaButtonsEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline,
-                modifier = Modifier.size(22.dp),
-              )
+              else -> Icon(Icons.Filled.PhotoLibrary, contentDescription = "Pick photo from gallery", tint = if (mediaButtonsEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline, modifier = Modifier.size(22.dp))
             }
           }
-
-          // Bilingual voice input button toggles offline SpeechRecognizer listening session.
           IconButton(onClick = onToggleVoice, modifier = Modifier.size(48.dp)) {
             Icon(
               imageVector = if (isListening) Icons.Filled.Stop else Icons.Filled.Mic,
@@ -485,26 +532,11 @@ private fun SavorAgentComposer(
               modifier = Modifier.size(22.dp),
             )
           }
-
-          // 48.dp touch box hosting compact EN / FR speech locale toggle pill.
-          Box(
-            modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).clip(CircleShape).clickable(onClick = onToggleLocale),
-            contentAlignment = Alignment.Center,
-          ) {
-            Surface(
-              shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainer,
-              border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
-            ) {
-              Text(
-                text = if (selectedLocale == VoiceInputPort.LOCALE_FR_FR) "FR" else "EN",
-                style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false,
-                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-              )
+          Box(modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).clip(CircleShape).clickable(onClick = onToggleLocale), contentAlignment = Alignment.Center) {
+            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainer, border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp) {
+              Text(if (selectedLocale == VoiceInputPort.LOCALE_FR_FR) "FR" else "EN", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
             }
           }
-
-          // Conversation reset icon appears only once chat history is non-empty.
           if (hasConversationHistory) {
             IconButton(onClick = onResetConversation, modifier = Modifier.size(48.dp)) {
               Icon(Icons.Filled.RestartAlt, contentDescription = "Reset Sous-Chef conversation", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
@@ -521,11 +553,7 @@ private fun SavorAgentComposer(
           Box(contentAlignment = Alignment.Center) {
             when {
               isGenerating || isPreprocessingImage -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.2.dp, color = MaterialTheme.colorScheme.primary)
-              else -> Icon(
-                imageVector = Icons.Filled.ArrowUpward, contentDescription = "Send prompt to Sous-Chef",
-                tint = if (canSubmitTurn) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.outline,
-                modifier = Modifier.size(20.dp),
-              )
+              else -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send prompt to Sous-Chef", tint = if (canSubmitTurn) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
             }
           }
         }
@@ -534,135 +562,120 @@ private fun SavorAgentComposer(
   }
 }
 
+// Render a single User bubble or Sous-Chef artifact turn inside the LazyColumn feed.
 @Composable
-private fun SavorChatTurnView(
-  turn: AiChatTurn,
-  savedRecipeIds: Set<String>,
-  isSwapsApplied: Boolean,
-  isIngredientsQueued: Boolean,
-  isVisualRestockConfirmed: Boolean,
-  currencySymbol: String,
-  onAction: (AiChefAction) -> Unit,
-  onQuickPromptFill: (String) -> Unit,
-  onNavigateToBoard: () -> Unit,
-  onNavigateToGroceryList: () -> Unit,
+private fun chefScreenChatTurnView(
+  turn: AiChatTurn, savedRecipeIds: Set<String>,
+  isSwapsApplied: Boolean, isIngredientsQueued: Boolean,
+  isVisualRestockConfirmed: Boolean, currencySymbol: String,
+  todayDayIndex: Int, catalog: List<IngredientCatalogItem>,
+  onAction: (AiChefAction) -> Unit, onQuickPromptFill: (String) -> Unit,
+  onNavigateToBoard: () -> Unit, onNavigateToGroceryList: () -> Unit,
 ) {
   val extendedColors = KitchenTheme.extendedColors
   val isUser = turn.role == AiChatRole.USER
-  val timeBadge = remember(turn.createdAtIso) { formatTurnClockLabel(turn.createdAtIso) }
+  val timeBadge = remember(turn.createdAtIso) { chefScreenFormatTurnClockLabel(turn.createdAtIso) }
 
-  if (isUser) {
-    // Trailing-aligned warm charcoal user bubble with attached photo echo badge.
-    Column(modifier = Modifier.fillMaxWidth().padding(start = 32.dp), horizontalAlignment = Alignment.End) {
-      Surface(shape = KitchenTheme.shapes.userChatBubble, color = MaterialTheme.colorScheme.inverseSurface, shadowElevation = 0.dp) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          if (!turn.attachedImageLabel.isNullOrBlank()) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-              Icon(Icons.Filled.PhotoLibrary, contentDescription = null, tint = extendedColors.primaryFixed, modifier = Modifier.size(14.dp))
-              Text(turn.attachedImageLabel, style = MaterialTheme.typography.labelSmall, color = extendedColors.primaryFixed, maxLines = 1, overflow = TextOverflow.Ellipsis)
+  when {
+    isUser -> {
+      // Trailing-aligned warm charcoal user bubble with attached photo echo badge.
+      Column(modifier = Modifier.fillMaxWidth().padding(start = 32.dp), horizontalAlignment = Alignment.End) {
+        Surface(shape = KitchenTheme.shapes.userChatBubble, color = MaterialTheme.colorScheme.inverseSurface, shadowElevation = 0.dp) {
+          Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (!turn.attachedImageLabel.isNullOrBlank()) {
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Icon(Icons.Filled.PhotoLibrary, contentDescription = null, tint = extendedColors.primaryFixed, modifier = Modifier.size(14.dp))
+                Text(turn.attachedImageLabel, style = MaterialTheme.typography.labelSmall, color = extendedColors.primaryFixed, maxLines = 1, overflow = TextOverflow.Ellipsis)
+              }
+            }
+            if (turn.messageText.isNotBlank()) {
+              Text(turn.messageText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.inverseOnSurface)
             }
           }
-          if (turn.messageText.isNotBlank()) {
-            Text(turn.messageText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.inverseOnSurface)
+        }
+        Text(timeBadge, style = MaterialTheme.typography.labelSmall, color = extendedColors.ashMuted, modifier = Modifier.padding(top = 4.dp, end = 4.dp))
+      }
+    }
+
+    else -> {
+      val proposal = turn.proposal
+      val richCard = proposal?.featuredRecipeCard
+      val intake = turn.visualIntakeResult
+      val hasVisualArtifact = intake != null && hasRenderableVisualIntake(intake)
+      val sourceTag = turn.responseSourceLabel?.trim()?.takeIf { it.isNotBlank() }?.replace("/", " · ")?.replace("(", "")?.replace(")", "")
+      val headerLabel = if (sourceTag != null) "Sous-Chef · $sourceTag · $timeBadge" else "Sous-Chef · $timeBadge"
+
+      Column(modifier = Modifier.fillMaxWidth().padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          SavorBrandBadge(badgeSize = 26.dp, logoSize = 16.dp, shape = CircleShape)
+          Text(headerLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+
+        if (!hasVisualArtifact && turn.messageText.isNotBlank()) {
+          Surface(
+            shape = KitchenTheme.shapes.assistantChatBubble, color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp, modifier = Modifier.fillMaxWidth(),
+          ) { Text(turn.messageText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(14.dp)) }
+        }
+
+        // Structured Rich Recipe Suggestion Card with Tonight Dinner picker and dynamic swap.
+        if (richCard != null) {
+          val isSaved = richCard.recipe.isSavedFavorite || richCard.recipe.recipeId in savedRecipeIds
+          AiRichRecipeSuggestionCard(
+            richCard = richCard, isSaved = isSaved,
+            onStartCookingMode = { onAction(AiChefAction.StartCookModeFromAi(richCard.recipe)) },
+            onAddToPlan = { onAction(AiChefAction.AddRecipeToPlanFromAi(richCard.recipe, dayIndex = todayDayIndex, slotType = MealSlotType.DINNER)) },
+            onToggleSave = { onAction(AiChefAction.ToggleSaveRecipe(richCard.recipe.recipeId)) },
+            onQueueMissingStaples = { deltas -> onAction(AiChefAction.QueueMissingRecipeStaples(deltas)) },
+            currencySymbol = currencySymbol, todayDayIndex = todayDayIndex,
+            onScheduleToPlan = { dayIdx, slotType ->
+              onAction(AiChefAction.AddRecipeToPlanFromAi(richCard.recipe, dayIndex = dayIdx, slotType = slotType))
+            },
+          )
+          // Resolve the actual named substitute ingredient rather than hardcoding Greek yogurt.
+          richCard.substitutionTip?.takeIf { it.isNotBlank() }?.let { tip ->
+            val combinedCatalog = catalog + richCard.matchSummary.matchedIngredients + richCard.matchSummary.missingStaples
+            CulinarySubstitutionTipCard(
+              tipText = tip,
+              onApplySwapClick = {
+                val swapPair = resolveChefSubstitutionPair(recipe = richCard.recipe, tipText = tip, catalog = combinedCatalog)
+                if (swapPair != null) {
+                  onAction(AiChefAction.ApplyRecipeSubstitution(richCard.recipe.recipeId, swapPair.first, swapPair.second))
+                }
+              },
+              onCheckCaloriesClick = { onQuickPromptFill("What is the updated calorie count?") },
+            )
           }
         }
-      }
-      Text(timeBadge, style = MaterialTheme.typography.labelSmall, color = extendedColors.ashMuted, modifier = Modifier.padding(top = 4.dp, end = 4.dp))
-    }
-  } else {
-    val proposal = turn.proposal
-    val richCard = proposal?.featuredRecipeCard
-    val intake = turn.visualIntakeResult
-    val hasVisualArtifact = intake != null && hasRenderableVisualIntake(intake)
-    val sourceTag = turn.responseSourceLabel?.trim()?.takeIf { it.isNotBlank() }
-    val headerLabel = if (sourceTag != null) "Sous-Chef · $sourceTag · $timeBadge" else "Sous-Chef · $timeBadge"
 
-    Column(modifier = Modifier.fillMaxWidth().padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      // 26.dp circular SavorAI cocotte Sous-Chef avatar (zero sparkles, zero cold blue pills).
-      Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SavorBrandBadge(badgeSize = 26.dp, logoSize = 16.dp, shape = CircleShape)
-        Text(
-          text = headerLabel, style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
-      }
-
-      // Always render the AI's actual assistantSummary prose bubble above any recipe or swap cards;
-      // suppress duplicate text only when VisualIntakeConfirmationCard renders its own scan header.
-      if (!hasVisualArtifact && turn.messageText.isNotBlank()) {
-        Surface(
-          shape = KitchenTheme.shapes.assistantChatBubble, color = MaterialTheme.colorScheme.surfaceContainerLowest,
-          border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp, modifier = Modifier.fillMaxWidth(),
-        ) {
-          Text(turn.messageText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(14.dp))
-        }
-      }
-
-      // Structured Rich Recipe Suggestion Card (<= 3 pills) + food-science substitution tip.
-      if (richCard != null) {
-        val isSaved = richCard.recipe.isSavedFavorite || richCard.recipe.recipeId in savedRecipeIds
-        AiRichRecipeSuggestionCard(
-          richCard = richCard, isSaved = isSaved,
-          onStartCookingMode = { onAction(AiChefAction.StartCookModeFromAi(richCard.recipe)) },
-          onAddToPlan = { onAction(AiChefAction.AddRecipeToPlanFromAi(richCard.recipe)) },
-          onToggleSave = { onAction(AiChefAction.ToggleSaveRecipe(richCard.recipe.recipeId)) },
-          onQueueMissingStaples = { deltas -> onAction(AiChefAction.QueueMissingRecipeStaples(deltas)) },
-          currencySymbol = currencySymbol,
-        )
-        richCard.substitutionTip?.takeIf { it.isNotBlank() }?.let { tip ->
-          CulinarySubstitutionTipCard(
-            tipText = tip,
-            onApplySwapClick = {
-              val targetFromId = resolveDairyOrSubstituteBomId(richCard.recipe.bomLines)
-              if (targetFromId != null) {
-                onAction(AiChefAction.ApplyRecipeSubstitution(richCard.recipe.recipeId, targetFromId, "ing_greek_yogurt"))
-              }
+        if (intake != null && hasRenderableVisualIntake(intake)) {
+          VisualIntakeConfirmationCard(
+            intakeResult = intake, isConfirmed = isVisualRestockConfirmed,
+            onConfirmRestock = { onAction(AiChefAction.ConfirmVisualRestock(intake)) },
+            turnId = turn.turnId,
+            onCommitSelection = { selectedIds, selectedNewLabels, destination ->
+              onAction(AiChefAction.CommitVisualIntakeSelection(turn.turnId, intake, selectedIds, selectedNewLabels, destination))
             },
-            onCheckCaloriesClick = { onQuickPromptFill("What is the updated calorie count?") },
           )
         }
-      }
 
-      // Interactive confirmation-gated photo scan artifact with selectable spice/catalog chips.
-      if (intake != null && hasRenderableVisualIntake(intake)) {
-        VisualIntakeConfirmationCard(
-          intakeResult = intake, isConfirmed = isVisualRestockConfirmed,
-          onConfirmRestock = { onAction(AiChefAction.ConfirmVisualRestock(intake)) },
-          turnId = turn.turnId,
-          onCommitSelection = { selectedIds, selectedNewLabels, destination ->
-            onAction(AiChefAction.CommitVisualIntakeSelection(turn.turnId, intake, selectedIds, selectedNewLabels, destination))
-          },
-        )
-      }
-
-      // Actionable weekly meal swap & grocery discovery cards (suppressed on conversational turns).
-      if (proposal != null && !proposal.isConversationalOnly) {
-        if (proposal.slotSwaps.isNotEmpty()) {
-          MealSwapsProposalCard(
-            proposal = proposal, isApplied = isSwapsApplied,
-            onApplySwaps = { onAction(AiChefAction.ApplyMealSwaps(proposal)) }, onNavigateToBoard = onNavigateToBoard,
-          )
+        if (proposal != null && !proposal.isConversationalOnly) {
+          if (proposal.slotSwaps.isNotEmpty()) {
+            MealSwapsProposalCard(proposal = proposal, isApplied = isSwapsApplied, onApplySwaps = { onAction(AiChefAction.ApplyMealSwaps(proposal)) }, onNavigateToBoard = onNavigateToBoard)
+          }
+          if (proposal.newIngredientSuggestions.isNotEmpty()) {
+            BrainBoosterIngredientsCard(proposal = proposal, isQueued = isIngredientsQueued, onQueueIngredients = { onAction(AiChefAction.QueueSuggestedIngredients(proposal)) }, onNavigateToGroceryList = onNavigateToGroceryList)
+          }
         }
-        if (proposal.newIngredientSuggestions.isNotEmpty()) {
-          BrainBoosterIngredientsCard(
-            proposal = proposal, isQueued = isIngredientsQueued,
-            onQueueIngredients = { onAction(AiChefAction.QueueSuggestedIngredients(proposal)) },
-            onNavigateToGroceryList = onNavigateToGroceryList,
-          )
-        }
-      }
 
-      // Warm 44.dp+ follow-up prompt pills beneath the assistant turn.
-      val followUps = proposal?.followUpPrompts ?: turn.toolCallResult?.followUpPrompts.orEmpty()
-      if (followUps.isNotEmpty()) {
-        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          followUps.forEach { followUp ->
-            Box(modifier = Modifier.defaultMinSize(minHeight = 44.dp).clip(CircleShape).clickable { onQuickPromptFill(followUp) }, contentAlignment = Alignment.Center) {
-              Surface(
-                shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
-                border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
-              ) {
-                Text(followUp, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+        val followUps = proposal?.followUpPrompts ?: turn.toolCallResult?.followUpPrompts.orEmpty()
+        if (followUps.isNotEmpty()) {
+          Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            followUps.forEach { followUp ->
+              Box(modifier = Modifier.defaultMinSize(minHeight = 44.dp).clip(CircleShape).clickable { onQuickPromptFill(followUp) }, contentAlignment = Alignment.Center) {
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow, border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp) {
+                  Text(followUp, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                }
               }
             }
           }
@@ -673,7 +686,7 @@ private fun SavorChatTurnView(
 }
 
 // Guarantees unique LazyColumn item keys even if a legacy persisted snapshot carried duplicate turnIds.
-private fun ensureUniqueTurnIds(turns: List<AiChatTurn>): List<AiChatTurn> {
+private fun chefScreenEnsureUniqueTurnIds(turns: List<AiChatTurn>): List<AiChatTurn> {
   val seenIds = HashSet<String>(turns.size)
   return turns.mapIndexed { index, turn ->
     val candidate = turn.turnId.ifBlank { "turn_idx_$index" }
@@ -688,22 +701,19 @@ private fun ensureUniqueTurnIds(turns: List<AiChatTurn>): List<AiChatTurn> {
   }
 }
 
-private fun formatTurnClockLabel(createdAtIso: String): String =
+// Extract HH:mm clock badge from ISO-8601 turn timestamps.
+private fun chefScreenFormatTurnClockLabel(createdAtIso: String): String =
   createdAtIso.substringAfter('T', "").take(5).ifBlank { "Just now" }
 
-// Selects butter/milk/cheese BOM lines before substitutable non-protein lines, avoiding self-swaps.
-private val DAIRY_SWAP_TARGETS: List<String> = listOf("ing_butter", "ing_milk", "ing_cheese")
-private val PRIMARY_PROTEIN_IDS: Set<String> =
-  setOf("ing_salmon", "ing_chicken", "ing_fish", "ing_bangus", "ing_turkey_breast", "ing_turkey_ham", "ing_egg", "ing_tofu")
-
-private fun resolveDairyOrSubstituteBomId(bomLines: List<BomLine>): String? {
-  DAIRY_SWAP_TARGETS.firstOrNull { id -> bomLines.any { it.ingredientId == id } }?.let { return it }
-  bomLines.firstOrNull { !it.substituteGroupId.isNullOrBlank() && it.ingredientId != "ing_greek_yogurt" }?.let { return it.ingredientId }
-  return bomLines.firstOrNull { it.ingredientId != "ing_greek_yogurt" && it.ingredientId !in PRIMARY_PROTEIN_IDS }?.ingredientId
+// Select dairy or non-protein BOM lines when a yogurt, gata, or milk swap is requested.
+private fun chefScreenResolveDairyOrNonProteinId(bomLines: List<BomLine>, excludeId: String): String? {
+  DAIRY_SWAP_TARGETS.firstOrNull { id -> id != excludeId && bomLines.any { it.ingredientId == id } }?.let { return it }
+  bomLines.firstOrNull { !it.substituteGroupId.isNullOrBlank() && it.ingredientId != excludeId }?.let { return it.ingredientId }
+  return bomLines.firstOrNull { it.ingredientId != excludeId && it.ingredientId !in PRIMARY_PROTEIN_IDS }?.ingredientId
 }
 
 // Pure in-memory procedural preview bitmap avoiding Android asset or disk reads in IDE @Preview.
-private fun buildPreviewThumbnailBitmap(): ImageBitmap? =
+private fun chefScreenBuildPreviewThumbnailBitmap(): ImageBitmap? =
   runCatching {
     val image = ImageBitmap(96, 96)
     val canvas = Canvas(image)
@@ -716,7 +726,7 @@ private fun buildPreviewThumbnailBitmap(): ImageBitmap? =
 @Preview(name = "Sous-Chef — Rich Recipe & Undo Bar", showBackground = true, widthDp = 412, heightDp = 900)
 @Composable
 private fun SavorAiAssistantRichRecipePreview() {
-  // Showcases structured recipe match card, docked Undo bar, quick chips, and 2-tier composer.
+  // Showcases structured recipe match card, Tonight Dinner picker, docked Undo bar, and composer.
   val salmon = IngredientCatalogItem("ing_salmon", "Salmon fillet", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 600.0)
   val spinach = IngredientCatalogItem("ing_spinach", "Baby spinach", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 300.0)
   val recipe = Recipe(
@@ -732,7 +742,7 @@ private fun SavorAiAssistantRichRecipePreview() {
       matchPercentage = 100, isZeroFoodWasteMatch = true,
       rescuedExpiringIngredientIds = listOf("ing_salmon", "ing_spinach"), rescuedValueUsd = 845.0,
     ),
-    substitutionTip = "Remove skillet from heat before whisking in Greek yogurt.",
+    substitutionTip = "Swap Baby spinach 1:1 with Fresh Kangkong for local market crunch.",
   )
   val proposal = AiMenuOptimizationProposal(
     proposalId = "prop_savor_1", focusTag = NutritionFocusTag.PANTRY_ZERO_WASTE,
@@ -740,10 +750,7 @@ private fun SavorAiAssistantRichRecipePreview() {
   )
   val turns = listOf(
     AiChatTurn("u1", AiChatRole.USER, "Rescue expiring salmon and spinach", "2026-10-25T18:42:00Z"),
-    AiChatTurn(
-      "a1", AiChatRole.ASSISTANT, proposal.assistantSummary, "2026-10-25T18:43:00Z",
-      proposal = proposal, responseSourceLabel = "gemma-4-E2B-it",
-    ),
+    AiChatTurn("a1", AiChatRole.ASSISTANT, proposal.assistantSummary, "2026-10-25T18:43:00Z", proposal = proposal, responseSourceLabel = "gemma-4-E2B-it"),
   )
   FamilyKitchenBoardTheme {
     AiChefScreen(
@@ -753,6 +760,7 @@ private fun SavorAiAssistantRichRecipePreview() {
       attachedImagePath = null, attachedImageLabel = null, onAction = {},
       onLaunchGalleryPicker = {}, onLaunchCameraCapture = {}, onRequestVoiceInput = {}, onLaunchModelPicker = {},
       canUndoLastAgentAction = true, lastAgentActionSummary = "Stocked 4 spices in Pantry", onAdjustLastAgentAction = {},
+      currentHour24 = 9, todayDayIndex = 2,
     )
   }
 }
@@ -770,14 +778,15 @@ private fun AiChefSpicePhotoArtifactPreview() {
     "turn_vis_1", AiChatRole.ASSISTANT, "Spotted 2 spices on your rack.", "2026-10-25T21:33:00Z",
     visualIntakeResult = VisualIntakeResult("Spotted 2 spices — select items below to stock.", proposedNewCatalogItems = spices),
   )
+  val previewPath = listOf("", "cache", "captures", "spice_rack.jpg").joinToString(File.separator)
   FamilyKitchenBoardTheme {
     AiChefScreen(
       turnHistory = listOf(intakeTurn), runtimeState = readyVision, voiceState = VoiceInputState.Idle,
       activeDeviceProfile = EdgeDeviceProfile.GEMMA_4_E2B_MULTIMODAL,
-      attachedImagePath = "/cache/captures/spice_rack.jpg", attachedImageLabel = "spice_rack.jpg",
+      attachedImagePath = previewPath, attachedImageLabel = "spice_rack.jpg",
       onAction = {}, onLaunchGalleryPicker = {}, onLaunchCameraCapture = {},
       onRequestVoiceInput = {}, onLaunchModelPicker = {},
-      previewThumbnailBitmap = remember { buildPreviewThumbnailBitmap() },
+      previewThumbnailBitmap = remember { chefScreenBuildPreviewThumbnailBitmap() },
     )
   }
 }

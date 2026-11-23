@@ -7,13 +7,13 @@ import com.familykitchen.board.domain.CookOwner
 import com.familykitchen.board.domain.CookedDeductionPayload
 import com.familykitchen.board.domain.CookedDeductionResult
 import com.familykitchen.board.domain.DEFAULT_TIMESTAMP_ISO
+import com.familykitchen.board.domain.ElephantKitchenObservation
 import com.familykitchen.board.domain.GroceryAndCatalogEditAction
 import com.familykitchen.board.domain.GroceryDiffEngine
 import com.familykitchen.board.domain.HouseholdProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
 import com.familykitchen.board.domain.IngredientCategory
 import com.familykitchen.board.domain.IngredientTier
-import com.familykitchen.board.domain.MAX_WEEKDAY_BREAKFAST_MINUTES
 import com.familykitchen.board.domain.MealSlot
 import com.familykitchen.board.domain.MealSlotStatus
 import com.familykitchen.board.domain.MealSlotType
@@ -29,13 +29,15 @@ import com.familykitchen.board.domain.StorageLocation
 import com.familykitchen.board.domain.WeeklyBoard
 import com.familykitchen.board.domain.WeeklyGroceryDiff
 import com.familykitchen.board.domain.WorkoutTiming
+import com.familykitchen.board.domain.addDaysIso
 import com.familykitchen.board.domain.computeCalibratedMorningMinutes
+import com.familykitchen.board.domain.distillActionIntoElephantMemory
 import com.familykitchen.board.domain.requireDomainValid
 import com.familykitchen.board.ports.KitchenSnapshot
 import com.familykitchen.board.ui.sheets.QaEdgeCaseScenario
 
-// Pure snapshot-transformation and QA scenario reducers keeping KitchenBoardViewModel cohesive
-// and well below the 700 logical-line module budget (.copilot_compliance.json).
+// Pure snapshot-transformation, ElephantMemory distillation, and QA scenario reducers keeping
+// KitchenBoardViewModel cohesive and well below the 700 logical-line module budget.
 
 /**
  * Immutable outcome of running a live 1-tap [QaEdgeCaseScenario] from `QaScenarioLabSheet`.
@@ -64,6 +66,7 @@ internal fun upsertCatalogAndPantrySnapshot(
   explicitLocation: StorageLocation? = null,
   explicitExpiresInDays: Int? = null,
   nowIso: String = DEFAULT_TIMESTAMP_ISO,
+  todayIso: String? = null,
 ): KitchenSnapshot {
   // Replace any prior catalog item sharing the same ingredientId so price/unit metadata refreshes.
   val updatedCatalog = snapshot.ingredients.filterNot { it.ingredientId == item.ingredientId } + item
@@ -79,12 +82,19 @@ internal fun upsertCatalogAndPantrySnapshot(
         catalog = updatedCatalog,
         deltas = listOf(RestockDelta(item.ingredientId, item.defaultPackageQuantity, statusReset)),
         nowIso = nowIso,
+        todayIso = todayIso,
+        zoneOverrides = mapOf(item.ingredientId to resolvedZone),
       )
       // Stamp explicit storage zone and custom shelf-life window when supplied by AddIngredientCard.
       restocked.map { entry ->
         when {
           entry.ingredientId != item.ingredientId -> entry
-          else -> entry.copy(storageLocation = resolvedZone, expiresInDays = resolvedShelfLife, purchasedDaysAgo = 0)
+          else -> entry.copy(
+            storageLocation = resolvedZone,
+            expiresInDays = resolvedShelfLife,
+            expiryDateIso = todayIso?.let { addDaysIso(it, resolvedShelfLife) } ?: entry.expiryDateIso,
+            purchasedDaysAgo = 0,
+          )
         }
       }
     }
@@ -120,14 +130,16 @@ internal fun upsertCatalogAndPantrySnapshot(
 }
 
 /**
- * Applies an updated [HouseholdProfile] (including custom discovered market staples and life-event
- * serving multipliers) plus recommended grocery IDs in a single pure snapshot pass.
+ * Applies an updated [HouseholdProfile] (including custom discovered market staples, life-event
+ * serving multipliers, and `ElephantMemory` distillation of `preferredCuisines` + member goals)
+ * plus recommended grocery IDs in a single pure snapshot pass.
  */
 internal fun reduceSavedHouseholdProfile(
   snapshot: KitchenSnapshot,
   updatedProfile: HouseholdProfile,
   recommendedGroceryIdsToQueue: Set<String>,
   nowIso: String = DEFAULT_TIMESTAMP_ISO,
+  todayIso: String? = null,
 ): KitchenSnapshot {
   // Sync newly added free-text discovered ingredients into catalog + pantry so AI Chef can ground them.
   val existingNames = snapshot.ingredients.map { it.displayName.lowercase() }.toSet()
@@ -158,6 +170,7 @@ internal fun reduceSavedHouseholdProfile(
         updatedAtIso = nowIso,
         storageLocation = StorageLocation.FRIDGE,
         expiresInDays = 5,
+        expiryDateIso = todayIso?.let { addDaysIso(it, 5) },
         purchasedDaysAgo = 0,
       )
     }
@@ -171,6 +184,45 @@ internal fun reduceSavedHouseholdProfile(
       else -> slot
     }
   }
+  val rescaledNextWeek = snapshot.nextWeekBoard?.let { nextBoard ->
+    nextBoard.copy(
+      slots = nextBoard.slots.map { slot ->
+        when (slot.status) {
+          MealSlotStatus.PLANNED -> slot.copy(targetServings = targetServings)
+          else -> slot
+        }
+      },
+    )
+  }
+
+  // Distill preferredCuisines and updated member focus goals into HouseholdElephantMemory in 1 pass.
+  var nextMemory = snapshot.elephantMemory
+  val cleanCuisines = updatedProfile.preferredCuisines.map { it.trim() }.filter { it.isNotEmpty() }
+  if (cleanCuisines.isNotEmpty()) {
+    nextMemory = distillActionIntoElephantMemory(
+      memory = nextMemory,
+      observation = ElephantKitchenObservation.MemberNutritionHabitUpdated(
+        memberId = "HOUSEHOLD_CUISINES",
+        memberName = updatedProfile.householdName.ifBlank { "Household" },
+        focusSummary = "Preferred family cuisines: ${cleanCuisines.joinToString(", ")}",
+      ),
+      nowIso = nowIso,
+    )
+  }
+  val prevFocusByMember = snapshot.householdProfile.members.associate { it.memberId to it.focusGoal }
+  for (member in updatedProfile.members) {
+    if (member.focusGoal.isNotBlank() && prevFocusByMember[member.memberId] != member.focusGoal) {
+      nextMemory = distillActionIntoElephantMemory(
+        memory = nextMemory,
+        observation = ElephantKitchenObservation.MemberNutritionHabitUpdated(
+          memberId = member.memberId,
+          memberName = member.memberName,
+          focusSummary = member.focusGoal,
+        ),
+        nowIso = nowIso,
+      )
+    }
+  }
 
   // Filter recommended life-event staple IDs against valid catalog items before queueing.
   val validRecommendedIds = recommendedGroceryIdsToQueue.filter { recId ->
@@ -182,7 +234,9 @@ internal fun reduceSavedHouseholdProfile(
     pantryEntries = mergedPantry,
     householdProfile = updatedProfile,
     weeklyBoard = snapshot.weeklyBoard.copy(slots = rescaledSlots),
+    nextWeekBoard = rescaledNextWeek,
     aiAddedGroceryIds = snapshot.aiAddedGroceryIds + validRecommendedIds,
+    elephantMemory = nextMemory,
     updatedAtIso = nowIso,
   )
 }
@@ -198,16 +252,22 @@ internal fun reduceScheduledPresetRecipe(
   dayIndex: Int,
   applyMondayThroughFriday: Boolean,
   nowIso: String = DEFAULT_TIMESTAMP_ISO,
+  targetNextWeek: Boolean = false,
 ): KitchenSnapshot {
   // Expand target days to Monday..Friday (0..4) when weekday batch scheduling is selected.
   val targetDays = if (applyMondayThroughFriday) (0..4).toSet() else setOf(dayIndex.coerceIn(0, 6))
+  val baseRecipes = snapshot.allHouseholdRecipes
   val upsertedRecipes = when {
-    snapshot.recipes.any { it.recipeId == recipe.recipeId } ->
-      snapshot.recipes.map { if (it.recipeId == recipe.recipeId) recipe else it }
-    else -> snapshot.recipes + recipe
+    baseRecipes.any { it.recipeId == recipe.recipeId } ->
+      baseRecipes.map { if (it.recipeId == recipe.recipeId) recipe else it }
+    else -> baseRecipes + recipe
   }
 
-  var updatedBoard: WeeklyBoard = snapshot.weeklyBoard
+  val sourceBoard = when {
+    targetNextWeek && snapshot.nextWeekBoard != null -> snapshot.nextWeekBoard
+    else -> snapshot.weeklyBoard
+  }
+  var updatedBoard: WeeklyBoard = sourceBoard
   for (day in targetDays) {
     val existingSlot = updatedBoard.slots.firstOrNull { it.dayIndex == day && it.slotType == slotType }
     updatedBoard = when (existingSlot) {
@@ -235,7 +295,12 @@ internal fun reduceScheduledPresetRecipe(
     }
   }
 
-  return snapshot.copy(recipes = upsertedRecipes, weeklyBoard = updatedBoard, updatedAtIso = nowIso)
+  return when {
+    targetNextWeek && snapshot.nextWeekBoard != null ->
+      snapshot.copy(recipes = upsertedRecipes, nextWeekBoard = updatedBoard, updatedAtIso = nowIso)
+    else ->
+      snapshot.copy(recipes = upsertedRecipes, weeklyBoard = updatedBoard, updatedAtIso = nowIso)
+  }
 }
 
 /**
@@ -250,8 +315,9 @@ internal fun reduceAiRecipeSubstitution(
   toIngredientId: String,
   nowIso: String = DEFAULT_TIMESTAMP_ISO,
 ): Pair<KitchenSnapshot, Recipe>? {
-  // Resolve base recipe from either persisted library or the latest AI Chef featured card.
-  val baseRecipe = snapshot.recipesById[recipeId]
+  // Resolve base recipe from household/heritage library or the latest AI Chef featured card.
+  val baseRecipes = snapshot.allHouseholdRecipes
+  val baseRecipe = baseRecipes.firstOrNull { it.recipeId == recipeId }
     ?: snapshot.aiTurnHistory.asReversed()
       .mapNotNull { it.proposal?.featuredRecipeCard?.recipe }
       .firstOrNull { it.recipeId == recipeId }
@@ -279,9 +345,9 @@ internal fun reduceAiRecipeSubstitution(
   )
 
   val updatedRecipes = when {
-    snapshot.recipes.any { it.recipeId == recipeId } ->
-      snapshot.recipes.map { if (it.recipeId == recipeId) swapped else it }
-    else -> snapshot.recipes + swapped
+    baseRecipes.any { it.recipeId == recipeId } ->
+      baseRecipes.map { if (it.recipeId == recipeId) swapped else it }
+    else -> baseRecipes + swapped
   }
 
   // Refresh matching AiRichRecipeCard in rolling chat history so UI reflects new kcal immediately.
@@ -329,19 +395,19 @@ internal fun executeLiveQaScenario(
       // EC-02: Mark ing_avocado locally unavailable (no substitute group) and count hidden recipes.
       val updatedCatalog = PantryLedgerEngine.toggleLocalAvailability(snapshot.ingredients, "ing_avocado", false)
       val schedulable = AvailabilityFilter.filterSchedulableRecipes(
-        snapshot.recipes, updatedCatalog, snapshot.householdProfile.householdAllergens, snapshot.pantryEntries,
+        snapshot.allHouseholdRecipes, updatedCatalog, snapshot.householdProfile.householdAllergens, snapshot.pantryEntries,
       )
       QaScenarioExecutionOutcome(
         updatedSnapshot = snapshot.copy(ingredients = updatedCatalog, updatedAtIso = nowIso),
         shouldPersist = true,
-        statusMessage = "PASS EC-02: Marked Avocado unavailable locally -> ${schedulable.size}/${snapshot.recipes.size} recipes remain schedulable (1 batch write).",
+        statusMessage = "PASS EC-02: Marked Avocado unavailable locally -> ${schedulable.size}/${snapshot.allHouseholdRecipes.size} recipes remain schedulable (1 batch write).",
       )
     }
 
     QaEdgeCaseScenario.EC_03 -> {
       // EC-03: Mark ing_blueberry unavailable in FRUIT_TOPPING and verify auto-swap to in-stock fruit.
       val updatedCatalog = PantryLedgerEngine.toggleLocalAvailability(snapshot.ingredients, "ing_blueberry", false)
-      val berryRecipe = snapshot.recipes.firstOrNull { rec ->
+      val berryRecipe = snapshot.allHouseholdRecipes.firstOrNull { rec ->
         rec.bomLines.any { it.ingredientId == "ing_blueberry" && it.substituteGroupId == "FRUIT_TOPPING" }
       }
       val eval = berryRecipe?.let {
@@ -357,13 +423,13 @@ internal fun executeLiveQaScenario(
 
     QaEdgeCaseScenario.EC_04 -> {
       // EC-04: Deduct one-time override without mutating permanent recipe.householdBomOverrides.
-      val slot = primarySlot ?: return noSlotOutcome(snapshot, "EC-04")
-      val recipe = snapshot.recipesById[slot.recipeId] ?: return noSlotOutcome(snapshot, "EC-04")
+      val slot = primarySlot ?: return reducerV2NoSlotOutcome(snapshot, "EC-04")
+      val recipe = snapshot.recipesById[slot.recipeId] ?: return reducerV2NoSlotOutcome(snapshot, "EC-04")
       val firstTier1 = recipe.bomLines.firstOrNull()?.ingredientId ?: "ing_egg"
       val payload = CookedDeductionPayload(slot.slotId, recipe.recipeId, slot.targetServings, actualUsedQuantities = mapOf(firstTier1 to 2.0), saveOverrideAsHouseholdDefault = false)
       val deduction = PantryLedgerEngine.applyCookedDeduction(snapshot.pantryEntries, recipe, snapshot.ingredients, payload, nowIso)
       QaScenarioExecutionOutcome(
-        updatedSnapshot = applyCookedDeductionToSnapshot(snapshot, slot.slotId, deduction, nowIso),
+        updatedSnapshot = reducerV2ApplyCookedDeductionToSnapshot(snapshot, slot.slotId, deduction, nowIso),
         shouldPersist = true,
         statusMessage = "PASS EC-04: Deducted one-time override (2.0 '$firstTier1') while keeping permanent recipe defaults unchanged.",
       )
@@ -371,14 +437,14 @@ internal fun executeLiveQaScenario(
 
     QaEdgeCaseScenario.EC_05 -> {
       // EC-05: Normalize overridden quantity by baseServings / targetServings into householdBomOverrides.
-      val slot = primarySlot ?: return noSlotOutcome(snapshot, "EC-05")
-      val recipe = snapshot.recipesById[slot.recipeId] ?: return noSlotOutcome(snapshot, "EC-05")
+      val slot = primarySlot ?: return reducerV2NoSlotOutcome(snapshot, "EC-05")
+      val recipe = snapshot.recipesById[slot.recipeId] ?: return reducerV2NoSlotOutcome(snapshot, "EC-05")
       val firstTier1 = recipe.bomLines.firstOrNull()?.ingredientId ?: "ing_egg"
       val payload = CookedDeductionPayload(slot.slotId, recipe.recipeId, slot.targetServings, actualUsedQuantities = mapOf(firstTier1 to 3.0), saveOverrideAsHouseholdDefault = true)
       val deduction = PantryLedgerEngine.applyCookedDeduction(snapshot.pantryEntries, recipe, snapshot.ingredients, payload, nowIso)
       val normalized = deduction.updatedRecipe.householdBomOverrides[firstTier1] ?: 3.0
       QaScenarioExecutionOutcome(
-        updatedSnapshot = applyCookedDeductionToSnapshot(snapshot, slot.slotId, deduction, nowIso),
+        updatedSnapshot = reducerV2ApplyCookedDeductionToSnapshot(snapshot, slot.slotId, deduction, nowIso),
         shouldPersist = true,
         statusMessage = "PASS EC-05: Normalized and saved household default ($firstTier1 = $normalized per ${recipe.baseServings} srv) in 1 batch write.",
       )
@@ -386,12 +452,12 @@ internal fun executeLiveQaScenario(
 
     QaEdgeCaseScenario.EC_06 -> {
       // EC-06: Deduct unplanned +1 Vine-Ripened Tomato alongside planned BOM in 1 O(1) batch write.
-      val slot = primarySlot ?: return noSlotOutcome(snapshot, "EC-06")
-      val recipe = snapshot.recipesById[slot.recipeId] ?: return noSlotOutcome(snapshot, "EC-06")
+      val slot = primarySlot ?: return reducerV2NoSlotOutcome(snapshot, "EC-06")
+      val recipe = snapshot.recipesById[slot.recipeId] ?: return reducerV2NoSlotOutcome(snapshot, "EC-06")
       val payload = CookedDeductionPayload(slot.slotId, recipe.recipeId, slot.targetServings, actualUsedQuantities = mapOf("ing_tomato" to 1.0))
       val deduction = PantryLedgerEngine.applyCookedDeduction(snapshot.pantryEntries, recipe, snapshot.ingredients, payload, nowIso)
       QaScenarioExecutionOutcome(
-        updatedSnapshot = applyCookedDeductionToSnapshot(snapshot, slot.slotId, deduction, nowIso),
+        updatedSnapshot = reducerV2ApplyCookedDeductionToSnapshot(snapshot, slot.slotId, deduction, nowIso),
         shouldPersist = true,
         statusMessage = "PASS EC-06: Deducted planned BOM + 1 ad-hoc Vine-Ripened Tomato together in 1 atomic O(1) batch write.",
       )
@@ -399,7 +465,7 @@ internal fun executeLiveQaScenario(
 
     QaEdgeCaseScenario.EC_07 -> {
       // EC-07: Activate Dad's POST_WORKOUT_HIGH_PROTEIN boost (flat 1x unscaled by servings).
-      val slot = primarySlot ?: return noSlotOutcome(snapshot, "EC-07")
+      val slot = primarySlot ?: return reducerV2NoSlotOutcome(snapshot, "EC-07")
       val boostedBoard = MenuPlannerEngine.toggleSlotWorkoutModifier(snapshot.weeklyBoard, slot.slotId, WorkoutTiming.POST_WORKOUT_HIGH_PROTEIN)
       QaScenarioExecutionOutcome(
         updatedSnapshot = snapshot.copy(weeklyBoard = boostedBoard, updatedAtIso = nowIso),
@@ -425,7 +491,7 @@ internal fun executeLiveQaScenario(
         if (entry.ingredientId == "ing_egg") entry.copy(currentQuantity = 6.0, isOutOfStock = false) else entry
       }
       val diff = GroceryDiffEngine.computeWeeklyGroceryDiff(
-        snapshot.weeklyBoard, snapshot.recipes, snapshot.ingredients, clampedEggsPantry, snapshot.householdProfile.householdAllergens, snapshot.aiAddedGroceryIds,
+        snapshot.weeklyBoard, snapshot.allHouseholdRecipes, snapshot.ingredients, clampedEggsPantry, snapshot.householdProfile.householdAllergens, snapshot.aiAddedGroceryIds,
       )
       val eggLine = diff.groceryItems.firstOrNull { it.ingredientId == "ing_egg" }
       QaScenarioExecutionOutcome(
@@ -462,7 +528,7 @@ internal fun executeLiveQaScenario(
       // EC-12: Mark a planned slot COMPLETED_SKIPPED and release its reserved Tier-1 BOM immediately.
       val planned = daySlots.firstOrNull { it.status == MealSlotStatus.PLANNED }
         ?: snapshot.weeklyBoard.slots.firstOrNull { it.status == MealSlotStatus.PLANNED }
-        ?: return noSlotOutcome(snapshot, "EC-12")
+        ?: return reducerV2NoSlotOutcome(snapshot, "EC-12")
       val skippedBoard = MenuPlannerEngine.markSlotSkippedOrLeftovers(snapshot.weeklyBoard, planned.slotId)
       QaScenarioExecutionOutcome(
         updatedSnapshot = snapshot.copy(weeklyBoard = skippedBoard, updatedAtIso = nowIso),
@@ -474,7 +540,7 @@ internal fun executeLiveQaScenario(
     QaEdgeCaseScenario.EC_13 -> {
       // EC-13: Filter 100% in-stock, <= 25m Breakfast replacement meals with zero OUT Tier-2 staples.
       val swaps = MenuPlannerEngine.findInstantInStockSwaps(
-        MealSlotType.BREAKFAST, snapshot.recipes, snapshot.ingredients, snapshot.pantryEntries,
+        MealSlotType.BREAKFAST, snapshot.allHouseholdRecipes, snapshot.ingredients, snapshot.pantryEntries,
         snapshot.householdProfile.householdAllergens, snapshot.householdProfile.effectiveTargetServings,
       )
       QaScenarioExecutionOutcome(
@@ -487,7 +553,7 @@ internal fun executeLiveQaScenario(
 }
 
 // Merges pure applyCookedDeduction output onto recipes, pantryEntries, and weeklyBoard slots.
-private fun applyCookedDeductionToSnapshot(
+private fun reducerV2ApplyCookedDeductionToSnapshot(
   current: KitchenSnapshot,
   slotId: String,
   deductionResult: CookedDeductionResult,
@@ -507,7 +573,7 @@ private fun applyCookedDeductionToSnapshot(
   )
 }
 
-private fun noSlotOutcome(snapshot: KitchenSnapshot, code: String): QaScenarioExecutionOutcome =
+private fun reducerV2NoSlotOutcome(snapshot: KitchenSnapshot, code: String): QaScenarioExecutionOutcome =
   QaScenarioExecutionOutcome(
     updatedSnapshot = snapshot,
     shouldPersist = false,
@@ -516,8 +582,8 @@ private fun noSlotOutcome(snapshot: KitchenSnapshot, code: String): QaScenarioEx
 
 /**
  * Pure reducer applying Smart Grocery List buy-quantity overrides, pack stepping, trip skipping,
- * custom item edits/deletions, and global catalog ingredient renames in a single `O(1)` snapshot
- * transformation.
+ * custom item edits/deletions, global catalog ingredient renames, and live `HouseholdElephantMemory`
+ * distillation in a single `O(1)` snapshot transformation.
  *
  * @param snapshot Current immutable household [KitchenSnapshot].
  * @param currentDiff Currently derived [WeeklyGroceryDiff] providing active pack counts and sizes.
@@ -530,42 +596,41 @@ fun reduceGroceryAndCatalogEdit(
   currentDiff: WeeklyGroceryDiff,
   action: GroceryAndCatalogEditAction,
   nowIso: String = DEFAULT_TIMESTAMP_ISO,
-): Pair<KitchenSnapshot, String> =
-  when (action) {
+): Pair<KitchenSnapshot, String> {
+  val (rawUpdated, toast) = when (action) {
     is GroceryAndCatalogEditAction.SaveGroceryCatalogItemEdit ->
-      reduceSaveGroceryCatalogItemEdit(snapshot, action, nowIso)
+      reducerV2SaveGroceryCatalogItemEdit(snapshot, action, nowIso)
     is GroceryAndCatalogEditAction.StepGroceryItemPacks ->
-      reduceStepGroceryItemPacks(snapshot, currentDiff, action, nowIso)
+      reducerV2StepGroceryItemPacks(snapshot, currentDiff, action, nowIso)
     is GroceryAndCatalogEditAction.ResetGroceryItemOverride -> {
       requireDomainValid(action.ingredientId.isNotBlank(), "ResetGroceryItemOverride") {
         "ingredientId: must be non-blank"
       }
-      val label = resolveEditedIngredientLabel(snapshot, currentDiff, action.ingredientId)
+      val label = reducerV2ResolveEditedIngredientLabel(snapshot, currentDiff, action.ingredientId)
       val candidate = snapshot.copy(
         groceryQuantityOverrides = snapshot.groceryQuantityOverrides - action.ingredientId,
         dismissedGroceryItemIds = snapshot.dismissedGroceryItemIds - action.ingredientId,
       )
-      stampSnapshotIfChanged(snapshot, candidate, nowIso) to
+      reducerV2StampSnapshotIfChanged(snapshot, candidate, nowIso) to
         "Reset $label to weekly meal plan amount."
     }
     is GroceryAndCatalogEditAction.DismissGroceryItemForTrip -> {
       requireDomainValid(action.ingredientId.isNotBlank(), "DismissGroceryItemForTrip") {
         "ingredientId: must be non-blank"
       }
-      val label = resolveEditedIngredientLabel(snapshot, currentDiff, action.ingredientId)
-      // Remove manual queue, checked flag, and stale buy override when skipping for this trip.
+      val label = reducerV2ResolveEditedIngredientLabel(snapshot, currentDiff, action.ingredientId)
       val candidate = snapshot.copy(
         dismissedGroceryItemIds = snapshot.dismissedGroceryItemIds + action.ingredientId,
         aiAddedGroceryIds = snapshot.aiAddedGroceryIds - action.ingredientId,
         checkedGroceryItemIds = snapshot.checkedGroceryItemIds - action.ingredientId,
         groceryQuantityOverrides = snapshot.groceryQuantityOverrides - action.ingredientId,
       )
-      stampSnapshotIfChanged(snapshot, candidate, nowIso) to
+      reducerV2StampSnapshotIfChanged(snapshot, candidate, nowIso) to
         "Skipped $label for this shopping trip."
     }
     is GroceryAndCatalogEditAction.RestoreDismissedGroceryItems -> {
       val candidate = snapshot.copy(dismissedGroceryItemIds = emptySet())
-      stampSnapshotIfChanged(snapshot, candidate, nowIso) to
+      reducerV2StampSnapshotIfChanged(snapshot, candidate, nowIso) to
         "Restored skipped items to your Shopping List."
     }
     is GroceryAndCatalogEditAction.SaveCustomGroceryItemEdit -> {
@@ -578,7 +643,6 @@ fun reduceGroceryAndCatalogEdit(
       }
       val cleanQtyNote = action.item.quantityNote.trim().ifEmpty { "1 item" }
       val updatedCustom = action.item.copy(displayName = cleanName, quantityNote = cleanQtyNote)
-      // Preserve row order when editing an existing custom item, or append if newly created.
       val mergedCustomItems = when {
         snapshot.customGroceryItems.any { it.customId == updatedCustom.customId } ->
           snapshot.customGroceryItems.map { existing ->
@@ -587,7 +651,7 @@ fun reduceGroceryAndCatalogEdit(
         else -> snapshot.customGroceryItems + updatedCustom
       }
       val candidate = snapshot.copy(customGroceryItems = mergedCustomItems)
-      stampSnapshotIfChanged(snapshot, candidate, nowIso) to "Updated '$cleanName'."
+      reducerV2StampSnapshotIfChanged(snapshot, candidate, nowIso) to "Updated '$cleanName'."
     }
     is GroceryAndCatalogEditAction.DeleteCustomGroceryItem -> {
       requireDomainValid(action.customId.isNotBlank(), "DeleteCustomGroceryItem") {
@@ -597,36 +661,51 @@ fun reduceGroceryAndCatalogEdit(
         customGroceryItems = snapshot.customGroceryItems.filterNot { it.customId == action.customId },
         checkedGroceryItemIds = snapshot.checkedGroceryItemIds - action.customId,
       )
-      stampSnapshotIfChanged(snapshot, candidate, nowIso) to "Removed item from Shopping List."
+      reducerV2StampSnapshotIfChanged(snapshot, candidate, nowIso) to "Removed item from Shopping List."
     }
     is GroceryAndCatalogEditAction.UpdateCatalogIngredientDetails ->
-      reduceUpdateCatalogIngredientDetails(snapshot, action, nowIso)
+      reducerV2UpdateCatalogIngredientDetails(snapshot, action, nowIso)
   }
 
+  // Distill ingredient aliases ("Fresh Kulitis") and pack overrides ("2 kg chicken") into ElephantMemory.
+  val plannedQuantitiesById = currentDiff.groceryItems.associate { it.ingredientId to it.plannedRestockQuantity }
+  val distilledMemory = distillActionIntoElephantMemory(
+    memory = snapshot.elephantMemory,
+    editAction = action,
+    catalogById = snapshot.catalogById,
+    plannedQuantitiesById = plannedQuantitiesById,
+    nowIso = nowIso,
+  )
+  // Merge distilled ElephantMemory only when an action actually produced a durable household fact.
+  val finalSnapshot = when {
+    distilledMemory == snapshot.elephantMemory -> rawUpdated
+    else -> rawUpdated.copy(elephantMemory = distilledMemory, updatedAtIso = nowIso)
+  }
+  return finalSnapshot to toast
+}
+
 // Validates and applies global catalog name/pack edits plus an optional trip buy-quantity override.
-private fun reduceSaveGroceryCatalogItemEdit(
+// Preserves SchemaValidator domain invariants (finite positive package sizes and non-negative prices).
+private fun reducerV2SaveGroceryCatalogItemEdit(
   snapshot: KitchenSnapshot,
   action: GroceryAndCatalogEditAction.SaveGroceryCatalogItemEdit,
   nowIso: String,
 ): Pair<KitchenSnapshot, String> {
-  // Reject blank IDs, blank names, non-positive pack sizes/overrides, and negative prices up front.
   requireDomainValid(action.ingredientId.isNotBlank(), "SaveGroceryCatalogItemEdit") { "ingredientId: must be non-blank" }
   val cleanName = action.updatedDisplayName.trim()
   requireDomainValid(cleanName.isNotEmpty(), "SaveGroceryCatalogItemEdit") { "displayName: must be non-blank" }
-  if (action.updatedDefaultPackageQuantity != null) {
-    val pkg = action.updatedDefaultPackageQuantity
+  // Validate optional package size, price, and one-trip buy overrides before mutating catalog state.
+  action.updatedDefaultPackageQuantity?.let { pkg ->
     requireDomainValid(pkg.isFinite() && pkg > 0.0, "SaveGroceryCatalogItemEdit") { "defaultPackageQuantity: must be finite and > 0" }
   }
-  if (action.updatedPackagePriceUsd != null) {
-    val price = action.updatedPackagePriceUsd
+  action.updatedPackagePriceUsd?.let { price ->
     requireDomainValid(price.isFinite() && price >= 0.0, "SaveGroceryCatalogItemEdit") { "estimatedPackagePriceUsd: must be finite and >= 0" }
   }
-  if (action.overrideBuyQuantity != null) {
-    val buyQty = action.overrideBuyQuantity
+  action.overrideBuyQuantity?.let { buyQty ->
     requireDomainValid(buyQty.isFinite() && buyQty > 0.0, "SaveGroceryCatalogItemEdit") { "overrideBuyQuantity: must be finite and > 0" }
   }
 
-  // Update catalog displayName and optional store package metadata so Pantry, Plan, and Shop stay in sync.
+  // Re-validate the edited IngredientCatalogItem through SchemaValidator so catalog stays pure.
   val updatedIngredients = snapshot.ingredients.map { item ->
     when {
       item.ingredientId != action.ingredientId -> item
@@ -639,49 +718,46 @@ private fun reduceSaveGroceryCatalogItemEdit(
       )
     }
   }
-  // Store positive trip override or clear back to planned rounding when overrideBuyQuantity is null.
+  // Store positive trip overrides in groceryQuantityOverrides; null/zero restores automatic ceil math.
   val nextOverrides = when {
     action.overrideBuyQuantity != null && action.overrideBuyQuantity > 0.0 ->
       snapshot.groceryQuantityOverrides + (action.ingredientId to action.overrideBuyQuantity)
     else -> snapshot.groceryQuantityOverrides - action.ingredientId
   }
+  // Undismiss the edited item automatically so explicit user edits always remain visible on Shop.
   val candidate = snapshot.copy(
-    ingredients = updatedIngredients,
-    groceryQuantityOverrides = nextOverrides,
+    ingredients = updatedIngredients, groceryQuantityOverrides = nextOverrides,
     dismissedGroceryItemIds = snapshot.dismissedGroceryItemIds - action.ingredientId,
   )
-  return stampSnapshotIfChanged(snapshot, candidate, nowIso) to
-    "Updated '$cleanName' on your Shopping List."
+  return reducerV2StampSnapshotIfChanged(snapshot, candidate, nowIso) to "Updated '$cleanName' on your Shopping List."
 }
 
 // Steps whole-pack buy quantity (clamped to 1..99 packs) for 1-tap grocery card adjustments.
-private fun reduceStepGroceryItemPacks(
+// Multiplies pack count by defaultPackageQuantity so GroceryDiffEngine ceil rounding stays exact.
+private fun reducerV2StepGroceryItemPacks(
   snapshot: KitchenSnapshot,
   currentDiff: WeeklyGroceryDiff,
   action: GroceryAndCatalogEditAction.StepGroceryItemPacks,
   nowIso: String,
 ): Pair<KitchenSnapshot, String> {
   requireDomainValid(action.ingredientId.isNotBlank(), "StepGroceryItemPacks") { "ingredientId: must be non-blank" }
-  // Prefer active GroceryListItem pack count/size and fall back to catalog metadata if needed.
   val item = currentDiff.groceryItems.firstOrNull { it.ingredientId == action.ingredientId }
   val cat = snapshot.catalogById[action.ingredientId]
   val label = item?.displayName ?: cat?.displayName ?: action.ingredientId
+  // Guard against degenerate package sizes so pack stepping always produces finite positive totals.
   val pkgQty = (item?.defaultPackageQuantity ?: cat?.defaultPackageQuantity ?: 1.0)
-    .takeIf { it.isFinite() }
-    ?.coerceAtLeast(0.01) ?: 1.0
-  val currentPacks = item?.packagesToBuy ?: 1
-  val nextPacks = (currentPacks + action.deltaPacks).coerceIn(1, 99)
+    .takeIf { it.isFinite() }?.coerceAtLeast(0.01) ?: 1.0
+  val nextPacks = ((item?.packagesToBuy ?: 1) + action.deltaPacks).coerceIn(1, 99)
   val candidate = snapshot.copy(
-    groceryQuantityOverrides = snapshot.groceryQuantityOverrides +
-      (action.ingredientId to (nextPacks.toDouble() * pkgQty)),
+    groceryQuantityOverrides = snapshot.groceryQuantityOverrides + (action.ingredientId to (nextPacks.toDouble() * pkgQty)),
     dismissedGroceryItemIds = snapshot.dismissedGroceryItemIds - action.ingredientId,
   )
-  return stampSnapshotIfChanged(snapshot, candidate, nowIso) to
-    "Updated $label to $nextPacks pack(s)."
+  return reducerV2StampSnapshotIfChanged(snapshot, candidate, nowIso) to "Updated $label to $nextPacks pack(s)."
 }
 
 // Updates global catalog display name, optional aisle category, and store pack details from Pantry.
-private fun reduceUpdateCatalogIngredientDetails(
+// Throws ValidationException when ingredientId does not exist in snapshot.ingredients.
+private fun reducerV2UpdateCatalogIngredientDetails(
   snapshot: KitchenSnapshot,
   action: GroceryAndCatalogEditAction.UpdateCatalogIngredientDetails,
   nowIso: String,
@@ -689,21 +765,16 @@ private fun reduceUpdateCatalogIngredientDetails(
   requireDomainValid(action.ingredientId.isNotBlank(), "UpdateCatalogIngredientDetails") { "ingredientId: must be non-blank" }
   val cleanName = action.updatedDisplayName.trim()
   requireDomainValid(cleanName.isNotEmpty(), "UpdateCatalogIngredientDetails") { "displayName: must be non-blank" }
-  // Ensure the target ingredientId exists in the household catalog before applying updates.
-  requireDomainValid(
-    snapshot.ingredients.any { it.ingredientId == action.ingredientId },
-    "UpdateCatalogIngredientDetails",
-  ) {
+  // Enforce catalog referential integrity before applying global Pantry metadata updates.
+  requireDomainValid(snapshot.ingredients.any { it.ingredientId == action.ingredientId }, "UpdateCatalogIngredientDetails") {
     "ingredientId: unknown catalog reference '${action.ingredientId}'"
   }
-  // Validate updated IngredientCatalogItem invariants via SchemaValidator before committing.
   val updatedIngredients = snapshot.ingredients.map { item ->
     when {
       item.ingredientId != action.ingredientId -> item
       else -> SchemaValidator.validateIngredientCatalogItem(
         item.copy(
-          displayName = cleanName,
-          category = action.updatedCategory ?: item.category,
+          displayName = cleanName, category = action.updatedCategory ?: item.category,
           defaultPackageQuantity = action.updatedDefaultPackageQuantity ?: item.defaultPackageQuantity,
           estimatedPackagePriceUsd = action.updatedPackagePriceUsd ?: item.estimatedPackagePriceUsd,
         ),
@@ -711,10 +782,11 @@ private fun reduceUpdateCatalogIngredientDetails(
     }
   }
   val candidate = snapshot.copy(ingredients = updatedIngredients)
-  return stampSnapshotIfChanged(snapshot, candidate, nowIso) to "Updated ingredient '$cleanName'."
+  return reducerV2StampSnapshotIfChanged(snapshot, candidate, nowIso) to "Updated ingredient '$cleanName'."
 }
 
-private fun resolveEditedIngredientLabel(
+// Resolves a friendly ingredient label from catalog or live grocery diff for ElephantMemory facts.
+private fun reducerV2ResolveEditedIngredientLabel(
   snapshot: KitchenSnapshot,
   currentDiff: WeeklyGroceryDiff,
   ingredientId: String,
@@ -724,7 +796,7 @@ private fun resolveEditedIngredientLabel(
     ?: ingredientId
 
 // Stamps updatedAtIso only when domain state actually changed so no-op taps avoid extra batch writes.
-private fun stampSnapshotIfChanged(
+private fun reducerV2StampSnapshotIfChanged(
   previous: KitchenSnapshot,
   candidateWithoutTimestamp: KitchenSnapshot,
   nowIso: String,

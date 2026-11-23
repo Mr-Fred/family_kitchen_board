@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,11 +58,14 @@ import com.familykitchen.board.domain.CustomGroceryItem
 import com.familykitchen.board.domain.GroceryAndCatalogEditAction
 import com.familykitchen.board.domain.GroceryListItem
 import com.familykitchen.board.domain.GrocerySortMode
+import com.familykitchen.board.domain.HouseholdCurrency
 import com.familykitchen.board.domain.HouseholdProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
 import com.familykitchen.board.domain.IngredientCategory
 import com.familykitchen.board.domain.IngredientTier
+import com.familykitchen.board.domain.MarketVenue
 import com.familykitchen.board.domain.RestockDelta
+import com.familykitchen.board.domain.SkippedPantryItemSummary
 import com.familykitchen.board.domain.StapleStatus
 import com.familykitchen.board.domain.WeeklyGroceryDiff
 import com.familykitchen.board.ui.export.KitchenExportActionRow
@@ -70,58 +74,25 @@ import com.familykitchen.board.ui.theme.ExtendedKitchenColors
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
 
-// SavorAI Smart Grocery List Screen (`smart_grocery_list`) enforcing EC-09 chronological ceiling
-// rounding, EC-11 Tier-2 PLENTY resets, O(1) batch commits, and above-the-fold aisle visibility.
+// SavorAI Smart Grocery List Screen (`smart_grocery_list`) with `All · Palengke · Supermarket`
+// venue pills, expandable skipped-staples drawer (`Ran Low`), `Uncheck · N`, and `Restock · N`.
 
-private data class AisleSpec(
-  val category: IngredientCategory,
-  val headerTitle: String,
-)
+// Canonical supermarket aisle traversal order keeping produce, dairy, meat, bakery, and pantry tidy.
+private data class GroceryAisleSpec(val category: IngredientCategory, val headerTitle: String)
 
-// Physical supermarket aisle mapping ordered along the shopper's perimeter walk.
-private val SUPERMARKET_AISLES: List<AisleSpec> = listOf(
-  AisleSpec(IngredientCategory.PRODUCE, "Aisle 1: Produce & Herbs"),
-  AisleSpec(IngredientCategory.DAIRY_EGGS, "Aisle 2: Dairy & Refrigerated"),
-  AisleSpec(IngredientCategory.PROTEIN, "Aisle 4: Meat & Seafood"),
-  AisleSpec(IngredientCategory.BAKERY_GRAINS, "Aisle 5: Bakery & Grains"),
-  AisleSpec(IngredientCategory.PANTRY_STAPLE, "Aisle 7: Pantry & Baking"),
+private val GROCERY_SUPERMARKET_AISLES: List<GroceryAisleSpec> = listOf(
+  GroceryAisleSpec(IngredientCategory.PRODUCE, "Aisle 1: Produce & Herbs"),
+  GroceryAisleSpec(IngredientCategory.DAIRY_EGGS, "Aisle 2: Dairy & Refrigerated"),
+  GroceryAisleSpec(IngredientCategory.PROTEIN, "Aisle 4: Meat & Seafood"),
+  GroceryAisleSpec(IngredientCategory.BAKERY_GRAINS, "Aisle 5: Bakery & Grains"),
+  GroceryAisleSpec(IngredientCategory.PANTRY_STAPLE, "Aisle 7: Pantry & Baking"),
 )
 
 /**
- * Stateless Material 3 screen implementing `smart_grocery_list` with immediate above-the-fold
- * grocery item visibility, lazy aisle `items(...)`, a non-wrapping `Pantry-Adjusted List` card,
- * `48.dp` Quick-Add + `Mic` + 3 direct sort pills, and a slim `56.dp` docked summary bar.
- *
- * @param groceryDiff Chronological weekly grocery diff (`EC-09`, `EC-11`, `EC-12`).
- * @param checkedGroceryItemIds Persisted set of checked catalog `ingredientId`s.
- * @param customGroceryItems User-added or dictated custom shopping items.
- * @param sortMode Active [GrocerySortMode] (`AISLE_SORTED`, `BY_RECIPE`, `URGENCY_FIRST`).
- * @param householdProfile Household profile supplying name and cook initials.
- * @param batchWriteCallCount Live `KitchenStoragePort.batchWriteCallCount` metric.
- * @param tonightMealSummary Subtitle retained for backward-compatible callers.
- * @param showPlanSwitcher Renders the top `List | Meal Plan` segmented bar when `true`.
- * @param showVaultDebugPill Renders the internal `Batch #` QA vault pill when `true` (`false` default).
- * @param existingCatalogIds Existing catalog IDs surfaced on the local-preset quick-add drawer.
- * @param onToggleItemChecked Toggles checked state for a catalog `ingredientId` or `customId`.
- * @param onRestockCheckedItems Commits checked [RestockDelta]s in one `O(1)` atomic batch write.
- * @param onSelectSortMode Updates `KitchenSnapshot.grocerySortMode`.
- * @param onAddCustomGroceryItem Persists a custom or dictated [CustomGroceryItem].
- * @param onAddCatalogItemToGrocery Adds a preset or custom [IngredientCatalogItem] to Grocery.
- * @param onAddCatalogItemToPantry Stocks a preset or custom [IngredientCatalogItem] in Pantry.
- * @param onRemoveManualQueue Removes a manually queued catalog ID from `aiAddedGroceryIds`.
- * @param onClearCheckedItems Sweeps checked items in one `O(1)` snapshot write.
- * @param onStartVoiceDictation Triggers offline voice dictation (`en-US` / `fr-FR`).
- * @param onOpenWeeklyMealPlan Navigates to the Weekly Meal Plan / Today board.
- * @param onOpenQaLab Opens `QaScenarioLabSheet` when the `Batch #` vault pill is tapped.
- * @param currencySymbol Active household currency symbol (`"₱"` default).
- * @param marketRegionLabel Active local market region label.
- * @param isExportingPdf `true` while a scoped multi-page Grocery PDF export is writing on IO.
- * @param onCopyListToClipboard Copies the plain-text shopping list to the system clipboard.
- * @param onSaveListAsPdf Launches scoped `CreateDocument("application/pdf")` for the shopping list.
- * @param catalogById Household catalog lookup map supplying pack size and price inside edit sheets.
- * @param dismissedItemCount Count of items skipped on this shopping trip (`> 0` renders restore bar).
- * @param onEditGroceryOrCatalog Dispatches [GroceryAndCatalogEditAction] mutations in `O(1)` writes.
- * @param modifier Optional Compose [Modifier].
+ * Stateless Material 3 screen implementing `smart_grocery_list` with `All · Palengke · Supermarket`
+ * venue filtering (adapting `"Palengke"` to `"Wet Market"` outside `PHP`), expandable pre-shop
+ * skipped-staples verification (`Ran Low`), `Uncheck · N`, and `Restock · N` (`onOpenUnpackSheet`
+ * falling back to `onRestockCheckedItems`).
  */
 @Composable
 fun SmartGroceryScreen(
@@ -154,119 +125,142 @@ fun SmartGroceryScreen(
   catalogById: Map<String, IngredientCatalogItem> = emptyMap(),
   dismissedItemCount: Int = 0,
   onEditGroceryOrCatalog: (GroceryAndCatalogEditAction) -> Unit = {},
+  activeVenueFilter: MarketVenue? = null,
+  onSelectVenueFilter: (MarketVenue?) -> Unit = {},
+  onRequeueSkippedStaple: (ingredientId: String) -> Unit = {},
+  onOpenUnpackSheet: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
   val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+  // Persist quick-add drawer, Shop Mode focus, checked accordion, and active edit targets.
   var showAddDrawer by rememberSaveable { mutableStateOf(false) }
   var quickCustomInput by rememberSaveable { mutableStateOf("") }
   var checkedAccordionOpen by rememberSaveable { mutableStateOf(true) }
   var inStoreFocusMode by rememberSaveable { mutableStateOf(false) }
-  // Track open item-edit modal bottom sheets as Bundle-safe String IDs across recreation.
   var editingCatalogItemId by rememberSaveable { mutableStateOf<String?>(null) }
   var editingCustomItemId by rememberSaveable { mutableStateOf<String?>(null) }
+  // Sync venue filter across both controlled ViewModel state and standalone @Preview taps.
+  var localVenueName by rememberSaveable { mutableStateOf(activeVenueFilter?.name) }
+  LaunchedEffect(activeVenueFilter) { localVenueName = activeVenueFilter?.name }
+  val effectiveVenue = activeVenueFilter ?: MarketVenue.entries.find { it.name == localVenueName }
 
-  // Partition catalog and custom grocery rows into active unchecked vs completed checked buckets.
+  // Combine persisted checked IDs with any pre-checked GroceryListItem flags.
   val effectiveCheckedIds = remember(groceryDiff.groceryItems, checkedGroceryItemIds) {
     checkedGroceryItemIds + groceryDiff.groceryItems.filter { it.isChecked }.map { it.ingredientId }
   }
-  // Apply selected GrocerySortMode deterministically to active unchecked catalog items.
-  val uncheckedCatalogItems = remember(groceryDiff.groceryItems, effectiveCheckedIds, sortMode) {
-    orderGroceryItems(
-      items = groceryDiff.groceryItems.filterNot { it.ingredientId in effectiveCheckedIds },
-      sortMode = sortMode,
-    )
+
+  // Compute venue counts across all unchecked items so `All · Palengke · Supermarket` badges stay live.
+  val allUncheckedCatalog = remember(groceryDiff.groceryItems, effectiveCheckedIds) {
+    groceryDiff.groceryItems.filterNot { it.ingredientId in effectiveCheckedIds }
   }
-  // Preserve checked catalog items separately so CheckedItemsAccordionCard can restore them in 1 tap.
+  val allUncheckedCustom = remember(customGroceryItems) { customGroceryItems.filterNot { it.isChecked } }
+  val wetMarketCount = remember(allUncheckedCatalog, allUncheckedCustom) {
+    allUncheckedCatalog.count { it.marketVenue == MarketVenue.WET_MARKET } +
+      allUncheckedCustom.count { groceryScreenCustomVenue(it) == MarketVenue.WET_MARKET }
+  }
+  val supermarketCount = remember(allUncheckedCatalog, allUncheckedCustom) {
+    allUncheckedCatalog.count { it.marketVenue == MarketVenue.SUPERMARKET } +
+      allUncheckedCustom.count { groceryScreenCustomVenue(it) == MarketVenue.SUPERMARKET }
+  }
+  val allActiveCount = allUncheckedCatalog.size + allUncheckedCustom.size
+
+  // Filter active items by `All · Palengke · Supermarket` before applying sortMode.
+  val uncheckedCatalogItems = remember(allUncheckedCatalog, effectiveVenue, sortMode) {
+    val venueFiltered = when (effectiveVenue) {
+      null -> allUncheckedCatalog
+      else -> allUncheckedCatalog.filter { it.marketVenue == effectiveVenue }
+    }
+    groceryScreenOrderItems(items = venueFiltered, sortMode = sortMode)
+  }
+  val uncheckedCustomItems = remember(allUncheckedCustom, effectiveVenue) {
+    when (effectiveVenue) {
+      null -> allUncheckedCustom
+      else -> allUncheckedCustom.filter { groceryScreenCustomVenue(it) == effectiveVenue }
+    }
+  }
+  // Keep checked items grouped inside the bottom Checked Off tray ready for UnpackGroceriesSheet.
   val checkedCatalogItems = remember(groceryDiff.groceryItems, effectiveCheckedIds) {
     groceryDiff.groceryItems.filter { it.ingredientId in effectiveCheckedIds }
   }
-  // Split custom/dictated items into active aisle rows vs completed accordion pills.
-  val uncheckedCustomItems = remember(customGroceryItems) { customGroceryItems.filterNot { it.isChecked } }
   val checkedCustomItems = remember(customGroceryItems) { customGroceryItems.filter { it.isChecked } }
 
-  // Compute live cart counters and estimated remaining household currency cost.
   val remainingCount = uncheckedCatalogItems.size + uncheckedCustomItems.size
   val totalCheckedCount = checkedCatalogItems.size + checkedCustomItems.size
-  val remainingCostUsd = remember(uncheckedCatalogItems) {
-    uncheckedCatalogItems.sumOf { it.estimatedCostUsd }
-  }
+  val remainingCostUsd = remember(uncheckedCatalogItems) { uncheckedCatalogItems.sumOf { it.estimatedCostUsd } }
 
-  // Build O(1) atomic RestockDeltas for checked catalog items (resetting Tier-2 staples to PLENTY).
+  // Build fallback RestockDelta list when legacy callers omit onOpenUnpackSheet.
   val checkedRestockDeltas = remember(checkedCatalogItems) {
     checkedCatalogItems.map { item ->
-      // EC-11: Checking off a LOW/OUT Tier-2 staple restores its status directly to PLENTY.
       val reset = if (item.tier == IngredientTier.TIER_2_STAPLE) StapleStatus.PLENTY else null
       RestockDelta(item.ingredientId, item.restockQuantity, reset)
     }
   }
 
-  // Reclaim above-the-fold height so Aisle 1 items appear immediately on compact 360dp screens.
   Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
       LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-          start = 16.dp,
-          end = 16.dp,
-          top = 10.dp,
-          bottom = if (isImeVisible) 24.dp else 88.dp,
-        ),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = if (isImeVisible) 24.dp else 88.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
       ) {
-        // Optional standalone List | Meal Plan switcher (disabled inside 5-tab SavorAI shell).
+        // Optional segmented Plan switcher when rendered outside KitchenScaffold.
         if (showPlanSwitcher && !inStoreFocusMode) {
           item(key = "grocery_plan_switcher") {
-            GroceryPlanSegmentedHeader(
-              remainingCount = remainingCount,
-              onOpenWeeklyMealPlan = onOpenWeeklyMealPlan,
-            )
+            GroceryPlanSegmentedHeader(remainingCount = remainingCount, onOpenWeeklyMealPlan = onOpenWeeklyMealPlan)
           }
         }
 
-        // Hide internal Batch #0 QA pill by default (`showVaultDebugPill = false`) on consumer views.
+        // Optional QA Batch # pill hidden on normal consumer grocery trips.
         if (showVaultDebugPill && !inStoreFocusMode) {
           item(key = "grocery_vault_pill") {
             HouseholdVaultSyncPill(
-              householdProfile = householdProfile,
-              batchWriteCallCount = batchWriteCallCount,
-              onOpenQaLab = onOpenQaLab,
-              marketRegionLabel = marketRegionLabel,
+              householdProfile = householdProfile, batchWriteCallCount = batchWriteCallCount,
+              onOpenQaLab = onOpenQaLab, marketRegionLabel = marketRegionLabel,
             )
           }
         }
 
-        // Editorial Pantry-Adjusted List banner showing skipped in-stock staples and PHP ₱ savings.
+        // Expandable Pantry-Adjusted List banner with 1-tap `Ran Low` skipped-staples drawer.
         if (!inStoreFocusMode) {
           item(key = "grocery_dedup_banner") {
-            PantryDeduplicationBanner(groceryDiff = groceryDiff, currencySymbol = currencySymbol)
+            PantryDeduplicationBanner(
+              groceryDiff = groceryDiff, currencySymbol = currencySymbol,
+              onRequeueSkippedStaple = onRequeueSkippedStaple,
+            )
           }
         }
 
-        // Weighted Quick-Add bar + on-screen 48.dp Mic button + 3 direct single-tap sort pills.
+        // Multi-Market Venue Filter Pills (`All · Palengke · Supermarket` or `Wet Market`).
+        item(key = "grocery_venue_filter_row") {
+          MarketVenueFilterRow(
+            activeVenue = effectiveVenue, currency = householdProfile.currency,
+            allCount = allActiveCount, wetMarketCount = wetMarketCount, supermarketCount = supermarketCount,
+            onSelectVenue = { nextVenue ->
+              localVenueName = nextVenue?.name
+              onSelectVenueFilter(nextVenue)
+            },
+          )
+        }
+
+        // Weighted Quick-Add bar, Mic, Uncheck · N pill, and 3 direct single-tap sort pills.
         item(key = "grocery_sort_and_add_bar") {
           StoreSortAndQuickAddBar(
-            sortMode = sortMode,
-            checkedCount = totalCheckedCount,
-            onSelectSortMode = onSelectSortMode,
-            onToggleAddDrawer = { showAddDrawer = !showAddDrawer },
-            onStartDictation = onStartVoiceDictation,
-            onClearChecked = onClearCheckedItems,
+            sortMode = sortMode, checkedCount = totalCheckedCount,
+            onSelectSortMode = onSelectSortMode, onToggleAddDrawer = { showAddDrawer = !showAddDrawer },
+            onStartDictation = onStartVoiceDictation, onClearChecked = onClearCheckedItems,
           )
         }
 
-        // Tactile 48.dp Copy List & Save PDF export pills (zero storage permissions via SAF).
+        // Copy List and Save PDF 48.dp export strip.
         item(key = "grocery_export_actions") {
           KitchenExportActionRow(
-            copyLabel = "Copy List",
-            pdfLabel = "Save PDF",
-            isExportingPdf = isExportingPdf,
-            onCopyClick = onCopyListToClipboard,
-            onSavePdfClick = onSaveListAsPdf,
+            copyLabel = "Copy List", pdfLabel = "Save PDF", isExportingPdf = isExportingPdf,
+            onCopyClick = onCopyListToClipboard, onSavePdfClick = onSaveListAsPdf,
           )
         }
 
-        // Surface skipped-items restore banner whenever >= 1 item was skipped for this trip.
+        // Restore banner shown whenever 1 or more items were skipped on the current trip.
         if (dismissedItemCount > 0) {
           item(key = "grocery_skipped_notice") {
             SkippedGroceryNoticeBanner(
@@ -276,10 +270,9 @@ fun SmartGroceryScreen(
           }
         }
 
-        // Expandable quick custom note + local-market preset drawer.
+        // Inline quick-add custom note input + catalog preset drawer when toggled open.
         if (showAddDrawer) {
           item(key = "grocery_quick_custom_drawer") {
-            // Normalize free-text shopping notes into deterministic snake_case custom IDs.
             val submitQuickCustom = {
               val clean = quickCustomInput.trim()
               if (clean.isNotEmpty()) {
@@ -289,40 +282,25 @@ fun SmartGroceryScreen(
               }
             }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-              ) {
+              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
-                  value = quickCustomInput,
-                  onValueChange = { quickCustomInput = it },
+                  value = quickCustomInput, onValueChange = { quickCustomInput = it },
                   label = { Text("Quick Shopping Item", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                   placeholder = { Text("e.g., Fresh Basil", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                   singleLine = true,
-                  keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
-                    imeAction = ImeAction.Done,
-                  ),
+                  keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
                   keyboardActions = KeyboardActions(onDone = { submitQuickCustom() }),
                   modifier = Modifier.weight(1f),
                 )
-                Button(
-                  onClick = submitQuickCustom,
-                  enabled = quickCustomInput.isNotBlank(),
-                  shape = CircleShape,
-                  modifier = Modifier.defaultMinSize(minHeight = 48.dp),
-                ) {
+                Button(onClick = submitQuickCustom, enabled = quickCustomInput.isNotBlank(), shape = CircleShape, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
                   Text("Add", maxLines = 1, softWrap = false)
                 }
               }
 
-              // Embed full catalog & 20-preset builder when adding structured pantry/grocery items.
               AddIngredientCard(
                 existingIngredientIds = existingCatalogIds,
                 queuedGroceryIds = groceryDiff.groceryItems.map { it.ingredientId }.toSet(),
-                isExpanded = true,
-                onToggleExpanded = { showAddDrawer = false },
+                isExpanded = true, onToggleExpanded = { showAddDrawer = false },
                 onAddIngredientToGrocery = onAddCatalogItemToGrocery,
                 onAddIngredientToPantry = onAddCatalogItemToPantry,
               )
@@ -330,56 +308,49 @@ fun SmartGroceryScreen(
           }
         }
 
-        // Show zero-deficit celebration card when home stock already covers all 21 weekly slots.
-        if (remainingCount == 0 && totalCheckedCount == 0) {
-          item(key = "grocery_all_covered_card") {
-            AllPlannedMealsCoveredCard()
+        // Celebrate 100% home-pantry meal coverage when zero shopping items remain.
+        if (allActiveCount == 0 && totalCheckedCount == 0) {
+          item(key = "grocery_all_covered_card") { groceryScreenAllCoveredCard() }
+        }
+        // Calm venue-specific empty card when Palengke or Supermarket has zero items needed.
+        if (allActiveCount > 0 && remainingCount == 0 && effectiveVenue != null) {
+          item(key = "grocery_venue_empty_card") {
+            val venueLabel = when {
+              effectiveVenue == MarketVenue.SUPERMARKET -> "Supermarket"
+              householdProfile.currency == HouseholdCurrency.PHP -> "Palengke"
+              else -> "Wet Market"
+            }
+            groceryScreenEmptyVenueCard(venueLabel)
           }
         }
 
-        // Emit true lazy items(...) for aisle headers, catalog items, and custom items.
+        // Render active shopping items either grouped by store aisle or sorted flat.
         when (sortMode) {
           GrocerySortMode.AISLE_SORTED -> {
-            // Walk physical supermarket perimeter order and omit empty aisles cleanly.
-            SUPERMARKET_AISLES.forEach { aisle ->
+            GROCERY_SUPERMARKET_AISLES.forEach { aisle ->
               val aisleCatalog = uncheckedCatalogItems.filter { it.category == aisle.category }
               val aisleCustom = uncheckedCustomItems.filter { it.category == aisle.category }
               val totalInAisle = aisleCatalog.size + aisleCustom.size
               if (totalInAisle > 0) {
                 item(key = "aisle_header_${aisle.category.name}") {
-                  AisleSectionHeader(
-                    title = aisle.headerTitle,
-                    dotColor = aisleDotColor(aisle.category, extendedColors),
-                    itemCount = totalInAisle,
-                  )
+                  groceryScreenAisleHeader(aisle.headerTitle, groceryScreenAisleDotColor(aisle.category, extendedColors), totalInAisle)
                 }
-                // Lazy key per ingredientId enables smooth placement animations when checking items.
-                items(
-                  items = aisleCatalog,
-                  key = { item -> "aisle_cat_${item.ingredientId}" },
-                ) { item ->
+                items(items = aisleCatalog, key = { item -> "aisle_cat_${item.ingredientId}" }) { item ->
                   GroceryCheckableItemCard(
-                    item = item,
-                    isChecked = false,
+                    item = item, isChecked = false,
                     onToggleChecked = { onToggleItemChecked(item.ingredientId) },
                     onQuickRestockOne = {
-                      // Single-item overflow shortcut commits 1 whole-package RestockDelta immediately.
                       val reset = if (item.tier == IngredientTier.TIER_2_STAPLE) StapleStatus.PLENTY else null
                       onRestockCheckedItems(listOf(RestockDelta(item.ingredientId, item.restockQuantity, reset)))
                     },
                     onRemoveManualQueue = { onRemoveManualQueue(item.ingredientId) },
                     onEditItem = { editingCatalogItemId = item.ingredientId },
-                    onSkipForTrip = {
-                      onEditGroceryOrCatalog(GroceryAndCatalogEditAction.DismissGroceryItemForTrip(item.ingredientId))
-                    },
+                    onSkipForTrip = { onEditGroceryOrCatalog(GroceryAndCatalogEditAction.DismissGroceryItemForTrip(item.ingredientId)) },
                     currencySymbol = currencySymbol,
                   )
                 }
-                items(
-                  items = aisleCustom,
-                  key = { custom -> "aisle_custom_${custom.customId}" },
-                ) { custom ->
-                  CustomGroceryItemRow(
+                items(items = aisleCustom, key = { custom -> "aisle_custom_${custom.customId}" }) { custom ->
+                  groceryScreenCustomItemRow(
                     item = custom,
                     onToggleChecked = { onToggleItemChecked(custom.customId) },
                     onEditCustomItem = { editingCustomItemId = custom.customId },
@@ -390,22 +361,13 @@ fun SmartGroceryScreen(
           }
 
           GrocerySortMode.BY_RECIPE, GrocerySortMode.URGENCY_FIRST -> {
-            // Render flat sorted list when grouping by first chronological meal or shortage urgency.
             if (remainingCount > 0) {
               item(key = "sorted_flat_header_${sortMode.name}") {
-                AisleSectionHeader(
-                  title = sortMode.displayLabel,
-                  dotColor = extendedColors.herbalSage,
-                  itemCount = remainingCount,
-                )
+                groceryScreenAisleHeader(sortMode.displayLabel, extendedColors.herbalSage, remainingCount)
               }
-              items(
-                items = uncheckedCatalogItems,
-                key = { item -> "flat_cat_${item.ingredientId}" },
-              ) { item ->
+              items(items = uncheckedCatalogItems, key = { item -> "flat_cat_${item.ingredientId}" }) { item ->
                 GroceryCheckableItemCard(
-                  item = item,
-                  isChecked = false,
+                  item = item, isChecked = false,
                   onToggleChecked = { onToggleItemChecked(item.ingredientId) },
                   onQuickRestockOne = {
                     val reset = if (item.tier == IngredientTier.TIER_2_STAPLE) StapleStatus.PLENTY else null
@@ -413,17 +375,12 @@ fun SmartGroceryScreen(
                   },
                   onRemoveManualQueue = { onRemoveManualQueue(item.ingredientId) },
                   onEditItem = { editingCatalogItemId = item.ingredientId },
-                  onSkipForTrip = {
-                    onEditGroceryOrCatalog(GroceryAndCatalogEditAction.DismissGroceryItemForTrip(item.ingredientId))
-                  },
+                  onSkipForTrip = { onEditGroceryOrCatalog(GroceryAndCatalogEditAction.DismissGroceryItemForTrip(item.ingredientId)) },
                   currencySymbol = currencySymbol,
                 )
               }
-              items(
-                items = uncheckedCustomItems,
-                key = { custom -> "flat_custom_${custom.customId}" },
-              ) { custom ->
-                CustomGroceryItemRow(
+              items(items = uncheckedCustomItems, key = { custom -> "flat_custom_${custom.customId}" }) { custom ->
+                groceryScreenCustomItemRow(
                   item = custom,
                   onToggleChecked = { onToggleItemChecked(custom.customId) },
                   onEditCustomItem = { editingCustomItemId = custom.customId },
@@ -433,12 +390,10 @@ fun SmartGroceryScreen(
           }
         }
 
-        // Collapsible Checked Off tray keeps completed items accessible without cluttering active aisles.
         if (totalCheckedCount > 0) {
           item(key = "grocery_checked_accordion") {
             CheckedItemsAccordionCard(
-              checkedCatalogItems = checkedCatalogItems,
-              checkedCustomItems = checkedCustomItems,
+              checkedCatalogItems = checkedCatalogItems, checkedCustomItems = checkedCustomItems,
               isAccordionExpanded = checkedAccordionOpen,
               onToggleAccordion = { checkedAccordionOpen = !checkedAccordionOpen },
               onUncheckItem = onToggleItemChecked,
@@ -447,37 +402,32 @@ fun SmartGroceryScreen(
         }
       }
 
-      // Docked 56.dp warm summary bar with 3.dp cart-progress micro-bar (yields to IME when typing).
+      // Docked 56.dp warm summary bar opening UnpackGroceriesSheet or committing O(1) restock.
       if (!isImeVisible) {
         GroceryDockedSummaryBar(
-          remainingItemCount = remainingCount,
-          remainingCostUsd = remainingCostUsd,
-          checkedCount = totalCheckedCount,
-          checkedRestockCount = checkedRestockDeltas.size,
+          remainingItemCount = remainingCount, remainingCostUsd = remainingCostUsd,
+          checkedCount = totalCheckedCount, checkedRestockCount = checkedRestockDeltas.size,
           inStoreFocusMode = inStoreFocusMode,
           onRestockCheckedBatch = {
-            if (checkedRestockDeltas.isNotEmpty()) {
-              onRestockCheckedItems(checkedRestockDeltas)
+            when {
+              onOpenUnpackSheet != null && totalCheckedCount > 0 -> onOpenUnpackSheet()
+              checkedRestockDeltas.isNotEmpty() -> onRestockCheckedItems(checkedRestockDeltas)
             }
           },
           onToggleInStoreMode = { inStoreFocusMode = !inStoreFocusMode },
           currencySymbol = currencySymbol,
-          modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+          modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 10.dp),
         )
       }
 
-      // Modal bottom sheet for editing any catalog shopping item's quantity, name, or store pack.
+      // Modal bottom sheet for editing catalog-backed buy quantities, names, and pack pricing.
       val activeEditCatalogItem = editingCatalogItemId?.let { targetId ->
         groceryDiff.groceryItems.firstOrNull { it.ingredientId == targetId }
       }
       if (activeEditCatalogItem != null) {
         EditGroceryCatalogItemSheet(
-          item = activeEditCatalogItem,
-          catalogItem = catalogById[activeEditCatalogItem.ingredientId],
-          currencySymbol = currencySymbol,
-          onDispatchEditAction = onEditGroceryOrCatalog,
+          item = activeEditCatalogItem, catalogItem = catalogById[activeEditCatalogItem.ingredientId],
+          currencySymbol = currencySymbol, onDispatchEditAction = onEditGroceryOrCatalog,
           onQuickRestockOne = {
             val reset = if (activeEditCatalogItem.tier == IngredientTier.TIER_2_STAPLE) StapleStatus.PLENTY else null
             onRestockCheckedItems(listOf(RestockDelta(activeEditCatalogItem.ingredientId, activeEditCatalogItem.restockQuantity, reset)))
@@ -486,14 +436,13 @@ fun SmartGroceryScreen(
         )
       }
 
-      // Modal bottom sheet for editing or deleting a user-added custom shopping note.
+      // Modal bottom sheet for editing or deleting user-added custom shopping notes.
       val activeEditCustomItem = editingCustomItemId?.let { targetId ->
         customGroceryItems.firstOrNull { it.customId == targetId }
       }
       if (activeEditCustomItem != null) {
         EditCustomGroceryItemSheet(
-          item = activeEditCustomItem,
-          onDispatchEditAction = onEditGroceryOrCatalog,
+          item = activeEditCustomItem, onDispatchEditAction = onEditGroceryOrCatalog,
           onDismiss = { editingCustomItemId = null },
         )
       }
@@ -501,149 +450,110 @@ fun SmartGroceryScreen(
   }
 }
 
-private fun aisleDotColor(
-  category: IngredientCategory,
-  extendedColors: ExtendedKitchenColors,
-): Color = when (category) {
-  IngredientCategory.PRODUCE -> extendedColors.herbalSage
-  IngredientCategory.DAIRY_EGGS -> extendedColors.warmApricot
-  IngredientCategory.PROTEIN -> extendedColors.terracotta
-  IngredientCategory.BAKERY_GRAINS -> extendedColors.expiringSoonIndicator
-  IngredientCategory.PANTRY_STAPLE -> extendedColors.terracottaClay
-}
+// Route fresh produce custom notes to Wet Market and packaged items to Supermarket.
+private fun groceryScreenCustomVenue(item: CustomGroceryItem): MarketVenue =
+  when (item.category) {
+    IngredientCategory.PRODUCE -> MarketVenue.WET_MARKET
+    else -> MarketVenue.SUPERMARKET
+  }
 
-// Weighted supermarket aisle header preventing "Refrigerated1\nitems" collision & "1 items" bug.
+// Map each supermarket aisle category to its semantic Material 3 kitchen accent dot color.
+private fun groceryScreenAisleDotColor(category: IngredientCategory, extendedColors: ExtendedKitchenColors): Color =
+  when (category) {
+    IngredientCategory.PRODUCE -> extendedColors.herbalSage
+    IngredientCategory.DAIRY_EGGS -> extendedColors.warmApricot
+    IngredientCategory.PROTEIN -> extendedColors.terracotta
+    IngredientCategory.BAKERY_GRAINS -> extendedColors.expiringSoonIndicator
+    IngredientCategory.PANTRY_STAPLE -> extendedColors.terracottaClay
+  }
+
+// Compact aisle heading row pairing a colored indicator dot with singular or plural item count.
 @Composable
-private fun AisleSectionHeader(title: String, dotColor: Color, itemCount: Int) {
+private fun groceryScreenAisleHeader(title: String, dotColor: Color, itemCount: Int) {
   Row(
     modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-    horizontalArrangement = Arrangement.SpaceBetween,
-    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
   ) {
-    Row(
-      modifier = Modifier.weight(1f),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
+    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dotColor))
-      Text(
-        text = title,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
+      Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     Spacer(modifier = Modifier.width(8.dp))
-    Text(
-      text = if (itemCount == 1) "1 item" else "$itemCount items",
-      style = MaterialTheme.typography.labelSmall,
-      color = MaterialTheme.colorScheme.outline,
-      maxLines = 1,
-      softWrap = false,
-    )
+    Text(if (itemCount == 1) "1 item" else "$itemCount items", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, maxLines = 1, softWrap = false)
   }
 }
 
-// Checkable 24.dp ceramic card with 48.dp touch box and 1-tap 48.dp Edit button for custom items.
+// Checkable 48.dp custom shopping note row with inline Edit icon button.
 @Composable
-private fun CustomGroceryItemRow(
+private fun groceryScreenCustomItemRow(
   item: CustomGroceryItem,
   onToggleChecked: () -> Unit,
   onEditCustomItem: (() -> Unit)? = null,
 ) {
   val extendedColors = KitchenTheme.extendedColors
   Card(
-    modifier = Modifier.fillMaxWidth(),
-    shape = KitchenTheme.shapes.card2xl,
+    modifier = Modifier.fillMaxWidth(), shape = KitchenTheme.shapes.card2xl,
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
     border = BorderStroke(1.dp, extendedColors.borderSubtle),
   ) {
     Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .clickable(onClick = onToggleChecked)
-        .padding(horizontal = 4.dp, vertical = 8.dp),
+      modifier = Modifier.fillMaxWidth().clickable(onClick = onToggleChecked).padding(horizontal = 4.dp, vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Box(
-        modifier = Modifier.size(48.dp),
-        contentAlignment = Alignment.Center,
-      ) {
-        Box(
-          modifier = Modifier
-            .size(24.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
-            .border(1.5.dp, MaterialTheme.colorScheme.outline, CircleShape),
-        )
+      Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerLowest).border(1.5.dp, MaterialTheme.colorScheme.outline, CircleShape))
       }
       Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-        Text(
-          text = item.displayName,
-          style = MaterialTheme.typography.titleSmall,
-          fontWeight = FontWeight.SemiBold,
-          maxLines = 2,
-          overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-          text = item.quantityNote,
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
+        Text(item.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(item.quantityNote, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
       }
       if (onEditCustomItem != null) {
         IconButton(onClick = onEditCustomItem, modifier = Modifier.size(48.dp)) {
-          Icon(
-            imageVector = Icons.Filled.Edit,
-            contentDescription = "Edit ${item.displayName}",
-            tint = extendedColors.herbalSage,
-            modifier = Modifier.size(19.dp),
-          )
+          Icon(Icons.Filled.Edit, contentDescription = "Edit ${item.displayName}", tint = extendedColors.herbalSage, modifier = Modifier.size(19.dp))
         }
       }
     }
   }
 }
 
-// Celebration card rendered when 100% of planned weekly BOM lines are satisfied by home stock.
+// Serene confirmation card rendered when 100% of planned weekly meals are covered by home stock.
 @Composable
-private fun AllPlannedMealsCoveredCard() {
+private fun groceryScreenAllCoveredCard() {
   val extendedColors = KitchenTheme.extendedColors
   Card(
-    modifier = Modifier.fillMaxWidth(),
-    shape = KitchenTheme.shapes.card2xl,
+    modifier = Modifier.fillMaxWidth(), shape = KitchenTheme.shapes.card2xl,
     colors = CardDefaults.cardColors(containerColor = extendedColors.freshContainer),
     border = BorderStroke(1.dp, extendedColors.borderSubtle),
   ) {
-    Row(
-      modifier = Modifier.fillMaxWidth().padding(16.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
       Icon(Icons.Filled.Check, contentDescription = null, tint = extendedColors.onFreshContainer)
       Spacer(modifier = Modifier.width(2.dp))
       Column(modifier = Modifier.weight(1f)) {
-        Text(
-          text = "All Planned Meals Covered!",
-          style = MaterialTheme.typography.titleMedium,
-          fontWeight = FontWeight.Bold,
-          color = extendedColors.onFreshContainer,
-        )
-        Text(
-          text = "Zero packages needed — 100% of planned weekly recipes are covered by home stock.",
-          style = MaterialTheme.typography.bodySmall,
-          color = extendedColors.onFreshContainer,
-        )
+        Text("All Planned Meals Covered!", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = extendedColors.onFreshContainer)
+        Text("Zero packages needed — 100% of planned weekly recipes are covered by home stock.", style = MaterialTheme.typography.bodySmall, color = extendedColors.onFreshContainer)
       }
     }
   }
 }
 
-// Deterministically orders unchecked GroceryListItems according to the selected GrocerySortMode.
-private fun orderGroceryItems(items: List<GroceryListItem>, sortMode: GrocerySortMode): List<GroceryListItem> =
+// Quiet empty-venue card shown when all remaining items belong to the other market venue.
+@Composable
+private fun groceryScreenEmptyVenueCard(venueLabel: String) {
+  val extendedColors = KitchenTheme.extendedColors
+  Card(
+    modifier = Modifier.fillMaxWidth(), shape = KitchenTheme.shapes.card2xl,
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    border = BorderStroke(1.dp, extendedColors.borderSubtle),
+  ) {
+    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+      Icon(Icons.Filled.Check, contentDescription = null, tint = extendedColors.herbalSage)
+      Text("Zero items needed from $venueLabel right now.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+  }
+}
+
+// Order unchecked catalog items according to aisle, meal attribution, or acute shortage priority.
+private fun groceryScreenOrderItems(items: List<GroceryListItem>, sortMode: GrocerySortMode): List<GroceryListItem> =
   when (sortMode) {
     GrocerySortMode.AISLE_SORTED -> items
     GrocerySortMode.BY_RECIPE -> items.sortedBy { it.mealUsageLabels.firstOrNull().orEmpty() }
@@ -656,30 +566,27 @@ private fun orderGroceryItems(items: List<GroceryListItem>, sortMode: GrocerySor
 @Preview(showBackground = true, widthDp = 412, heightDp = 920)
 @Composable
 private fun SmartGroceryScreenPreview() {
+  // Verifies All · Palengke · Supermarket venue pills, skipped-staples drawer, and Restock · 1 bar.
   val items = listOf(
-    GroceryListItem("ing_avocado", "Ripe Avocados (Antipolo Market)", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 4.0, 1.0, 3.0, 4.0, 1, 4.0, mealUsageLabels = listOf("for Tuesday Breakfast • Avocado Egg Tartine"), estimatedCostUsd = 180.0, packageDescriptor = "4 count • Semi-ripe"),
-    GroceryListItem("ing_butter", "Unsalted Cultured Butter", IngredientCategory.DAIRY_EGGS, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 250.0, 50.0, 200.0, 250.0, 1, 250.0, estimatedCostUsd = 225.0, packageDescriptor = "250 g block"),
-    GroceryListItem("ing_chicken", "Free-Range Chicken Thighs", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 4000.0, 0.0, 4000.0, 4000.0, 4, 4000.0, mealUsageLabels = listOf("for Monday Dinner • Crispy Chicken & Tomato Baguette"), estimatedCostUsd = 920.0, packageDescriptor = "4 packs (4000 g)"),
-    GroceryListItem("ing_olive_oil", "Extra Virgin Olive Oil", IngredientCategory.PANTRY_STAPLE, IngredientTier.TIER_2_STAPLE, BaseUnit.MILLILITER, 0.0, 500.0, 750.0, 750.0, 1, 750.0, StapleStatus.LOW, estimatedCostUsd = 695.0, packageDescriptor = "750 ml bottle", isChecked = true),
+    GroceryListItem("ing_avocado", "Ripe Avocados · Antipolo Market", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 4.0, 1.0, 3.0, 4.0, 1, 4.0, mealUsageLabels = listOf("for Tuesday Breakfast • Avocado Egg Tartine"), estimatedCostUsd = 180.0, packageDescriptor = "4 count · Semi-ripe", marketVenue = MarketVenue.WET_MARKET),
+    GroceryListItem("ing_butter", "Unsalted Cultured Butter", IngredientCategory.DAIRY_EGGS, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 250.0, 50.0, 200.0, 250.0, 1, 250.0, estimatedCostUsd = 225.0, packageDescriptor = "250 g block", marketVenue = MarketVenue.SUPERMARKET),
+    GroceryListItem("ing_chicken", "Free-Range Chicken Thighs", IngredientCategory.PROTEIN, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 4000.0, 0.0, 4000.0, 4000.0, 4, 4000.0, mealUsageLabels = listOf("for Monday Dinner • Crispy Chicken & Tomato Baguette"), estimatedCostUsd = 920.0, packageDescriptor = "4 packs · 4 kg", marketVenue = MarketVenue.WET_MARKET),
+    GroceryListItem("ing_olive_oil", "Extra Virgin Olive Oil", IngredientCategory.PANTRY_STAPLE, IngredientTier.TIER_2_STAPLE, BaseUnit.MILLILITER, 0.0, 500.0, 750.0, 750.0, 1, 750.0, StapleStatus.LOW, estimatedCostUsd = 695.0, packageDescriptor = "750 ml bottle", isChecked = true, marketVenue = MarketVenue.SUPERMARKET),
+  )
+  val skipped = listOf(
+    SkippedPantryItemSummary("ing_milk", "Whole Fresh Milk", "2 L", 800.0, BaseUnit.MILLILITER),
+    SkippedPantryItemSummary("ing_egg", "Large Farm Eggs", "12 count", 8.0, BaseUnit.COUNT),
   )
   val diff = WeeklyGroceryDiff(
-    slotSummaries = emptyList(),
-    slotSummariesBySlotId = emptyMap(),
-    groceryItems = items,
-    groceryItemsByCategory = items.groupBy { it.category },
-    restockDeltas = emptyList(),
-    skippedStockedStapleCount = 8,
-    deduplicationSavingsUsd = 7983.0,
-    plannedMealCount = 21,
-    estimatedTotalCostUsd = 1325.0,
+    slotSummaries = emptyList(), slotSummariesBySlotId = emptyMap(), groceryItems = items,
+    groceryItemsByCategory = items.groupBy { it.category }, restockDeltas = emptyList(),
+    skippedStockedStapleCount = 8, deduplicationSavingsUsd = 7983.0, plannedMealCount = 21,
+    estimatedTotalCostUsd = 1325.0, skippedStockedItems = skipped,
   )
   FamilyKitchenBoardTheme {
     SmartGroceryScreen(
-      groceryDiff = diff,
-      checkedGroceryItemIds = setOf("ing_olive_oil"),
-      batchWriteCallCount = 2,
-      onToggleItemChecked = {},
-      onRestockCheckedItems = {},
+      groceryDiff = diff, checkedGroceryItemIds = setOf("ing_olive_oil"),
+      batchWriteCallCount = 2, onToggleItemChecked = {}, onRestockCheckedItems = {},
     )
   }
 }

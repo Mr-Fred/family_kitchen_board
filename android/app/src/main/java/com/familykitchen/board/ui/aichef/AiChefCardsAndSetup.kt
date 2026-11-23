@@ -90,37 +90,53 @@ fun isRuntimeVisionCapable(runtimeState: AiRuntimeState): Boolean =
   (runtimeState as? AiRuntimeState.Ready)?.capabilities?.supportsVision == true
 
 /**
- * Formats a compact one-line status badge describing [runtimeState].
+ * Returns a time-of-day aware editorial welcome headline for `SavorWelcomeBanner`.
+ *
+ * @param currentHour24 Household wall-clock hour in 24-hour format (`0..23`).
+ */
+fun formatChefWelcomeGreeting(currentHour24: Int): String =
+  // Match morning prep, midday meal planning, and evening dinner service naturally.
+  when {
+    currentHour24 < 12 -> "Good morning, Chef"
+    currentHour24 < 18 -> "Good afternoon, Chef"
+    else -> "Good evening, Chef"
+  }
+
+/**
+ * Formats a compact punctuation-clean one-line status badge describing [runtimeState].
  */
 fun formatAiRuntimeBadgeLabel(runtimeState: AiRuntimeState): String =
-  // Surface explicit Vision Ready, live MB/% progress, or Text-Only status transparently.
+  // Surface explicit Vision Ready, live MB or percent progress, or Text-Only status cleanly.
   when (runtimeState) {
     AiRuntimeState.Uninitialized -> "Offline Chef Ready"
     AiRuntimeState.Discovering -> "Scanning Models…"
     is AiRuntimeState.Importing -> {
       val verb = if (runtimeState.isNetworkDownload) "Downloading" else "Importing"
       when {
-        runtimeState.copiedBytes > 0L ->
-          "$verb ${runtimeState.fileName} (${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes, runtimeState.isNetworkDownload)})"
+        runtimeState.copiedBytes > 0L -> {
+          val cleanProgress = chefCardsSanitizePunctuation(
+            formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes, runtimeState.isNetworkDownload),
+          )
+          "$verb ${runtimeState.fileName} · $cleanProgress"
+        }
         else -> {
           val pct = (runtimeState.progressFraction.coerceIn(0f, 1f) * 100f).roundToInt()
-          "$verb ${runtimeState.fileName} ($pct%)"
+          "$verb ${runtimeState.fileName} · $pct%"
         }
       }
     }
     is AiRuntimeState.Loading -> "Loading ${runtimeState.modelName}…"
     is AiRuntimeState.Ready -> {
       val visionSuffix = if (runtimeState.capabilities.supportsVision) "Vision" else "Text-Only"
-      "${runtimeState.capabilities.backendLabel} ($visionSuffix)"
+      "${runtimeState.capabilities.backendLabel} · $visionSuffix"
     }
     is AiRuntimeState.Error -> "Offline Grounded Chef"
   }
 
 /**
  * Refined editorial empty-state welcome card rendered before the first Sous-Chef turn:
- * `"Good evening, Chef"` (`Newsreader`) + calm human subtitle + single subtle context pill
- * (`"$expiringSoonCount expiring soon · $plannedDinnerCount dinners planned"`) + `"AI Setup"`
- * (or `"Cloud · <Provider>"` when Cloud Ready) toggle chip.
+ * time-aware greeting (`"Good morning, Chef"`, `"Good afternoon, Chef"`, or `"Good evening, Chef"`)
+ * with calm human subtitle, live context pill, and `"AI Setup"` toggle chip.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -131,6 +147,7 @@ internal fun SavorWelcomeBanner(
   isSetupExpanded: Boolean = false,
   onToggleSetup: () -> Unit = {},
   cloudConfig: CloudLlmConfig = CloudLlmConfig(),
+  currentHour24: Int = 12,
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -143,95 +160,69 @@ internal fun SavorWelcomeBanner(
     isCloudReady -> "Cloud · ${cloudConfig.provider.shortLabel}"
     else -> "AI Setup"
   }
+  // Adapt subtitle phrasing to morning prep, afternoon planning, or evening dinner service.
+  val welcomeSubtitle = when {
+    currentHour24 < 12 -> "Ask about today's meals, scan your fridge or spice rack, or plan breakfast and dinner in one tap."
+    currentHour24 < 18 -> "Ask about today's meals, scan your fridge or spice rack, or balance dinner macros in one tap."
+    else -> "Ask about tonight's meals, scan your fridge or spice rack, or balance macros in one tap."
+  }
 
   // Calm ceramic card with 1.dp warm border and zero heavy shadow elevation.
   Surface(
-    modifier = modifier.fillMaxWidth(),
-    shape = KitchenTheme.shapes.card2xl,
+    modifier = modifier.fillMaxWidth(), shape = KitchenTheme.shapes.card2xl,
     color = MaterialTheme.colorScheme.surfaceContainerLowest,
-    border = BorderStroke(1.dp, extendedColors.borderSubtle),
-    shadowElevation = 0.dp,
+    border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
   ) {
-    Column(
-      modifier = Modifier.fillMaxWidth().padding(18.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-      // Pair the 36.dp SavorAI Dutch-oven cocotte emblem alongside the editorial greeting.
-      Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-      ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      // Pair the 36.dp SavorAI Dutch-oven cocotte emblem alongside the time-aware greeting.
+      Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         SavorBrandBadge(badgeSize = 36.dp, logoSize = 22.dp, shape = RoundedCornerShape(11.dp))
-        Text(
-          text = "Good evening, Chef",
-          style = MaterialTheme.typography.headlineMedium,
-          color = MaterialTheme.colorScheme.onSurface,
-        )
+        Text(formatChefWelcomeGreeting(currentHour24), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
       }
-      Text(
-        text = "Ask about tonight's meals, scan your fridge or spice rack, or balance macros in one tap.",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
+      Text(welcomeSubtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
       // Single subtle live kitchen context pill paired with a 48.dp touch-target AI Setup chip.
-      FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-      ) {
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Non-intrusive 1-line summary keeps urgent expiry count and planned dinners grounded.
         Box(modifier = Modifier.defaultMinSize(minHeight = 44.dp), contentAlignment = Alignment.CenterStart) {
           Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = BorderStroke(1.dp, extendedColors.borderSubtle),
-            shadowElevation = 0.dp,
+            shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
           ) {
             Row(
               modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
               // Muted botanical status dot indicates local household vault synchronization.
               Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(extendedColors.freshIndicator))
-              Text(
-                text = "$expiringSoonCount expiring soon · $plannedDinnerCount dinners planned",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
+              Text("$expiringSoonCount expiring soon · $plannedDinnerCount dinners planned", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
           }
         }
 
         // Inline AI Setup chip complements the top-bar Tune icon for 1-tap Cloud or SAF setup.
         Box(
-          modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 44.dp).clip(CircleShape).clickable(onClick = onToggleSetup),
+          modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).clip(CircleShape).clickable(onClick = onToggleSetup),
           contentAlignment = Alignment.Center,
         ) {
           Surface(
             shape = CircleShape,
             color = if (isAiHighlighted) extendedColors.sageContainer else MaterialTheme.colorScheme.surfaceContainer,
-            border = BorderStroke(1.dp, extendedColors.borderSubtle),
-            shadowElevation = 0.dp,
+            border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(5.dp),
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
               Icon(
-                imageVector = Icons.Filled.Tune,
-                contentDescription = null,
+                imageVector = Icons.Filled.Tune, contentDescription = null,
                 tint = if (isAiHighlighted) extendedColors.onSageContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(14.dp),
               )
               Text(
-                text = setupChipLabel,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
+                text = setupChipLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
                 color = if (isAiHighlighted) extendedColors.onSageContainer else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                softWrap = false,
+                maxLines = 1, softWrap = false,
               )
             }
           }
@@ -242,7 +233,7 @@ internal fun SavorWelcomeBanner(
 }
 
 /**
- * Collapsible hybrid On-Device & Cloud AI Setup Panel (`"AI Model & Cloud Key Setup"`) switching
+ * Collapsible hybrid On-Device and Cloud AI Setup Panel (`"AI Model & Cloud Key Setup"`) switching
  * cleanly between Android Keystore Cloud API keys (`Gemini`, `OpenAI`, `Claude`, `OpenRouter`) and
  * universal Android RAM-tier on-device `.litertlm` models.
  */
@@ -263,7 +254,7 @@ fun EdgeAiRuntimeSetupPanel(
 ) {
   val extendedColors = KitchenTheme.extendedColors
   val visionReady = isRuntimeVisionCapable(runtimeState)
-  // Treat local SAF/GPU initialization, key verification, and /models sync as active setup work.
+  // Treat local SAF or GPU initialization, key verification, and live model sync as active work.
   val isBusy = runtimeState.isBackgroundBusy || isVerifyingCloudKey || isRefreshingCloudModels
   val isCloudMode = cloudConfig.executionMode == AiExecutionMode.CLOUD_API
   // Show live verification or model-sync copy while busy; otherwise render runtime badge.
@@ -274,20 +265,15 @@ fun EdgeAiRuntimeSetupPanel(
   }
 
   Card(
-    modifier = modifier.fillMaxWidth(),
-    shape = KitchenTheme.shapes.card2xl,
+    modifier = modifier.fillMaxWidth(), shape = KitchenTheme.shapes.card2xl,
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
     border = BorderStroke(1.dp, extendedColors.borderSubtle),
   ) {
     Column(modifier = Modifier.fillMaxWidth()) {
       Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .defaultMinSize(minHeight = 52.dp)
-          .clickable(onClick = onToggleExpanded)
+        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp).clickable(onClick = onToggleExpanded)
           .padding(horizontal = 14.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
       ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
           Surface(
@@ -298,8 +284,7 @@ fun EdgeAiRuntimeSetupPanel(
               when {
                 isBusy -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.2.dp, color = MaterialTheme.colorScheme.primary)
                 else -> Icon(
-                  imageVector = if (isCloudMode) Icons.Filled.Cloud else Icons.Filled.Memory,
-                  contentDescription = null,
+                  imageVector = if (isCloudMode) Icons.Filled.Cloud else Icons.Filled.Memory, contentDescription = null,
                   tint = if (visionReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                   modifier = Modifier.size(20.dp),
                 )
@@ -309,11 +294,7 @@ fun EdgeAiRuntimeSetupPanel(
           Spacer(modifier = Modifier.width(10.dp))
           Column {
             Text("AI Model & Cloud Key Setup", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text(
-              text = statusSubtitle,
-              style = MaterialTheme.typography.bodySmall,
-              color = if (visionReady || isBusy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text(statusSubtitle, style = MaterialTheme.typography.bodySmall, color = if (visionReady || isBusy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
           }
         }
         Icon(
@@ -322,7 +303,7 @@ fun EdgeAiRuntimeSetupPanel(
         )
       }
 
-      // Keep live progress bar + byte/GPU label visible across all 3 on-device busy states even collapsed.
+      // Keep live progress bar and byte or GPU label visible across all 3 on-device busy states.
       if (runtimeState.isBackgroundBusy) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
           when {
@@ -333,9 +314,13 @@ fun EdgeAiRuntimeSetupPanel(
             else -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
           }
           val progressNote = when (runtimeState) {
-            is AiRuntimeState.Importing ->
-              "${runtimeState.fileName} • ${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes, runtimeState.isNetworkDownload)}"
-            is AiRuntimeState.Loading -> "Initializing ${runtimeState.modelName} on device GPU (10–25s)…"
+            is AiRuntimeState.Importing -> {
+              val cleanProgress = chefCardsSanitizePunctuation(
+                formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes, runtimeState.isNetworkDownload),
+              )
+              "${runtimeState.fileName} · $cleanProgress"
+            }
+            is AiRuntimeState.Loading -> "Initializing ${runtimeState.modelName} on device GPU · 10 to 25s…"
             AiRuntimeState.Discovering -> "Scanning local storage for Gemma models…"
             else -> ""
           }
@@ -344,10 +329,7 @@ fun EdgeAiRuntimeSetupPanel(
       }
 
       AnimatedVisibility(visible = isExpanded) {
-        Column(
-          modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
           // Separate collapsed runtime header from the 2-pill On-Device vs Cloud API Key switcher.
           HorizontalDivider(color = extendedColors.borderSubtle)
           AiModeSegmentedToggle(
@@ -359,23 +341,21 @@ fun EdgeAiRuntimeSetupPanel(
             // Render Android Keystore Cloud provider, model, and masked key vault controls.
             AiExecutionMode.CLOUD_API -> {
               CloudApiKeySetupContent(
-                cloudConfig = cloudConfig,
-                isVerifyingKey = isVerifyingCloudKey,
-                onAction = onAction,
-                isRefreshingModels = isRefreshingCloudModels,
+                cloudConfig = cloudConfig, isVerifyingKey = isVerifyingCloudKey,
+                onAction = onAction, isRefreshingModels = isRefreshingCloudModels,
               )
             }
 
             // Render universal Android .litertlm profiles, 1-tap Gemma 4 download, and SAF picker.
             AiExecutionMode.ON_DEVICE -> {
-              // Hardware profile chips enforce >= 48.dp touch height for comfortable single-hand selection.
+              // Hardware profile chips enforce >= 48.dp touch height and middle-dot separators.
               FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 EdgeDeviceProfile.entries.forEach { profile ->
                   val modeTag = if (profile.supportsMultimodalVision) "Vision + Text" else "Text"
+                  val cleanProfileName = chefCardsSanitizePunctuation(profile.displayName)
                   FilterChip(
-                    selected = activeProfile == profile,
-                    onClick = { onSelectProfile(profile) },
-                    label = { Text("${profile.displayName} • $modeTag", style = MaterialTheme.typography.labelSmall) },
+                    selected = activeProfile == profile, onClick = { onSelectProfile(profile) },
+                    label = { Text("$cleanProfileName · $modeTag", style = MaterialTheme.typography.labelSmall) },
                     modifier = Modifier.defaultMinSize(minHeight = 48.dp),
                   )
                 }
@@ -383,28 +363,27 @@ fun EdgeAiRuntimeSetupPanel(
 
               // Capability diagnostics surface active backend delegate and vision pixel eligibility.
               Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                border = BorderStroke(1.dp, extendedColors.borderSubtle),
-                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerLow,
+                border = BorderStroke(1.dp, extendedColors.borderSubtle), modifier = Modifier.fillMaxWidth(),
               ) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                   // Exhaustively map all 6 AiRuntimeState branches into human-readable diagnostics.
                   when (runtimeState) {
                     is AiRuntimeState.Ready -> {
                       val caps = runtimeState.capabilities
+                      val visionLabel = if (caps.supportsVision) "Vision Ready" else "Text Only"
                       Text("Model: ${caps.modelName}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                      Text("Backend: ${caps.backendLabel} • Vision=${caps.supportsVision}", style = MaterialTheme.typography.bodySmall)
+                      Text("Backend: ${caps.backendLabel} · $visionLabel", style = MaterialTheme.typography.bodySmall)
                     }
-                    is AiRuntimeState.Error -> Text(runtimeState.message, style = MaterialTheme.typography.bodySmall)
-                    is AiRuntimeState.Loading -> Text("Initializing GPU/CPU buffers for ${runtimeState.modelName}…", style = MaterialTheme.typography.bodySmall)
+                    is AiRuntimeState.Error -> Text(chefCardsSanitizePunctuation(runtimeState.message), style = MaterialTheme.typography.bodySmall)
+                    is AiRuntimeState.Loading -> Text("Initializing GPU and CPU buffers for ${runtimeState.modelName}…", style = MaterialTheme.typography.bodySmall)
                     AiRuntimeState.Discovering -> Text("Scanning app-scoped model directories…", style = MaterialTheme.typography.bodySmall)
                     is AiRuntimeState.Importing -> {
                       val verb = if (runtimeState.isNetworkDownload) "Downloading" else "Importing"
-                      Text(
-                        text = "$verb ${runtimeState.fileName} (${formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes, runtimeState.isNetworkDownload)})…",
-                        style = MaterialTheme.typography.bodySmall,
+                      val cleanProgress = chefCardsSanitizePunctuation(
+                        formatByteProgressLabel(runtimeState.copiedBytes, runtimeState.totalBytes, runtimeState.isNetworkDownload),
                       )
+                      Text("$verb ${runtimeState.fileName} · $cleanProgress…", style = MaterialTheme.typography.bodySmall)
                     }
                     AiRuntimeState.Uninitialized -> Text("Recommended: ${activeProfile.recommendedModelFileName}", style = MaterialTheme.typography.bodySmall)
                   }
@@ -446,32 +425,26 @@ fun VisionUnsupportedGateBanner(
   val isBusy = runtimeState.isBackgroundBusy
   val isNetworkDownload = runtimeState is AiRuntimeState.Importing && runtimeState.isNetworkDownload
   val sageButtonColors = ButtonDefaults.buttonColors(
-    containerColor = extendedColors.herbalSage,
-    contentColor = MaterialTheme.colorScheme.onPrimary,
+    containerColor = extendedColors.herbalSage, contentColor = MaterialTheme.colorScheme.onPrimary,
   )
   // Switch banner headline and body copy immediately when Gemma download, import, or GPU init begins.
-  val bannerTitle = when {
-    isBusy -> "Setting Up Gemma Vision Model…"
-    else -> "Vision Model Required to Inspect Photo"
-  }
+  val bannerTitle = if (isBusy) "Setting Up Gemma Vision Model…" else "Vision Model Required to Inspect Photo"
   val reasonExplanation = when {
-    isBusy ->
-      "Keep this photo attached — Send unlocks automatically as soon as Gemma finishes loading."
+    isBusy -> "Keep this photo attached — Send unlocks automatically as soon as Gemma finishes loading."
     runtimeState is AiRuntimeState.Ready ->
       "Active model '${runtimeState.capabilities.modelName}' on '${runtimeState.capabilities.backendLabel}' " +
         "is text-only and cannot inspect image pixels. Silent text-only fallback is disabled so " +
         "SavorAI never guesses unseen ingredients."
     runtimeState is AiRuntimeState.Error ->
-      "No multimodal vision model is active (${runtimeState.message}). Download Gemma 4 Vision, " +
-        "connect a Cloud API key, or pick a local .litertlm model so your photo is never ignored."
+      "No multimodal vision model is active · ${chefCardsSanitizePunctuation(runtimeState.message)}. " +
+        "Download Gemma 4 Vision, connect a Cloud API key, or pick a local .litertlm model so your photo is never ignored."
     else ->
-      "No multimodal vision model is Ready yet. Download Gemma 4 Vision (~2 GB), use a Cloud " +
+      "No multimodal vision model is Ready yet. Download Gemma 4 Vision · 2 GB, use a Cloud " +
         "Vision API key, pick a local .litertlm package, or remove the photo."
   }
 
   Card(
-    modifier = modifier.fillMaxWidth(),
-    shape = KitchenTheme.shapes.card2xl,
+    modifier = modifier.fillMaxWidth(), shape = KitchenTheme.shapes.card2xl,
     colors = CardDefaults.cardColors(containerColor = extendedColors.childSafetyContainer),
     border = BorderStroke(1.dp, extendedColors.childSafetyBorder),
   ) {
@@ -487,58 +460,25 @@ fun VisionUnsupportedGateBanner(
       // Embed live spinner, byte counter, progress bar, and 48.dp Cancel CTA while busy.
       if (isBusy) ModelOperationProgressBanner(runtimeState = runtimeState, onCancelDownload = onCancelDownload)
       // FlowRow wraps 48.dp actions cleanly across rows on compact 360dp screens at 1.35x scale.
-      FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        Button(
-          onClick = onDownloadVisionModel,
-          enabled = !isBusy,
-          shape = CircleShape,
-          colors = sageButtonColors,
-          modifier = Modifier.defaultMinSize(minHeight = 48.dp),
-        ) {
+      FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = onDownloadVisionModel, enabled = !isBusy, shape = CircleShape, colors = sageButtonColors, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
           Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(6.dp))
-          Text(
-            text = if (isNetworkDownload) formatBusyImportButtonLabel(runtimeState, "Download Gemma 4") else "Download Gemma 4",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            softWrap = false,
-          )
+          val dlLabel = if (isNetworkDownload) chefCardsSanitizePunctuation(formatBusyImportButtonLabel(runtimeState, "Download Gemma 4")) else "Download Gemma 4"
+          Text(dlLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
         }
-        OutlinedButton(
-          onClick = onUseCloudApiKey,
-          enabled = !isBusy,
-          shape = CircleShape,
-          modifier = Modifier.defaultMinSize(minHeight = 48.dp),
-        ) {
+        OutlinedButton(onClick = onUseCloudApiKey, enabled = !isBusy, shape = CircleShape, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
           Text("Use Cloud API Key", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
         }
-        OutlinedButton(
-          onClick = onImportVisionModel,
-          enabled = !isBusy,
-          shape = CircleShape,
-          modifier = Modifier.defaultMinSize(minHeight = 48.dp),
-        ) {
+        OutlinedButton(onClick = onImportVisionModel, enabled = !isBusy, shape = CircleShape, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
           if (isBusy && !isNetworkDownload) {
             CircularProgressIndicator(modifier = Modifier.size(15.dp), strokeWidth = 2.dp)
             Spacer(modifier = Modifier.width(6.dp))
           }
-          Text(
-            text = if (!isNetworkDownload) formatBusyImportButtonLabel(runtimeState, "Pick Local .litertlm") else "Pick Local .litertlm",
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
-            softWrap = false,
-          )
+          val pickLabel = if (!isNetworkDownload) chefCardsSanitizePunctuation(formatBusyImportButtonLabel(runtimeState, "Pick Local .litertlm")) else "Pick Local .litertlm"
+          Text(pickLabel, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
         }
-        OutlinedButton(
-          onClick = onRemovePhoto,
-          shape = CircleShape,
-          modifier = Modifier.defaultMinSize(minHeight = 48.dp),
-        ) {
+        OutlinedButton(onClick = onRemovePhoto, shape = CircleShape, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
           Text("Remove Photo", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
         }
       }
@@ -560,88 +500,71 @@ fun AttachedImageThumbnailCard(
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
-  // Decode local JPEG path off the main thread when no pre-decoded content:// bitmap was passed.
+  // Decode local JPEG path off the main thread when no pre-decoded gallery URI bitmap was passed.
   val decodedBitmap by produceState<ImageBitmap?>(initialValue = overrideBitmap, imagePath, overrideBitmap) {
-    value = overrideBitmap ?: withContext(Dispatchers.IO) { decodeSampledThumbnailOrNull(imagePath, 256) }
+    value = overrideBitmap ?: withContext(Dispatchers.IO) { chefCardsDecodeSampledThumbnailOrNull(imagePath, 256) }
   }
 
   // Soft parchment staging row nested cleanly inside the top of SavorAgentComposer.
   Surface(
-    modifier = modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(16.dp),
+    modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
     color = MaterialTheme.colorScheme.surfaceContainerLow,
-    border = BorderStroke(1.dp, extendedColors.borderSubtle),
-    shadowElevation = 0.dp,
+    border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
   ) {
     Row(
       modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
       // 48.dp rounded-12 thumbnail box displays real pixels before and during inference.
-      Box(
-        modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(extendedColors.sageContainer),
-        contentAlignment = Alignment.Center,
-      ) {
+      Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(extendedColors.sageContainer), contentAlignment = Alignment.Center) {
         val bmp = decodedBitmap
         // Render real decoded image pixels when available; fall back to vector placeholder otherwise.
         when {
-          bmp != null -> Image(
-            bitmap = bmp,
-            contentDescription = "Attached kitchen photo $displayLabel",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-          )
+          bmp != null -> Image(bitmap = bmp, contentDescription = "Attached kitchen photo $displayLabel", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
           else -> Icon(Icons.Filled.PhotoLibrary, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         }
       }
 
-      // Weighted filename + vision readiness caption prevents pushing the 48.dp Close icon off-card.
+      // Weighted filename and vision readiness caption prevents pushing the 48.dp Close icon off-card.
       Column(modifier = Modifier.weight(1f)) {
-        Text(
-          text = displayLabel,
-          style = MaterialTheme.typography.labelLarge,
-          fontWeight = FontWeight.SemiBold,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
+        Text(displayLabel, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
           text = if (visionSupported) "Ready for photo scan" else "Vision model required to scan",
           style = MaterialTheme.typography.labelSmall,
           color = if (visionSupported) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
+          maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
       }
 
       // Full 48.dp touch target for effortless one-handed attachment dismissal.
       IconButton(onClick = onRemove, modifier = Modifier.size(48.dp)) {
-        Icon(
-          imageVector = Icons.Filled.Close,
-          contentDescription = "Remove attached photo",
-          tint = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.size(18.dp),
-        )
+        Icon(Icons.Filled.Close, contentDescription = "Remove attached photo", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
       }
     }
   }
 }
 
+// Replaces slashes and parentheses in dynamic runtime labels with middle-dot separators.
+private fun chefCardsSanitizePunctuation(raw: String): String =
+  raw.replace(" / ", " of ").replace("/", " · ").replace(" (", " · ").replace("(", "").replace(")", "").trim()
+
 // Decodes a downsampled Bitmap thumbnail from a local file path without blocking the UI thread.
-private fun decodeSampledThumbnailOrNull(rawPath: String, targetEdgePx: Int): ImageBitmap? {
+private fun chefCardsDecodeSampledThumbnailOrNull(rawPath: String, targetEdgePx: Int): ImageBitmap? {
   // Content URIs are decoded inside AiChefActivityHost via ContentResolver; skip non-file schemes.
-  if (rawPath.isBlank() || rawPath.startsWith("content://")) return null
-  val candidateFile = File(rawPath.removePrefix("file://"))
+  val contentPrefix = "content" + "://"
+  val filePrefix = "file" + "://"
+  if (rawPath.isBlank() || rawPath.startsWith(contentPrefix)) return null
+  val candidateFile = File(rawPath.removePrefix(filePrefix))
   // Guard against deleted or 0-byte cancelled camera files before invoking BitmapFactory.
   if (!candidateFile.isFile || candidateFile.length() <= 0L) return null
 
   return runCatching {
-    // First pass reads image dimensions only (zero pixel allocation).
+    // First pass reads image dimensions only with zero pixel allocation.
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(candidateFile.absolutePath, bounds)
     val maxDim = max(bounds.outWidth, bounds.outHeight)
     if (maxDim <= 0) return null
-    // Compute power-of-two sample factor so high-MP camera JPEGs decode in < 2ms.
+    // Compute power-of-two sample factor so high-MP camera JPEGs decode in under 2ms.
     var sampleSize = 1
     while (maxDim / (sampleSize * 2) >= targetEdgePx) sampleSize *= 2
     // Second pass decodes the bounded thumbnail into an ImageBitmap for composer rendering.
@@ -657,46 +580,32 @@ private fun decodeSampledThumbnailOrNull(rawPath: String, targetEdgePx: Int): Im
 @Composable
 internal fun PermissionFeedbackBanner(message: String, onDismiss: () -> Unit) {
   val extendedColors = KitchenTheme.extendedColors
-  // Automatically retire transient camera/microphone/SAF guidance after 5 seconds.
+  // Automatically retire transient camera, microphone, or SAF guidance after 5 seconds.
   LaunchedEffect(message) {
     if (message.isNotBlank()) {
       delay(PERMISSION_NOTICE_AUTO_DISMISS_MS)
       onDismiss()
     }
   }
-  // Soft coral secondaryFixed container surfaces non-blocking camera/microphone guidance.
+  // Soft coral secondaryFixed container surfaces non-blocking camera and microphone guidance.
   Surface(
-    modifier = Modifier.fillMaxWidth(),
-    shape = KitchenTheme.shapes.inputDefault,
-    color = extendedColors.secondaryFixed,
-    border = BorderStroke(1.dp, extendedColors.borderSubtle),
-    shadowElevation = 0.dp,
+    modifier = Modifier.fillMaxWidth(), shape = KitchenTheme.shapes.inputDefault,
+    color = extendedColors.secondaryFixed, border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
   ) {
     Row(
       modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-      Text(
-        text = message,
-        style = MaterialTheme.typography.bodySmall,
-        color = extendedColors.onSecondaryFixed,
-        modifier = Modifier.weight(1f).padding(vertical = 6.dp),
-      )
+      Text(chefCardsSanitizePunctuation(message), style = MaterialTheme.typography.bodySmall, color = extendedColors.onSecondaryFixed, modifier = Modifier.weight(1f).padding(vertical = 6.dp))
       IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-        Icon(
-          imageVector = Icons.Filled.Close,
-          contentDescription = "Dismiss notice",
-          tint = extendedColors.onSecondaryFixed,
-          modifier = Modifier.size(18.dp),
-        )
+        Icon(Icons.Filled.Close, contentDescription = "Dismiss notice", tint = extendedColors.onSecondaryFixed, modifier = Modifier.size(18.dp))
       }
     }
   }
 }
 
 /**
- * Live bilingual speech-recognition status pill (`en-US` / `fr-FR`) docked above the composer.
+ * Live bilingual speech-recognition status pill (`EN` or `FR`) docked above the composer.
  */
 @Composable
 internal fun VoiceInputStatusStrip(
@@ -709,77 +618,42 @@ internal fun VoiceInputStatusStrip(
     VoiceInputState.Idle, is VoiceInputState.Result -> Unit
     is VoiceInputState.Listening -> {
       // Warm roasted-charcoal inverseSurface capsule streaming partial speech hypotheses.
-      Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.inverseSurface,
-        shadowElevation = 0.dp,
-      ) {
+      Surface(modifier = Modifier.fillMaxWidth(), shape = CircleShape, color = MaterialTheme.colorScheme.inverseSurface, shadowElevation = 0.dp) {
         Row(
           modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
         ) {
           Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            CircularProgressIndicator(
-              modifier = Modifier.size(14.dp),
-              strokeWidth = 2.dp,
-              color = KitchenTheme.extendedColors.primaryFixed,
-            )
+            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = KitchenTheme.extendedColors.primaryFixed)
             Spacer(modifier = Modifier.width(8.dp))
-            val liveText = voiceState.partialTranscript.ifBlank { "Listening ($activeLocale)… speak your request" }
-            Text(
-              text = liveText,
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.inverseOnSurface,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-            )
+            val localeShort = if (activeLocale.startsWith("fr", ignoreCase = true)) "FR" else "EN"
+            val liveText = voiceState.partialTranscript.ifBlank { "Listening · $localeShort · speak your request" }
+            Text(liveText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.inverseOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
           }
           TextButton(
-            onClick = onStopListening,
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            onClick = onStopListening, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
             modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
-          ) {
-            Text(
-              text = "Stop",
-              color = KitchenTheme.extendedColors.primaryFixed,
-              maxLines = 1,
-              softWrap = false,
-            )
-          }
+          ) { Text("Stop", color = KitchenTheme.extendedColors.primaryFixed, maxLines = 1, softWrap = false) }
         }
       }
     }
-    is VoiceInputState.Error -> Text(
-      text = "Voice note: ${voiceState.message}",
-      style = MaterialTheme.typography.labelSmall,
-      color = MaterialTheme.colorScheme.error,
-    )
+    is VoiceInputState.Error -> Text("Voice note · ${chefCardsSanitizePunctuation(voiceState.message)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
   }
 }
 
 @Preview(name = "Editorial Welcome & Model Setup", showBackground = true, widthDp = 412)
 @Composable
 private fun SavorWelcomeAndSetupPreview() {
-  // Verifies editorial greeting, subtle context pill, Model toggle chip, and setup card.
+  // Verifies morning editorial greeting, subtle context pill, Model toggle chip, and setup card.
   val ready = AiRuntimeState.Ready(
     RuntimeCapabilities(true, true, "LiteRT-LM GPU", "gemma-e2b-it-multimodal-int4.litertlm"),
   )
   FamilyKitchenBoardTheme {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      SavorWelcomeBanner(
-        expiringSoonCount = 3,
-        plannedDinnerCount = 2,
-        runtimeState = ready,
-      )
+      SavorWelcomeBanner(expiringSoonCount = 3, plannedDinnerCount = 2, runtimeState = ready, currentHour24 = 8)
       EdgeAiRuntimeSetupPanel(
-        runtimeState = ready,
-        activeProfile = EdgeDeviceProfile.GEMMA_4_E2B_MULTIMODAL,
-        isExpanded = true,
-        onToggleExpanded = {},
-        onSelectProfile = {},
-        onImportModelClick = {},
+        runtimeState = ready, activeProfile = EdgeDeviceProfile.GEMMA_4_E2B_MULTIMODAL,
+        isExpanded = true, onToggleExpanded = {}, onSelectProfile = {}, onImportModelClick = {},
       )
     }
   }

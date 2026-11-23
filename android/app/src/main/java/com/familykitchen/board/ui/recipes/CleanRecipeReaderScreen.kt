@@ -37,20 +37,42 @@ import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import kotlin.math.max
 import kotlinx.coroutines.delay
 
-// Top-level Cookbook & Clean Recipe Reader stateless screen orchestrator wiring
-// CookbookHeaderAndHero, RecipeReaderActionSections, and RecipeReaderStepsAndNotes
-// without floating bottom-bar viewport occlusion.
+// Top-level Clean Recipe Reader stateless screen orchestrator wiring ReaderTopBackBar (`All Recipes`),
+// CookbookHeaderAndHero, ownership remix/edit/delete pills, and 1-tap `Swap Ingredient` BOM pickers.
 
 /**
- * Stateless `CleanRecipeReaderScreen` implementing the `SavorAI` Cookbook Browser and distraction-free
- * Clean Recipe Reader (`recipe_reader`).
+ * Stateless `CleanRecipeReaderScreen` implementing the distraction-free Clean Recipe Reader
+ * (`recipe_reader`) with an `All Recipes` top back button, `Make Our Version` / `Edit Recipe` /
+ * `Delete Recipe` action pills, and 1-tap `Swap Ingredient` BOM pickers.
  *
- * Features non-clipping Cookbook filter & switcher strips, dynamic-height Hero Banner (`maxLines = 3`
- * `Newsreader` title), Pantry Inventory Status card, equal-height 3-stat grid + muted macro bars,
- * `52.dp` `Start Cook Mode` + `52.dp` `Mic` Hands-Free trigger (zero floating overlay occlusion!),
- * `EC-08` Child Safety & 4-Member Goal Plating accordion, `48.dp` `Yield Scale`, checkable
- * `Ingredients`, `18.sp` `Method & Directions` with `48.dp` inline timers, `Sous Chef Pairing`,
- * and warm parchment `Kitchen Notes`.
+ * @param recipes Household recipe collection.
+ * @param catalog Household ingredient catalog.
+ * @param pantryEntries Household pantry stock ledger.
+ * @param householdProfile Active household dietary and child-safety profile.
+ * @param selectedRecipeId Currently focused `recipeId`.
+ * @param savedRecipeIds Persisted bookmarked recipe IDs.
+ * @param checkedIngredientsByRecipeId Mise-en-place checked BOM IDs keyed by `recipeId`.
+ * @param recipeNotesByRecipeId Persisted household kitchen notes keyed by `recipeId`.
+ * @param searchQuery Active search query string.
+ * @param defaultPlanDayIndex Default weekday index (`0..6`) for inline `Plan` scheduling.
+ * @param onSelectRecipe Invoked when switching recipes via the horizontal pill strip.
+ * @param onToggleSavedRecipe Invoked when toggling a recipe bookmark.
+ * @param onToggleIngredientChecked Invoked when checking or unchecking a BOM ingredient row.
+ * @param onResetCheckedIngredients Invoked when tapping `Uncheck all`.
+ * @param onQueueMissingIngredients Invoked when queueing missing BOM items onto `Shop`.
+ * @param onAddKitchenNote Invoked when saving a new household kitchen note.
+ * @param onScheduleRecipeToPlan Invoked when confirming inline `(recipe, dayIndex, slotType)` scheduling.
+ * @param onStartCookMode Invoked to launch Step-by-Step Cook Mode (`handsFreeVoiceActive` flag).
+ * @param onOpenCustomMealBuilder Invoked when tapping `Add Recipe` or `Custom Meal`.
+ * @param onEditFamilyGoals Invoked when tapping `Customize Household Goals`.
+ * @param onShareRecipe Invoked after triggering offline `ACTION_SEND` recipe sharing.
+ * @param showAllRecipesBackButton Displays the top `All Recipes` back bar when `true`.
+ * @param onBackToCookbookGrid Invoked when tapping `All Recipes` to return to [CookbookGridScreen].
+ * @param onForkRecipe Invoked with the seed [Recipe] when tapping `Make Our Version`.
+ * @param onEditRecipe Invoked with a household-created [Recipe] when tapping `Edit Recipe`.
+ * @param onDeleteRecipe Invoked with `recipeId` when tapping `Delete Recipe`.
+ * @param onSwapRecipeIngredient Invoked with `(recipeId, fromIngredientId, toIngredientId)` on BOM swap.
+ * @param modifier Optional Compose [Modifier].
  */
 @Composable
 fun CleanRecipeReaderScreen(
@@ -75,25 +97,33 @@ fun CleanRecipeReaderScreen(
   onOpenCustomMealBuilder: () -> Unit = {},
   onEditFamilyGoals: () -> Unit = {},
   onShareRecipe: (Recipe) -> Unit = {},
+  showAllRecipesBackButton: Boolean = true,
+  onBackToCookbookGrid: () -> Unit = {},
+  onForkRecipe: (Recipe) -> Unit = {},
+  onEditRecipe: (Recipe) -> Unit = {},
+  onDeleteRecipe: (String) -> Unit = {},
+  onSwapRecipeIngredient: (String, String, String) -> Unit = { _, _, _ -> },
   modifier: Modifier = Modifier,
 ) {
-  // Acquire Android Context once for offline plain-text ACTION_SEND recipe sharing.
+  // Resolve sharing context and O(1) catalog map once per composition snapshot.
   val shareContext = rememberShareContext()
-  // Index catalog by ingredientId once per snapshot for O(1) BOM & unit resolution.
   val catalogById = remember(catalog) { catalog.associateBy { it.ingredientId } }
-  // Persist active Cookbook filter tab name as a Bundle-safe String across recreation.
+  // Persist active reader filter pill across configuration changes.
   val filterTabNameState = rememberSaveable { mutableStateOf(CookbookFilterTab.ALL.name) }
   val selectedFilterTab = CookbookFilterTab.entries.find { it.name == filterTabNameState.value }
     ?: CookbookFilterTab.ALL
+  // Synchronize local recipe selection with parent selectedRecipeId parameter.
   val localSelectedIdState = rememberSaveable(selectedRecipeId) {
     mutableStateOf(selectedRecipeId ?: recipes.firstOrNull()?.recipeId.orEmpty())
   }
-  // Mirror saved recipe bookmarks locally for instant heart/ribbon feedback before snapshot reload.
+  // Mirror saved recipe bookmarks locally for immediate < 16ms tap feedback.
   val localBookmarkedIds = remember(savedRecipeIds) {
     mutableStateListOf<String>().apply { addAll(savedRecipeIds) }
   }
+  // Optimistic local BOM swap map so standalone / preview sessions reflect macro deltas immediately.
+  val localSwappedRecipes = remember(recipes) { mutableStateMapOf<String, Recipe>() }
 
-  // Filter cookbook recipes by active CookbookFilterTab and optional search query.
+  // Filter recipes by search query and active CookbookFilterTab without blocking the UI thread.
   val filteredRecipes = remember(
     recipes,
     selectedFilterTab,
@@ -111,7 +141,7 @@ fun CleanRecipeReaderScreen(
         cand.sourceAttribution.lowercase().contains(cleanQuery)
       if (!matchesSearch) return@filter false
 
-      // Evaluate EC-01 morning cap, EC-13 100% in-stock, and zero-waste expiry rescue predicates.
+      // Evaluate EC-01 morning 25m cap, EC-13 100% stock, and expiring rescue per tab.
       when (selectedFilterTab) {
         CookbookFilterTab.ALL -> true
         CookbookFilterTab.SAVED -> cand.isSavedFavorite || cand.recipeId in localBookmarkedIds
@@ -134,21 +164,24 @@ fun CleanRecipeReaderScreen(
     }
   }
 
-  // Fall back gracefully when switching filter tabs hides the previously selected recipe.
-  val baseRecipe = filteredRecipes.find { it.recipeId == localSelectedIdState.value }
+  // Fall back gracefully across filtered and unfiltered lists so search edits never blank the reader.
+  val resolvedBaseRecipe = filteredRecipes.find { it.recipeId == localSelectedIdState.value }
     ?: recipes.find { it.recipeId == localSelectedIdState.value }
     ?: filteredRecipes.firstOrNull()
     ?: recipes.firstOrNull()
 
   // Guard empty recipe libraries cleanly without null-pointer assertions.
-  if (baseRecipe == null) {
+  if (resolvedBaseRecipe == null) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
       Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(24.dp)) {
-        Text(text = "No recipes available yet. Tap + Custom Meal to create one!")
+        Text(text = "No recipes available yet. Tap Add Recipe to create one.")
       }
     }
     return
   }
+
+  // Prefer optimistic swapped recipe when the user performed a 1-tap BOM ingredient swap.
+  val baseRecipe = localSwappedRecipes[resolvedBaseRecipe.recipeId] ?: resolvedBaseRecipe
 
   // Yield Scale state (1x, 2x, 4x, or Custom serving count) powered by PantryExpiryEngine.
   val yieldPresetNameState = rememberSaveable(baseRecipe.recipeId) { mutableStateOf(YieldPreset.SCALE_1X.name) }
@@ -157,6 +190,7 @@ fun CleanRecipeReaderScreen(
   val customServingsState = rememberSaveable(baseRecipe.recipeId) {
     mutableIntStateOf(max(1, baseRecipe.baseServings))
   }
+  // Compute exact proportional serving multiplier while guarding against zero division.
   val yieldMultiplier = when (selectedYieldPreset) {
     YieldPreset.SCALE_1X -> 1.0
     YieldPreset.SCALE_2X -> 2.0
@@ -165,10 +199,12 @@ fun CleanRecipeReaderScreen(
       customServingsState.intValue.toDouble() / max(1, baseRecipe.baseServings).toDouble()
   }
 
+  // Scale Tier-1 quantitative BOM lines proportionally while keeping Tier-2 staples unscaled.
   val scaledRecipe = remember(baseRecipe, yieldMultiplier, catalog) {
     PantryExpiryEngine.scaleRecipeForYield(baseRecipe, yieldMultiplier, catalog)
   }
 
+  // Evaluate live pantry match, missing restock deltas, and rescued expiring stock value.
   val matchSummary = remember(scaledRecipe, pantryEntries, catalog, householdProfile) {
     PantryExpiryEngine.evaluateRecipePantryMatch(
       recipe = scaledRecipe,
@@ -178,15 +214,18 @@ fun CleanRecipeReaderScreen(
       householdAllergens = householdProfile.householdAllergens,
     )
   }
+  // Cache in-stock ingredient IDs in a Set for O(1) BOM row badge lookups.
   val matchedIdSet = remember(matchSummary) {
     matchSummary.matchedIngredients.map { it.ingredientId }.toSet()
   }
 
+  // Hydrate mise-en-place checked BOM IDs from persisted snapshot state.
   val persistedChecked = checkedIngredientsByRecipeId[baseRecipe.recipeId].orEmpty()
   val checkedIds = remember(baseRecipe.recipeId, persistedChecked) {
     mutableStateListOf<String>().apply { addAll(persistedChecked) }
   }
 
+  // Track independent per-step countdown timers inside Method and Directions.
   val inlineTimerSeconds = remember(baseRecipe.recipeId) { mutableStateMapOf<Int, Int>() }
   val inlineTimerRunning = remember(baseRecipe.recipeId) { mutableStateMapOf<Int, Boolean>() }
   val anyInlineRunning = inlineTimerRunning.values.any { it }
@@ -216,6 +255,14 @@ fun CleanRecipeReaderScreen(
       .verticalScroll(rememberScrollState())
       .padding(bottom = 28.dp),
   ) {
+    // 0. Top `All Recipes` back navigation bar when opened from CookbookGridScreen.
+    if (showAllRecipesBackButton) {
+      ReaderTopBackBar(
+        onBackToCookbookGrid = onBackToCookbookGrid,
+        onOpenAddRecipe = onOpenCustomMealBuilder,
+      )
+    }
+
     // 1. Cookbook Filter Strip & Active Recipe Switcher.
     CookbookBrowserHeader(
       filteredRecipes = filteredRecipes,
@@ -254,12 +301,13 @@ fun CleanRecipeReaderScreen(
         .padding(horizontal = 16.dp, vertical = 10.dp),
       verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-      // 3. Pantry Match Pill + Equal-Height 3-Stat Grid + Start Cook Mode & Hands-Free Mic.
+      // 3. Pantry Match + 3-Stat Grid + Start Cook Mode + Ownership Action Pills.
       PantryMatchAndQuickActionsSection(
         recipe = scaledRecipe,
         matchSummary = matchSummary,
         householdProfile = householdProfile,
         defaultDayIndex = defaultPlanDayIndex,
+        isUserCreated = baseRecipe.isUserCreated,
         onQueueAllMissingIngredients = {
           val ids = matchSummary.missingStaples.map { it.ingredientId }.toSet()
           onQueueMissingIngredients(ids, matchSummary.missingRestockDeltas)
@@ -273,6 +321,9 @@ fun CleanRecipeReaderScreen(
           shareRecipeOffline(shareContext, scaledRecipe, catalogById)
           onShareRecipe(scaledRecipe)
         },
+        onForkRecipe = { onForkRecipe(baseRecipe) },
+        onEditRecipe = { onEditRecipe(baseRecipe) },
+        onDeleteRecipe = { onDeleteRecipe(baseRecipe.recipeId) },
       )
 
       // 4. EC-08 Child Safety Callout + Collapsible 4-Member Plating & EC-07 Boost.
@@ -283,7 +334,7 @@ fun CleanRecipeReaderScreen(
         onEditFamilyGoals = onEditFamilyGoals,
       )
 
-      // 5. Yield Scale Selector (1x | 2x | 4x | Custom).
+      // 5. Yield Scale Selector (1x · 2x · 4x · Custom).
       YieldScaleCard(
         servings = scaledRecipe.baseServings,
         selectedPreset = selectedYieldPreset,
@@ -296,13 +347,15 @@ fun CleanRecipeReaderScreen(
         },
       )
 
-      // 6. Interactive Checkable Ingredients Section.
+      // 6. Interactive Checkable Ingredients Section with 1-tap Swap Ingredient BOM picker.
       ReaderIngredientsChecklistSection(
         recipe = scaledRecipe,
         catalogById = catalogById,
         matchedIdSet = matchedIdSet,
         checkedIds = checkedIds,
         missingRestockDeltas = matchSummary.missingRestockDeltas,
+        catalog = catalog,
+        householdAllergens = householdProfile.householdAllergens,
         onToggleChecked = { ingId ->
           if (ingId in checkedIds) checkedIds.remove(ingId) else checkedIds.add(ingId)
           onToggleIngredientChecked(baseRecipe.recipeId, ingId)
@@ -314,9 +367,16 @@ fun CleanRecipeReaderScreen(
         onQueueSingleMissing = { ingId, delta ->
           onQueueMissingIngredients(setOf(ingId), listOfNotNull(delta))
         },
+        onSwapIngredient = { fromId, toId ->
+          runCatching {
+            val swapped = PantryExpiryEngine.swapRecipeIngredient(baseRecipe, fromId, toId, catalog)
+            localSwappedRecipes[baseRecipe.recipeId] = swapped
+          }
+          onSwapRecipeIngredient(baseRecipe.recipeId, fromId, toId)
+        },
       )
 
-      // 7. Distraction-Free 18.sp Method & Directions Cards with 48.dp Inline Step Timers.
+      // 7. Distraction-Free 18.sp Method and Directions Cards with 48.dp Inline Step Timers.
       MethodAndDirectionsSection(
         steps = scaledRecipe.morningSteps,
         inlineTimerSeconds = inlineTimerSeconds,
@@ -329,7 +389,7 @@ fun CleanRecipeReaderScreen(
           ?: "Pair with crisp citrus-infused sparkling water and seasonal leafy greens.",
       )
 
-      // 9. Warm Parchment Kitchen Notes Card with interactive "Add Note".
+      // 9. Warm Parchment Kitchen Notes Card with interactive Add Note.
       KitchenNotesCard(
         recipeId = baseRecipe.recipeId,
         builtInChefNote = baseRecipe.chefNote,
@@ -341,7 +401,7 @@ fun CleanRecipeReaderScreen(
 }
 
 /** Daylight `SavorAI` preview of `CleanRecipeReaderScreen` on Tuscan Salmon & Spinach. */
-@Preview(name = "CleanRecipeReader — Daylight", showBackground = true, widthDp = 412, heightDp = 1100)
+@Preview(name = "CleanRecipeReader Daylight", showBackground = true, widthDp = 412, heightDp = 1100)
 @Composable
 fun CleanRecipeReaderDaylightPreview() {
   FamilyKitchenBoardTheme(darkTheme = false) {
@@ -355,17 +415,22 @@ fun CleanRecipeReaderDaylightPreview() {
   }
 }
 
-/** Ambient Counter Dark preview of `CleanRecipeReaderScreen`. */
-@Preview(name = "CleanRecipeReader — Counter Dark", showBackground = true, widthDp = 412, heightDp = 1100)
+/** Ambient Counter Dark preview of a user-created recipe showing `Edit Recipe` & `Delete Recipe`. */
+@Preview(name = "CleanRecipeReader Custom Counter Dark", showBackground = true, widthDp = 412, heightDp = 1100)
 @Composable
 fun CleanRecipeReaderDarkPreview() {
+  val forkedSalmon = PreviewFixtures.dinnerSalmonRecipe.copy(
+    recipeId = "rec_fork_salmon",
+    title = "Tuscan Salmon Family Version",
+    isUserCreated = true,
+  )
   FamilyKitchenBoardTheme(darkTheme = true) {
     CleanRecipeReaderScreen(
-      recipes = PreviewFixtures.recipes,
+      recipes = listOf(forkedSalmon) + PreviewFixtures.recipes,
       catalog = PreviewFixtures.catalog,
       pantryEntries = PreviewFixtures.pantryEntries,
       householdProfile = PreviewFixtures.eveningLifeEventProfile,
-      selectedRecipeId = PreviewFixtures.dinnerSalmonRecipe.recipeId,
+      selectedRecipeId = forkedSalmon.recipeId,
     )
   }
 }

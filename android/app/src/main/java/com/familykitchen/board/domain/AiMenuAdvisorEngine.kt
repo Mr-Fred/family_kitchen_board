@@ -100,6 +100,7 @@ fun inferNutritionFocusFromPrompt(userPrompt: String): NutritionFocusTag {
  * @param pantry Current household pantry ledger.
  * @param householdAllergens Active household allergen exclusions.
  * @param householdProfile Optional full household profile.
+ * @param todayDayIndex Active weekday index (`0 = Monday`..`6 = Sunday`) so swaps target today and tomorrow first.
  * @return Grounded [AiMenuOptimizationProposal].
  */
 fun generatePantryGroundedMenuProposal(
@@ -110,8 +111,10 @@ fun generatePantryGroundedMenuProposal(
   pantry: List<PantryLedgerEntry>,
   householdAllergens: List<String> = emptyList(),
   householdProfile: HouseholdProfile? = null,
+  todayDayIndex: Int = 0,
 ): AiMenuOptimizationProposal {
   val effectiveAllergens = householdAllergens.ifEmpty { householdProfile?.householdAllergens.orEmpty() }
+  val preferredCuisines = householdProfile?.preferredCuisines.orEmpty()
   val focusTag = inferNutritionFocusFromPrompt(userPrompt)
   val catalogById = indexCatalogById(catalog)
   val pantryById = indexPantryById(pantry)
@@ -139,7 +142,7 @@ fun generatePantryGroundedMenuProposal(
 
   data class ScoredCandidate(val recipe: Recipe, val nutrients: List<String>, val inStockIds: List<String>, val score: Int)
 
-  // Evaluate schedulability, calibrated morning pacing, and brain-booster scores across all recipes.
+  // Evaluate local-market availability (EC-02/EC-03), preferred cuisines, and brain-booster scores.
   val youngestStage = householdProfile?.youngestStage ?: ChildGrowthStage.TODDLER_1_2Y
   val scoredCandidates = recipes.mapNotNull { recipe ->
     val availability = evaluateRecipeAvailability(recipe, catalogById, effectiveAllergens, pantryById)
@@ -153,11 +156,24 @@ fun generatePantryGroundedMenuProposal(
     )
     val enriched = resolved.copy(familyGoalPlating = plating)
     val analysis = analyzeRecipeBrainNutrients(enriched, catalogById, pantryById, focusTag)
-    ScoredCandidate(enriched, analysis.nutrients, analysis.inStockIngredientIds, analysis.score)
+    // Reward recipes matching household preferred cuisines, giving extra weight to native local stock.
+    val cuisineBonus = if (preferredCuisines.isNotEmpty() && doesRecipeMatchPreferredCuisines(enriched, preferredCuisines)) {
+      if (availability.substitutionsApplied.isEmpty()) 30 else 22
+    } else {
+      0
+    }
+    ScoredCandidate(enriched, analysis.nutrients, analysis.inStockIngredientIds, analysis.score + cuisineBonus)
   }.sortedByDescending { it.score }
 
-  // Select up to 3 representative PLANNED slots spanning Breakfast, Lunch, and Dinner.
-  val plannedSlots = board.slots.filter { it.status == MealSlotStatus.PLANNED }
+  // Prioritize todayDayIndex and (todayDayIndex + 1) % 7 ahead of later days (never hardcoded Monday 0).
+  val safeToday = ((todayDayIndex % 7) + 7) % 7
+  // Order PLANNED slots by forward modular distance from safeToday so tonight/tomorrow win first.
+  val plannedSlots = board.slots
+    .filter { it.status == MealSlotStatus.PLANNED }
+    .sortedWith(
+      compareBy<MealSlot> { (it.dayIndex - safeToday + 7) % 7 }
+        .thenBy { it.slotType.chronologicalRank },
+    )
   val targetSlots = mutableListOf<MealSlot>()
   for (st in listOf(MealSlotType.BREAKFAST, MealSlotType.LUNCH, MealSlotType.DINNER)) {
     plannedSlots.firstOrNull { it.slotType == st }?.let(targetSlots::add)
@@ -749,7 +765,7 @@ object AiMenuAdvisorEngine {
     userPrompt, hasAttachedImage, catalog, recipes, board, pantry, householdAllergens, activeDayIndex,
   )
 
-  // Generates 100% offline pantry-grounded menu swaps and allergen-safe brain-booster additions.
+  // Generates 100% offline pantry-grounded menu swaps targeting todayDayIndex and preferred cuisines.
   /** Delegates to [com.familykitchen.board.domain.generatePantryGroundedMenuProposal]. */
   fun generatePantryGroundedMenuProposal(
     userPrompt: String,
@@ -759,8 +775,9 @@ object AiMenuAdvisorEngine {
     pantry: List<PantryLedgerEntry>,
     householdAllergens: List<String> = emptyList(),
     householdProfile: HouseholdProfile? = null,
+    todayDayIndex: Int = 0,
   ): AiMenuOptimizationProposal = com.familykitchen.board.domain.generatePantryGroundedMenuProposal(
-    userPrompt, board, recipes, catalog, pantry, householdAllergens, householdProfile,
+    userPrompt, board, recipes, catalog, pantry, householdAllergens, householdProfile, todayDayIndex,
   )
 
   // Synthesizes 4-member 1-pot plating guide with pregnancy/guest life-event safety guardrails.

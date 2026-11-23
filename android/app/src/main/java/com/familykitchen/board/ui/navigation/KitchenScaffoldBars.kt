@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,7 +43,6 @@ import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
@@ -89,14 +89,18 @@ import com.familykitchen.board.ui.theme.KitchenTheme
 import com.familykitchen.board.ui.theme.SavorBrandBadge
 import kotlinx.coroutines.delay
 
-// Decluttered SavorAI Top App Bar, Compact Region/Vault Pill, Toast Banner, Search Bar,
-// 5-Tab Bottom NavigationBar, Wide-Counter NavigationRail, and 2-Pill Plan Mode Switcher.
+// Decluttered SavorAI v2.0 Top App Bar (Market pill -> Family Profile, 48.dp Ask Chef CTA across
+// all 4 tabs, Search on Pantry & Recipes, and Family Profile), 4-Tab Bottom NavigationBar,
+// Wide-Counter NavigationRail, and punctuation-clean Plan Mode Switcher (0 slashes, 0 parentheses).
 
 /**
- * Shared `SavorAI` Top App Bar prioritizing the weighted left brand identity ([SavorBrandBadge]
- * `34.dp` rounded-11 culinary cocotte mark + non-wrapping `"SavorAI"` + `"· <subtitle>"`) and
- * capping the right action cluster at `<= 3` `48.dp` touch controls so `SavorAI` is never crushed
- * to `0.dp` even at `1.35x` display/font scaling on compact `360dp` phones.
+ * Shared `SavorAI` Top App Bar displaying the weighted left brand identity ([SavorBrandBadge] +
+ * non-wrapping `"SavorAI"` + contextual subtitle), a market-region pill opening market and profile
+ * settings ([onOpenMarketSettings]), a persistent `48.dp` **`Ask Chef`** CTA ([onOpenSousChefSheet])
+ * across all 4 tabs, contextual search on `Pantry` and `Recipes` ([onToggleSearch]), and a `48.dp`
+ * `Family Profile` button ([onOpenFamilyProfile]).
+ *
+ * All visible labels and accessibility descriptions stay strictly free of slashes and parentheses.
  */
 @Composable
 fun SavorTopAppBar(
@@ -106,133 +110,133 @@ fun SavorTopAppBar(
   isSearchExpanded: Boolean,
   isDarkTheme: Boolean = false,
   isWideLayout: Boolean = false,
-  onOpenQaLab: () -> Unit = {},
-  onToggleSearch: () -> Unit = {},
-  onToggleDarkTheme: () -> Unit = {},
-  onToggleWideLayout: () -> Unit = {},
   onOpenFamilyProfile: () -> Unit = {},
+  onOpenMarketSettings: () -> Unit = onOpenFamilyProfile,
+  onOpenSousChefSheet: () -> Unit = {},
+  onToggleSearch: () -> Unit = {},
   isBackgroundBusy: Boolean = false,
-  isAiSetupExpanded: Boolean = false,
-  onToggleAiSetup: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
   // Soft breathing pulse on the local-vault indicator dot confirms offline sync status.
   val pulseTransition = rememberInfiniteTransition(label = "vault_pulse")
   val dotAlpha by pulseTransition.animateFloat(
-    initialValue = 0.45f,
-    targetValue = 1.0f,
-    animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Reverse),
-    label = "vault_dot_alpha",
+    initialValue = 0.45f, targetValue = 1.0f,
+    animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "vault_dot_alpha",
   )
-  // Shorten market region to single city name so the right cluster never crowds the brand title.
-  val compactRegion = compactMarketPillLabel(marketRegionLabel, householdName)
+  // Shorten market region to single city name so right actions never crowd the SavorAI wordmark.
+  val compactRegion = barsV2CompactMarketPillLabel(marketRegionLabel, householdName)
+  // Show the search icon only on searchable inventory and cookbook destinations (or while open).
+  val showSearchAction = activeDestination == TopLevelDestination.PANTRY ||
+    activeDestination == TopLevelDestination.RECIPES || isSearchExpanded
 
-  // Warm linen surface with crisp 1.dp bottom border and zero heavy shadow elevation.
+  // Warm linen surface with crisp 1.dp bottom stone border and zero heavy drop shadow.
   Surface(
     color = MaterialTheme.colorScheme.surface.copy(alpha = if (isDarkTheme) 0.96f else 0.94f),
-    shadowElevation = 0.dp,
-    modifier = modifier.fillMaxWidth(),
+    shadowElevation = 0.dp, modifier = modifier.fillMaxWidth(),
   ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .statusBarsPadding()
-          .defaultMinSize(minHeight = 64.dp)
-          .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        // Left: Weighted SavorAI culinary emblem + non-wrapping brand title + muted dot subtitle.
-        // Using Modifier.weight(1f) with bounded <= 3 right controls guarantees >= 160.dp on 360dp phones.
+      BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        // Adapt badge and pill widths on compact 360dp viewports so SavorAI never wraps at 1.35x scale.
+        val isCompactWidth = maxWidth < 392.dp || (!isWideLayout && maxWidth < 380.dp)
         Row(
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-          modifier = Modifier.weight(1f),
+          modifier = Modifier.fillMaxWidth().statusBarsPadding().defaultMinSize(minHeight = 64.dp)
+            .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+          verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-          // 34.dp rounded-11 SavorAI Dutch-oven cocotte emblem (zero sparkles, zero cold hues).
-          SavorBrandBadge(
-            badgeSize = 34.dp,
-            logoSize = 21.dp,
-            shape = RoundedCornerShape(11.dp),
-          )
-          // Non-wrapping brand wordmark keeps SavorAI readable at 1.35x system font scale.
-          Text(
-            text = "SavorAI",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            softWrap = false,
-          )
-          // Contextual destination subtitle ellipsizes gracefully if viewport width is tight.
-          Text(
-            text = "· ${activeDestination.headerSubtitle}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-          )
-        }
-
-        // Right cluster capped at <= 3 controls (48.dp touch targets; Dark/Wide live in Profile sheet).
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-          // Control 1: Compact region / background spinner pill (widthIn max 96.dp -> opens QA Lab).
-          Box(
-            modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).clip(CircleShape).clickable(onClick = onOpenQaLab),
-            contentAlignment = Alignment.Center,
+          // Left: Weighted SavorAI cocotte emblem + non-wrapping brand title + muted subtitle.
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            modifier = Modifier.weight(1f),
           ) {
-            Surface(
-              shape = CircleShape,
-              color = MaterialTheme.colorScheme.surfaceContainerLow,
-              border = BorderStroke(1.dp, extendedColors.borderSubtle),
-              shadowElevation = 0.dp,
-              modifier = Modifier.widthIn(max = 96.dp),
-            ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-              ) {
-                // Swap the 8.dp fresh botanical dot for a 12.dp spinner during background operations.
-                when {
-                  isBackgroundBusy -> CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.8.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                  )
-                  else -> Box(
-                    modifier = Modifier.size(8.dp).alpha(dotAlpha).clip(CircleShape).background(extendedColors.freshIndicator),
-                  )
-                }
-                Text(
-                  text = compactRegion,
-                  style = MaterialTheme.typography.labelSmall,
-                  color = MaterialTheme.colorScheme.onSurface,
-                  maxLines = 1,
-                  softWrap = false,
-                  overflow = TextOverflow.Ellipsis,
-                )
-              }
+            SavorBrandBadge(
+              badgeSize = if (isCompactWidth) 30.dp else 34.dp,
+              logoSize = if (isCompactWidth) 19.dp else 21.dp,
+              shape = RoundedCornerShape(10.dp),
+            )
+            // Non-wrapping brand wordmark keeps SavorAI legible at 1.35x accessibility font scale.
+            Text(
+              text = "SavorAI", style = MaterialTheme.typography.titleMedium,
+              color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
+              maxLines = 1, softWrap = false,
+            )
+            // Show screen subtitle alongside SavorAI whenever horizontal room allows cleanly.
+            if (!isCompactWidth || !showSearchAction) {
+              Text(
+                text = "· ${activeDestination.headerSubtitle}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+              )
             }
           }
 
-          // Control 2: Contextual 48.dp utility icon (Tune on Chef; Search on Pantry & Recipes).
-          when {
-            activeDestination == TopLevelDestination.ASK_AI -> {
-              IconButton(onClick = onToggleAiSetup, modifier = Modifier.size(48.dp)) {
-                Icon(
-                  imageVector = Icons.Filled.Tune,
-                  contentDescription = "Toggle on-device model setup",
-                  tint = if (isAiSetupExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+          // Right cluster: Market Region pill, 48.dp Ask Chef CTA, optional Search, & Family Profile.
+          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            // Control 1: Market region pill (Antipolo) opening Family Profile & Market Settings.
+            Box(
+              modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                .clip(CircleShape).clickable(onClick = onOpenMarketSettings),
+              contentAlignment = Alignment.Center,
+            ) {
+              Surface(
+                shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
+                border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
+                modifier = Modifier.widthIn(max = if (isCompactWidth) 74.dp else 92.dp),
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                  verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                  // Swap the fresh botanical dot for a compact spinner while background work runs.
+                  when {
+                    isBackgroundBusy -> CircularProgressIndicator(
+                      modifier = Modifier.size(11.dp), strokeWidth = 1.8.dp, color = MaterialTheme.colorScheme.primary,
+                    )
+                    else -> Box(
+                      modifier = Modifier.size(7.dp).alpha(dotAlpha).clip(CircleShape)
+                        .background(extendedColors.freshIndicator),
+                    )
+                  }
+                  Text(
+                    text = compactRegion, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+                  )
+                }
               }
             }
-            activeDestination == TopLevelDestination.PANTRY ||
-              activeDestination == TopLevelDestination.RECIPES ||
-              isSearchExpanded -> {
+
+            // Control 2: Dedicated 48.dp Ask Chef pill visible across all 4 destinations.
+            Box(
+              modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                .clip(CircleShape).clickable(onClick = onOpenSousChefSheet),
+              contentAlignment = Alignment.Center,
+            ) {
+              Surface(
+                shape = CircleShape, color = extendedColors.sageContainer,
+                border = BorderStroke(1.dp, extendedColors.herbalSage.copy(alpha = 0.45f)), shadowElevation = 0.dp,
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                  verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                  Icon(
+                    imageVector = Icons.Filled.ChatBubbleOutline, contentDescription = "Ask Chef",
+                    tint = extendedColors.onSageContainer, modifier = Modifier.size(15.dp),
+                  )
+                  Text(
+                    text = "Ask Chef", style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold, color = extendedColors.onSageContainer,
+                    maxLines = 1, softWrap = false,
+                  )
+                }
+              }
+            }
+
+            // Control 3: Contextual 48.dp Search toggle on Pantry and Recipes.
+            if (showSearchAction) {
               IconButton(onClick = onToggleSearch, modifier = Modifier.size(48.dp)) {
                 Icon(
                   imageVector = if (isSearchExpanded) Icons.Filled.Close else Icons.Filled.Search,
@@ -241,20 +245,18 @@ fun SavorTopAppBar(
                 )
               }
             }
-          }
 
-          // Control 3: 48.dp Family Profile button opening household goals, templates, & display toggles.
-          IconButton(onClick = onOpenFamilyProfile, modifier = Modifier.size(48.dp)) {
-            Box(
-              modifier = Modifier.size(34.dp).clip(CircleShape).background(extendedColors.sageContainer),
-              contentAlignment = Alignment.Center,
-            ) {
-              Icon(
-                imageVector = Icons.Filled.FamilyRestroom,
-                contentDescription = "Open Family Profile and display settings",
-                tint = extendedColors.onSageContainer,
-                modifier = Modifier.size(18.dp),
-              )
+            // Control 4: 48.dp Family Profile button opening cuisines, templates, & display toggles.
+            IconButton(onClick = onOpenFamilyProfile, modifier = Modifier.size(48.dp)) {
+              Box(
+                modifier = Modifier.size(34.dp).clip(CircleShape).background(extendedColors.sageContainer),
+                contentAlignment = Alignment.Center,
+              ) {
+                Icon(
+                  imageVector = Icons.Filled.FamilyRestroom, contentDescription = "Family Profile",
+                  tint = extendedColors.onSageContainer, modifier = Modifier.size(18.dp),
+                )
+              }
             }
           }
         }
@@ -280,13 +282,11 @@ internal fun SavorExpandableSearchBar(
   // Warm parchment search container with 48.dp clear action target.
   Surface(
     color = MaterialTheme.colorScheme.surfaceContainerLow,
-    border = BorderStroke(0.5.dp, extendedColors.borderSubtle),
-    modifier = modifier.fillMaxWidth(),
+    border = BorderStroke(0.5.dp, extendedColors.borderSubtle), modifier = modifier.fillMaxWidth(),
   ) {
     OutlinedTextField(
-      value = query,
-      onValueChange = onQueryChange,
-      placeholder = { Text("Search recipes, cuisines, or pantry items…", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+      value = query, onValueChange = onQueryChange,
+      placeholder = { Text("Search recipes, cuisines, or pantry items", maxLines = 1, overflow = TextOverflow.Ellipsis) },
       leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
       trailingIcon = {
         IconButton(onClick = onClearAndClose, modifier = Modifier.size(48.dp)) {
@@ -295,8 +295,7 @@ internal fun SavorExpandableSearchBar(
       },
       keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
       keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-      singleLine = true,
-      shape = RoundedCornerShape(16.dp),
+      singleLine = true, shape = RoundedCornerShape(16.dp),
       modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
     )
   }
@@ -317,9 +316,7 @@ internal fun SavorDismissibleToastBanner(
   val isVisible = !message.isNullOrBlank()
   // Retain the latest non-blank copy so fade/shrink exit transitions never flash an empty strip.
   var lastNonBlankMessage by remember { mutableStateOf(message.orEmpty()) }
-  if (!message.isNullOrBlank()) {
-    lastNonBlankMessage = message
-  }
+  if (!message.isNullOrBlank()) lastNonBlankMessage = message
   // Restart auto-dismiss countdown whenever a fresh toastEventId or message arrives.
   LaunchedEffect(toastEventId, message) {
     if (!message.isNullOrBlank()) {
@@ -336,26 +333,24 @@ internal fun SavorDismissibleToastBanner(
   ) {
     // Botanical sage container frames batch confirmations and non-silent vision gate notices.
     Surface(
-      shape = RoundedCornerShape(16.dp),
-      color = extendedColors.sageContainer,
-      border = BorderStroke(1.dp, extendedColors.herbalSage.copy(alpha = 0.45f)),
-      shadowElevation = 0.dp,
+      shape = RoundedCornerShape(16.dp), color = extendedColors.sageContainer,
+      border = BorderStroke(1.dp, extendedColors.herbalSage.copy(alpha = 0.45f)), shadowElevation = 0.dp,
       modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
       Row(
         modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
       ) {
         Text(
-          text = lastNonBlankMessage,
-          style = MaterialTheme.typography.bodySmall,
-          fontWeight = FontWeight.Medium,
-          color = extendedColors.onSageContainer,
+          text = lastNonBlankMessage, style = MaterialTheme.typography.bodySmall,
+          fontWeight = FontWeight.Medium, color = extendedColors.onSageContainer,
           modifier = Modifier.weight(1f).padding(vertical = 8.dp),
         )
         IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-          Icon(Icons.Filled.Close, contentDescription = "Dismiss notification", tint = extendedColors.onSageContainer, modifier = Modifier.size(18.dp))
+          Icon(
+            imageVector = Icons.Filled.Close, contentDescription = "Dismiss notification",
+            tint = extendedColors.onSageContainer, modifier = Modifier.size(18.dp),
+          )
         }
       }
     }
@@ -363,24 +358,20 @@ internal fun SavorDismissibleToastBanner(
 }
 
 /**
- * Cross-tab live progress strip displayed directly beneath [SavorTopAppBar] whenever the user
- * switches away from `Chef` while a Gemma model download, SAF import, or GPU weight load is running.
- *
- * @param runtimeState Active [AiRuntimeState] (`Importing` or `Loading`).
- * @param onOpenAiTab Callback returning the user to `Chef` to view full setup details.
- * @param modifier Optional Compose [Modifier].
+ * Cross-tab live progress strip displayed directly beneath [SavorTopAppBar] whenever a Gemma model
+ * download, SAF import, or GPU weight load is running while `SousChefModalSheet` is closed.
  */
 @Composable
 fun SavorGlobalModelProgressStrip(
   runtimeState: AiRuntimeState,
-  onOpenAiTab: () -> Unit,
+  onOpenSousChefSheet: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   // Ignore idle, Ready, or Error states since they do not need a cross-tab progress strip.
   if (runtimeState !is AiRuntimeState.Importing && runtimeState !is AiRuntimeState.Loading) return
 
   val extendedColors = KitchenTheme.extendedColors
-  // Build concise single-line download, SAF transfer, or GPU shader label for cross-tab visibility.
+  // Build concise single-line transfer label sanitized against slashes and parentheses.
   val summaryText = when (runtimeState) {
     is AiRuntimeState.Importing -> {
       val verb = if (runtimeState.isNetworkDownload) "Downloading" else "Importing"
@@ -388,45 +379,44 @@ fun SavorGlobalModelProgressStrip(
         copiedBytes = runtimeState.copiedBytes,
         totalBytes = runtimeState.totalBytes,
         isNetworkDownload = runtimeState.isNetworkDownload,
-      )
-      "$verb ${runtimeState.fileName} • $progressDetail"
+      ).replace(" / ", " of ").replace("(", "· ").replace(")", "")
+      "$verb ${runtimeState.fileName} · $progressDetail"
     }
-    is AiRuntimeState.Loading ->
-      "Initializing ${runtimeState.modelName} on device GPU…"
+    is AiRuntimeState.Loading -> "Initializing ${runtimeState.modelName} on device GPU"
     else -> return
   }
 
-  // Tappable global header strip keeps multi-GB background transfers visible across every tab.
+  // Tappable global header strip keeps multi-GB background transfers visible across all 4 tabs.
   Surface(
     color = extendedColors.sageContainer,
     border = BorderStroke(0.5.dp, extendedColors.herbalSage.copy(alpha = 0.45f)),
-    modifier = modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).clickable(onClick = onOpenAiTab),
+    modifier = modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).clickable(onClick = onOpenSousChefSheet),
   ) {
     Column(
       modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
       verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
       Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
       ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
           CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
           Spacer(modifier = Modifier.width(8.dp))
           Text(
-            text = summaryText,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = extendedColors.onSageContainer,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            text = summaryText, style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold, color = extendedColors.onSageContainer,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
           )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Text("View Chef", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, maxLines = 1, softWrap = false)
+        Text(
+          text = "View Chef", style = MaterialTheme.typography.labelSmall,
+          fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+          maxLines = 1, softWrap = false,
+        )
       }
-      // Switch between determinate lambda bar (known size) and indeterminate bar (unknown/GPU load).
+      // Switch between determinate lambda bar (known size) and indeterminate bar (unknown or GPU load).
       when {
         runtimeState is AiRuntimeState.Importing && runtimeState.totalBytes > 0L && runtimeState.copiedBytes > 0L -> {
           val clamped = runtimeState.progressFraction.coerceIn(0f, 1f)
@@ -448,19 +438,18 @@ fun SavorVaultLoadingView(modifier: Modifier = Modifier) {
   Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
     Column(
       horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.spacedBy(12.dp),
-      modifier = Modifier.padding(24.dp),
+      verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(24.dp),
     ) {
       SavorBrandBadge(badgeSize = 52.dp, logoSize = 32.dp, shape = RoundedCornerShape(16.dp))
       CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp, color = MaterialTheme.colorScheme.primary)
-      Text("Loading your SavorAI kitchen vault…", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Text("Loading your SavorAI kitchen vault", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
   }
 }
 
 /**
- * First-class 5-tab bottom `NavigationBar` (`Chef`, `Plan`, `Pantry` badge, `Recipes`, `Shop` badge)
- * rendered on portrait phones with `tonalElevation = 0.dp` and a crisp `1.dp` warm top border.
+ * First-class 4-tab bottom `NavigationBar` (`Plan · Pantry · Recipes · Shop`) rendered on portrait
+ * phones with `tonalElevation = 0.dp` and a crisp `1.dp` warm top border.
  */
 @Composable
 fun SavorBottomNavigationBar(
@@ -471,26 +460,22 @@ fun SavorBottomNavigationBar(
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
-  // Flat warm linen navigation bar framed by a crisp 1.dp top stone divider.
+  // Flat warm linen 4-tab navigation bar framed by a crisp 1.dp top stone divider.
   Column(modifier = modifier.fillMaxWidth()) {
     HorizontalDivider(thickness = 1.dp, color = extendedColors.borderSubtle)
     NavigationBar(containerColor = extendedColors.canvasWarm, tonalElevation = 0.dp, modifier = modifier.fillMaxWidth()) {
-      // Render all 5 first-class destinations with non-wrapping labels for 360dp 1.35x scaling.
+      // Render all 4 primary destinations with non-wrapping labels resilient at 360dp 1.35x scale.
       TopLevelDestination.entries.forEach { destination ->
         val isSelected = destination == activeDestination
-        val badgeCount = badgeCountForDestination(destination, groceryBadgeCount, expiringSoonCount)
+        val badgeCount = barsV2BadgeCountForDestination(destination, groceryBadgeCount, expiringSoonCount)
         NavigationBarItem(
-          selected = isSelected,
-          onClick = { onSelectDestination(destination) },
-          icon = { DestinationBadgedIcon(destination = destination, badgeCount = badgeCount) },
+          selected = isSelected, onClick = { onSelectDestination(destination) },
+          icon = { BarsV2DestinationBadgedIcon(destination = destination, badgeCount = badgeCount) },
           label = {
             Text(
-              text = destination.navLabel,
-              style = MaterialTheme.typography.labelSmall,
+              text = destination.navLabel, style = MaterialTheme.typography.labelSmall,
               fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-              maxLines = 1,
-              softWrap = false,
-              overflow = TextOverflow.Ellipsis,
+              maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
             )
           },
           colors = NavigationBarItemDefaults.colors(
@@ -507,7 +492,8 @@ fun SavorBottomNavigationBar(
 }
 
 /**
- * Leading-edge 5-tab `NavigationRail` rendered automatically in landscape or wide counter mode.
+ * Leading-edge 4-tab `NavigationRail` (`Plan · Pantry · Recipes · Shop`) rendered automatically in
+ * landscape or wide kitchen-counter mode.
  */
 @Composable
 fun SavorWideNavigationRail(
@@ -525,19 +511,15 @@ fun SavorWideNavigationRail(
       // Keep rail destination order 1:1 with portrait NavigationBar for muscle-memory consistency.
       TopLevelDestination.entries.forEach { destination ->
         val isSelected = destination == activeDestination
-        val badgeCount = badgeCountForDestination(destination, groceryBadgeCount, expiringSoonCount)
+        val badgeCount = barsV2BadgeCountForDestination(destination, groceryBadgeCount, expiringSoonCount)
         NavigationRailItem(
-          selected = isSelected,
-          onClick = { onSelectDestination(destination) },
-          icon = { DestinationBadgedIcon(destination = destination, badgeCount = badgeCount) },
+          selected = isSelected, onClick = { onSelectDestination(destination) },
+          icon = { BarsV2DestinationBadgedIcon(destination = destination, badgeCount = badgeCount) },
           label = {
             Text(
-              text = destination.navLabel,
-              style = MaterialTheme.typography.labelSmall,
+              text = destination.navLabel, style = MaterialTheme.typography.labelSmall,
               fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-              maxLines = 1,
-              softWrap = false,
-              overflow = TextOverflow.Ellipsis,
+              maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
             )
           },
           colors = NavigationRailItemDefaults.colors(
@@ -556,8 +538,9 @@ fun SavorWideNavigationRail(
 }
 
 /**
- * Clean 2-pill top mode switcher (`"Daily Plan"` vs `"Batch Prep (N)"`) rendered at the top of
- * [TopLevelDestination.PLAN] with `48.dp` touch height, `softWrap = false`, and `1.dp` warm border.
+ * Clean 2-pill top mode switcher (`"Meal Plan"` vs `"Batch Prep · N"`) rendered at the top of
+ * [TopLevelDestination.PLAN] with `48.dp` touch height, `softWrap = false`, and `0` slashes or
+ * parentheses.
  */
 @Composable
 fun PlanModeSwitcherBar(
@@ -567,18 +550,16 @@ fun PlanModeSwitcherBar(
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
-  // Warm stone segmented track hosting Daily Meal Plan and 4-station Batch Prep without truncation.
+  // Warm stone segmented track hosting Meal Plan and 4-station Batch Prep without parentheses.
   Surface(
-    shape = CircleShape,
-    color = MaterialTheme.colorScheme.surfaceContainer,
-    border = BorderStroke(1.dp, extendedColors.borderSubtle),
-    shadowElevation = 0.dp,
+    shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainer,
+    border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
     modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
   ) {
     Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       val options = listOf(
-        PacerMode.DAILY_PACER to "Daily Plan",
-        PacerMode.WEEKLY_PREP to "Batch Prep ($batchTaskCount)",
+        PacerMode.DAILY_PACER to "Meal Plan",
+        PacerMode.WEEKLY_PREP to "Batch Prep · $batchTaskCount",
       )
       // Render equal-weight 48.dp touch pills so both modes stay legible at 360dp 1.35x scaling.
       options.forEach { (mode, label) ->
@@ -593,24 +574,19 @@ fun PlanModeSwitcherBar(
         ) {
           Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
           ) {
             Icon(
-              imageVector = icon,
-              contentDescription = null,
+              imageVector = icon, contentDescription = null,
               tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
               modifier = Modifier.size(16.dp),
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-              text = label,
-              style = MaterialTheme.typography.labelLarge,
+              text = label, style = MaterialTheme.typography.labelLarge,
               color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
               fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-              maxLines = 1,
-              softWrap = false,
-              overflow = TextOverflow.Ellipsis,
+              maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
             )
           }
         }
@@ -620,8 +596,8 @@ fun PlanModeSwitcherBar(
 }
 
 @Composable
-private fun DestinationBadgedIcon(destination: TopLevelDestination, badgeCount: Int) {
-  val icon = iconForDestination(destination)
+private fun BarsV2DestinationBadgedIcon(destination: TopLevelDestination, badgeCount: Int) {
+  val icon = barsV2IconForDestination(destination)
   // Render coral-terracotta count badge only when unchecked groceries or expiring items exist.
   when {
     badgeCount > 0 -> BadgedBox(
@@ -640,10 +616,9 @@ private fun DestinationBadgedIcon(destination: TopLevelDestination, badgeCount: 
   }
 }
 
-// Maps each of the 5 primary destinations to a non-sparkle Material 3 icon.
-private fun iconForDestination(destination: TopLevelDestination): ImageVector =
+// Maps each of the 4 primary destinations to a non-sparkle Material 3 icon.
+private fun barsV2IconForDestination(destination: TopLevelDestination): ImageVector =
   when (destination) {
-    TopLevelDestination.ASK_AI -> Icons.Filled.ChatBubbleOutline
     TopLevelDestination.PLAN -> Icons.Filled.CalendarToday
     TopLevelDestination.PANTRY -> Icons.Filled.Kitchen
     TopLevelDestination.RECIPES -> Icons.AutoMirrored.Filled.MenuBook
@@ -651,7 +626,7 @@ private fun iconForDestination(destination: TopLevelDestination): ImageVector =
   }
 
 // Surface live grocery deficit count on Shop and urgent <= 48h expiry count on Pantry.
-private fun badgeCountForDestination(
+private fun barsV2BadgeCountForDestination(
   destination: TopLevelDestination,
   groceryBadgeCount: Int,
   expiringSoonCount: Int,
@@ -659,12 +634,13 @@ private fun badgeCountForDestination(
   when (destination) {
     TopLevelDestination.GROCERIES -> groceryBadgeCount
     TopLevelDestination.PANTRY -> expiringSoonCount
-    TopLevelDestination.ASK_AI, TopLevelDestination.PLAN, TopLevelDestination.RECIPES -> 0
+    TopLevelDestination.PLAN, TopLevelDestination.RECIPES -> 0
   }
 
-// Extracts concise single-word/city region pill copy ("Antipolo") so right bar controls stay <= 96.dp.
-private fun compactMarketPillLabel(marketRegionLabel: String, householdName: String): String {
-  val shortMarket = marketRegionLabel.substringBefore(',').substringBefore('&').substringBefore('•').trim()
+// Extracts concise single-word city region pill copy ("Antipolo") with 0 slashes or parentheses.
+private fun barsV2CompactMarketPillLabel(marketRegionLabel: String, householdName: String): String {
+  val shortMarket = marketRegionLabel.substringBefore(',').substringBefore('&').substringBefore('•')
+    .replace("/", " ").replace("(", "").replace(")", "").trim()
   return when {
     shortMarket.isNotEmpty() -> shortMarket
     householdName.isNotBlank() -> householdName.trim()
@@ -672,24 +648,20 @@ private fun compactMarketPillLabel(marketRegionLabel: String, householdName: Str
   }
 }
 
-@Preview(name = "Top Bar & 5-Tab Nav — Chef Daylight", showBackground = true, widthDp = 360)
+@Preview(name = "Top Bar & 4-Tab Nav — Plan Daylight", showBackground = true, widthDp = 360)
 @Composable
 private fun SavorBarsPreview() {
-  // Verifies non-crushed SavorAI header and 5-tab bar on narrow 360dp portrait width.
+  // Verifies non-crushed SavorAI header, Ask Chef pill, and 4-tab bar on narrow 360dp portrait width.
   FamilyKitchenBoardTheme {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
       SavorTopAppBar(
-        activeDestination = TopLevelDestination.ASK_AI,
-        householdName = "Our Family Kitchen",
-        marketRegionLabel = "Antipolo & Marikina, PH",
-        isSearchExpanded = false,
+        activeDestination = TopLevelDestination.PLAN, householdName = "Our Family Kitchen",
+        marketRegionLabel = "Antipolo & Marikina, PH", isSearchExpanded = false,
       )
       PlanModeSwitcherBar(activeMode = PacerMode.DAILY_PACER, batchTaskCount = 4, onSelectMode = {})
       SavorBottomNavigationBar(
-        activeDestination = TopLevelDestination.PLAN,
-        groceryBadgeCount = 6,
-        expiringSoonCount = 3,
-        onSelectDestination = {},
+        activeDestination = TopLevelDestination.PLAN, groceryBadgeCount = 6,
+        expiringSoonCount = 3, onSelectDestination = {},
       )
     }
   }

@@ -16,14 +16,19 @@ import com.familykitchen.board.domain.MealSlotStatus
 import com.familykitchen.board.domain.ModelNotReadyException
 import com.familykitchen.board.domain.PantryLedgerEntry
 import com.familykitchen.board.domain.RestockDelta
+import com.familykitchen.board.domain.SmartRecipeDraft
 import com.familykitchen.board.domain.StapleStatus
 import com.familykitchen.board.domain.StorageLocation
 import com.familykitchen.board.domain.ValidationException
 import com.familykitchen.board.domain.VisionNotSupportedException
 import com.familykitchen.board.domain.VisualIntakeResult
 import com.familykitchen.board.domain.batchRestockPantry
+import com.familykitchen.board.domain.buildCookbookPhotoOcrPrompt
 import com.familykitchen.board.domain.formatAiFallbackToastMessage
 import com.familykitchen.board.domain.formatAiResponseSourceLabel
+import com.familykitchen.board.domain.isMealOrRecipeProposalRequest
+import com.familykitchen.board.domain.parseCookbookVisionJsonToDraft
+import com.familykitchen.board.domain.requireDomainValid
 import com.familykitchen.board.domain.synthesizeCatalogItemFromLabel
 import com.familykitchen.board.domain.tryExecuteDeterministicToolIntent
 import com.familykitchen.board.ports.AiEdgePort
@@ -34,7 +39,8 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 
 // Pure-Kotlin AI Chef turn orchestrator decoupling ViewModels and JUnit tests from Android APIs.
-// Enforces zero fake grocery prompts, strict Vision Gate surfacing, and guaranteed temp-file cleanup.
+// Enforces zero fake grocery prompts, live Single-Gemma EGM + ADK routing, strict Vision Gate
+// surfacing (both kitchen scans and cookbook OCR), and guaranteed temp-file cleanup.
 
 /**
  * Resolution pathway taken by [AiChefCoordinator.submitTurn] for telemetry, UI banners, and
@@ -44,7 +50,7 @@ enum class AiTurnResolutionStatus {
   /** Explicit text-only command matched a deterministic `< 5ms` on-device kitchen tool. */
   DETERMINISTIC_TOOL_EXECUTED,
 
-  /** On-device LLM text output was validated and grounded against the household catalog. */
+  /** On-device or Cloud LLM output passed EGM safety audit / grounding against household catalog. */
   ON_DEVICE_TEXT_GROUNDED,
 
   /** Text-only prompt resolved via deterministic offline `generatePantryGroundedMenuProposal`. */
@@ -87,23 +93,28 @@ data class AiChefTurnOutcome(
 )
 
 /**
- * Pure-testable AI Chef turn coordinator bridging [AiEdgePort] with the pure functional domain
- * grounding and menu-optimization engines in [AiMenuAdvisorEngine].
+ * Pure-testable AI Chef turn coordinator bridging [AiEdgePort] and [SingleGemmaEgmGraphRunner]
+ * with the pure functional domain grounding, cookbook OCR, and menu-optimization engines.
  *
- * Contains **zero** `android.*` imports so `VisionGateAndChefCoordinatorTest` can verify:
- * 1. Authentic `Content.ImageFile` forwarding on vision-capable models,
+ * Contains **zero** `android.*` imports so hermetic JUnit suites can verify:
+ * 1. Authentic `Content.ImageFile` forwarding on vision-capable models (both kitchen intake and
+ *    cookbook recipe OCR via [scanCookbookRecipePhoto]),
  * 2. Non-silent [VisionNotSupportedException] / [ModelNotReadyException] warning surfacing with
  *    zero pantry mutation and zero silent text-only fallback on image turns,
- * 3. Guaranteed temporary preprocessed file cleanup inside `finally` across all outcomes.
+ * 3. Live 4-stage Single-Gemma Elephant & Goldfish + ADK `LoopAgent` execution on meal-planning
+ *    prompts alongside multi-turn conversational continuity (`RECENT_CONVERSATION`) on chat Q&A,
+ * 4. Guaranteed temporary preprocessed file cleanup inside `finally` across all outcomes.
  *
  * @param aiEdgePort Hexagonal on-device text and multimodal inference port.
  * @param onCleanupTempImage Deterministic callback invoked in `finally` to delete temp image files.
  * @param maxTurnHistorySize Maximum messages retained in rolling chat history (`12` = 6 exchanges).
+ * @param egmGraphRunner Single-Gemma Elephant & Goldfish + ADK graph runner for meal proposals.
  */
 class AiChefCoordinator(
   private val aiEdgePort: AiEdgePort,
-  private val onCleanupTempImage: (String) -> Unit = ::defaultDeleteTempFile,
+  private val onCleanupTempImage: (String) -> Unit = ::coordV2DefaultDeleteTempFile,
   private val maxTurnHistorySize: Int = DEFAULT_MAX_TURN_HISTORY,
+  val egmGraphRunner: SingleGemmaEgmGraphRunner = SingleGemmaEgmGraphRunner(aiEdgePort),
 ) {
 
   // Monotonic sequence generates collision-free turn IDs even under deterministic test timestamps.
@@ -117,6 +128,7 @@ class AiChefCoordinator(
    * @param attachedImageLabel Optional human-readable chip label for an attached photo.
    * @param deviceProfile Active universal Android RAM-tier / Gemma hardware profile.
    * @param nowIso Deterministic ISO-8601 timestamp stamped onto generated chat turns.
+   * @param activeDayIndex Active weekday index (`0..6`) anchoring `"tonight"` / `"today"` proposals.
    * @return Complete [AiChefTurnOutcome] ready for state emission and `O(1)` persistence.
    */
   suspend fun handleSubmitAction(
@@ -125,6 +137,7 @@ class AiChefCoordinator(
     attachedImageLabel: String? = null,
     deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
     nowIso: String = DEFAULT_TIMESTAMP_ISO,
+    activeDayIndex: Int = 0,
   ): AiChefTurnOutcome =
     submitTurn(
       snapshot = snapshot,
@@ -133,19 +146,20 @@ class AiChefCoordinator(
       attachedImageLabel = attachedImageLabel,
       deviceProfile = deviceProfile,
       nowIso = nowIso,
+      activeDayIndex = activeDayIndex,
     )
 
   /**
    * Coordinates either an **image-attached multimodal turn** or a **text-only turn**:
-   * - **Image-attached turns**: Never executes regex tool intents or fake grocery prompts; builds
-   *   a neutral prompt via [AiMenuAdvisorEngine.buildVisualIntakePrompt], invokes
-   *   [AiEdgePort.analyzeImageWithPrompt], grounds output into a confirmation-gated
+   * - **Image-attached turns**: Builds a pixel-neutral prompt via [AiMenuAdvisorEngine.buildVisualIntakePrompt],
+   *   invokes [AiEdgePort.analyzeImageWithPrompt], grounds output into a confirmation-gated
    *   [VisualIntakeResult] (or surfaces [VisionNotSupportedException] / [ModelNotReadyException]
    *   explicitly without touching pantry state), and deletes [attachedImagePath] in `finally`.
-   * - **Text-only turns**: Dispatches explicit NL commands via
-   *   [AiMenuAdvisorEngine.tryExecuteDeterministicToolIntent], queries [AiEdgePort.generateText]
-   *   when [AiRuntimeState.Ready] (grounding via [AiMenuAdvisorEngine.parseAndGroundAiResponse]),
-   *   and falls back cleanly to [AiMenuAdvisorEngine.generatePantryGroundedMenuProposal].
+   * - **Text-only turns**: Dispatches explicit `< 5ms` commands via [tryExecuteDeterministicToolIntent],
+   *   routes meal/recipe proposal requests through [SingleGemmaEgmGraphRunner.executeTurn] (and
+   *   conversational greetings/technique Q&A through multi-turn `buildPantryAwareSystemPrompt`),
+   *   and falls back cleanly to [AiMenuAdvisorEngine.generatePantryGroundedMenuProposal] anchored
+   *   to [activeDayIndex].
    *
    * @param snapshot Current immutable household state snapshot.
    * @param promptText User-entered prompt or optional photo note.
@@ -153,7 +167,7 @@ class AiChefCoordinator(
    * @param attachedImageLabel Optional display badge name for the attached image.
    * @param deviceProfile Active hardware profile guiding token/delegate system prompt hints.
    * @param nowIso Deterministic ISO-8601 timestamp.
-   * @param activeDayIndex Default weekday (`0..6`) for `"tonight"` / `"today"` swap commands.
+   * @param activeDayIndex Current real weekday (`0..6`) for `"tonight"` / `"today"` swap commands.
    * @return Immutable [AiChefTurnOutcome].
    */
   suspend fun submitTurn(
@@ -169,8 +183,48 @@ class AiChefCoordinator(
     val cleanImagePath = attachedImagePath?.trim()?.takeIf { it.isNotEmpty() }
     return when {
       cleanImagePath != null ->
-        executeImageAttachedTurn(snapshot, promptText, cleanImagePath, attachedImageLabel, nowIso)
-      else -> executeTextOnlyTurn(snapshot, promptText, deviceProfile, nowIso, activeDayIndex)
+        coordV2ExecuteImageAttachedTurn(snapshot, promptText, cleanImagePath, attachedImageLabel, nowIso)
+      else -> coordV2ExecuteTextOnlyTurn(snapshot, promptText, deviceProfile, nowIso, activeDayIndex)
+    }
+  }
+
+  /**
+   * Transcribes a photographed cookbook page or handwritten recipe card into an editable
+   * [SmartRecipeDraft] while enforcing the **Non-Silent Vision Gate** and guaranteed temporary file
+   * cleanup inside `finally`.
+   *
+   * Never silently drops [preprocessedImagePath] to text-only generation: if no vision-capable
+   * model is active, [AiEdgePort.analyzeImageWithPrompt] throws [VisionNotSupportedException] or
+   * [ModelNotReadyException] directly to the caller after cleaning up [preprocessedImagePath].
+   *
+   * @param snapshot Current household snapshot supplying catalog items and `preferredCuisines`.
+   * @param preprocessedImagePath Downscaled (`<= 1280px`) EXIF-normalized JPEG path to inspect.
+   * @param nowIso Deterministic ISO-8601 timestamp retained for audit symmetry.
+   * @return Grounded, editable [SmartRecipeDraft] ready for confirmation in `AddOrEditRecipeSheet`.
+   */
+  suspend fun scanCookbookRecipePhoto(
+    snapshot: KitchenSnapshot,
+    preprocessedImagePath: String,
+    nowIso: String = DEFAULT_TIMESTAMP_ISO,
+  ): SmartRecipeDraft {
+    val cleanPath = preprocessedImagePath.trim()
+    requireDomainValid(cleanPath.isNotEmpty() && nowIso.isNotBlank(), "CookbookPhotoScan") {
+      "preprocessedImagePath must be non-blank"
+    }
+    try {
+      // Build a pixel-neutral OCR prompt tuned to household preferred cuisines (0 fake food names).
+      val ocrPrompt = buildCookbookPhotoOcrPrompt(snapshot.householdProfile.preferredCuisines)
+      val rawVisionOutput = aiEdgePort.analyzeImageWithPrompt(cleanPath, ocrPrompt)
+      return parseCookbookVisionJsonToDraft(
+        rawOutput = rawVisionOutput,
+        catalog = snapshot.ingredients,
+        defaultCuisines = snapshot.householdProfile.preferredCuisines,
+      )
+    } catch (cancel: CancellationException) {
+      throw cancel
+    } finally {
+      // Deterministically delete the temporary preprocessed JPEG across success, error, or cancel.
+      runCatching { onCleanupTempImage(cleanPath) }
     }
   }
 
@@ -259,7 +313,7 @@ class AiChefCoordinator(
     if (baseDeltas.isEmpty() && selectedNewItemsById.isEmpty()) return snapshot
 
     // Upsert new catalog records first so Pantry and Grocery reducers resolve tier and unit metadata.
-    val mergedCatalog = upsertCatalogItems(snapshot.ingredients, selectedNewItemsById.values.toList())
+    val mergedCatalog = coordV2UpsertCatalogItems(snapshot.ingredients, selectedNewItemsById.values.toList())
     return when (destination) {
       IntakeCommitTarget.PANTRY -> {
         // Stock Tier-2 spices as PLENTY in PANTRY and add 1 default package for Tier-1 foods.
@@ -352,7 +406,7 @@ class AiChefCoordinator(
   }
 
   // Image turn pipeline: zero regex tools, zero fake grocery text, strict non-silent Vision Gate.
-  private suspend fun executeImageAttachedTurn(
+  private suspend fun coordV2ExecuteImageAttachedTurn(
     snapshot: KitchenSnapshot,
     userNote: String,
     preprocessedImagePath: String,
@@ -364,7 +418,7 @@ class AiChefCoordinator(
     val userDisplayMessage = userNote.trim().ifEmpty { "Inspect attached kitchen photo" }
     val existingIds = snapshot.aiTurnHistory.map { it.turnId }.toSet()
     val userTurn = AiChatTurn(
-      turnId = nextTurnId("user_img", existingIds),
+      turnId = coordV2NextTurnId("user_img", existingIds),
       role = AiChatRole.USER,
       messageText = userDisplayMessage,
       createdAtIso = nowIso,
@@ -380,18 +434,18 @@ class AiChefCoordinator(
       )
       // Dispatch real preprocessed JPEG path to AiEdgePort (enforces VisionNotSupportedException).
       val rawVisionOutput = aiEdgePort.analyzeImageWithPrompt(preprocessedImagePath, visualPrompt)
-      return buildGroundedVisionOutcome(snapshot, userTurn, userNote, rawVisionOutput, nowIso)
+      return coordV2BuildGroundedVisionOutcome(snapshot, userTurn, userNote, rawVisionOutput, nowIso)
     } catch (cancel: CancellationException) {
       throw cancel
     } catch (visionGateError: VisionNotSupportedException) {
       // Surface explicit non-silent warning without mutating pantry or running text-only fallback.
-      return buildBlockedVisionOutcome(
+      return coordV2BuildBlockedVisionOutcome(
         snapshot, userTurn, AiTurnResolutionStatus.VISION_GATE_BLOCKED,
         visionGateError.message, visionGateError, nowIso,
       )
     } catch (notReadyError: ModelNotReadyException) {
       // Model still loading or missing: inform user explicitly rather than fabricating items.
-      return buildBlockedVisionOutcome(
+      return coordV2BuildBlockedVisionOutcome(
         snapshot, userTurn, AiTurnResolutionStatus.VISION_GATE_BLOCKED,
         notReadyError.message, notReadyError, nowIso,
       )
@@ -399,7 +453,7 @@ class AiChefCoordinator(
       // Reject ungrounded or malformed vision JSON without touching pantry stock.
       val msg = "Photo scan output did not match strict household schema (${validationError.message}). " +
         "No pantry items were changed—please try a clearer photo."
-      return buildBlockedVisionOutcome(
+      return coordV2BuildBlockedVisionOutcome(
         snapshot, userTurn, AiTurnResolutionStatus.VISION_INFERENCE_ERROR,
         msg, validationError, nowIso,
       )
@@ -407,7 +461,7 @@ class AiChefCoordinator(
       // Catch unexpected native JNI Errors and Exceptions cleanly so UI and pantry stay intact.
       val detail = unexpected.message?.trim()?.takeIf { it.isNotEmpty() } ?: "multimodal runtime error"
       val msg = "Unable to complete on-device photo scan ($detail). Pantry state remains unchanged."
-      return buildBlockedVisionOutcome(
+      return coordV2BuildBlockedVisionOutcome(
         snapshot, userTurn, AiTurnResolutionStatus.VISION_INFERENCE_ERROR, msg, null, nowIso,
       )
     } finally {
@@ -417,7 +471,7 @@ class AiChefCoordinator(
   }
 
   // Parse VisualIntakeResult first; if the vision model returned a grounded swap schema, accept that.
-  private fun buildGroundedVisionOutcome(
+  private fun coordV2BuildGroundedVisionOutcome(
     snapshot: KitchenSnapshot,
     userTurn: AiChatTurn,
     userNote: String,
@@ -430,61 +484,41 @@ class AiChefCoordinator(
       // Secondary strict parser in case a vision prompt asked directly for JSON slot swaps.
       val groundedProposal = try {
         AiMenuAdvisorEngine.parseAndGroundAiResponse(
-          rawModelOutput = rawVisionOutput,
-          userPrompt = userNote,
-          board = snapshot.weeklyBoard,
-          recipes = snapshot.recipes,
-          catalog = snapshot.ingredients,
-          pantry = snapshot.pantryEntries,
-          householdProfile = snapshot.householdProfile,
+          rawModelOutput = rawVisionOutput, userPrompt = userNote, board = snapshot.weeklyBoard,
+          recipes = snapshot.allHouseholdRecipes, catalog = snapshot.ingredients,
+          pantry = snapshot.pantryEntries, householdProfile = snapshot.householdProfile,
         )
       } catch (_: ValidationException) {
         throw primaryErr
       }
       val reservedIds = snapshot.aiTurnHistory.map { it.turnId }.toSet() + userTurn.turnId
-      val assistantTurn = AiChatTurn(
-        turnId = nextTurnId("asst_vis_prop", reservedIds),
-        role = AiChatRole.ASSISTANT,
-        messageText = groundedProposal.assistantSummary,
-        createdAtIso = nowIso,
-        proposal = groundedProposal,
-        responseSourceLabel = resolveActiveModelSourceLabel(),
-      )
-      val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
-      return AiChefTurnOutcome(
-        status = AiTurnResolutionStatus.MULTIMODAL_VISION_GROUNDED,
-        userTurn = userTurn,
-        assistantTurn = assistantTurn,
-        updatedTurnHistory = history,
-        updatedSnapshot = snapshot.copy(aiTurnHistory = history, updatedAtIso = nowIso),
-        tempImageCleanedUp = true,
+      return coordV2BuildProposalOutcome(
+        snapshot = snapshot, userTurn = userTurn, reservedIds = reservedIds,
+        prefix = "asst_vis_prop", status = AiTurnResolutionStatus.MULTIMODAL_VISION_GROUNDED,
+        proposal = groundedProposal, sourceLabel = coordV2ResolveActiveModelSourceLabel(),
+        nowIso = nowIso, tempCleanedUp = true,
       )
     }
 
-    val assistantMessage = formatVisualIntakeMessage(intakeResult)
+    val assistantMessage = coordV2FormatVisualIntakeMessage(intakeResult)
     val reservedIds = snapshot.aiTurnHistory.map { it.turnId }.toSet() + userTurn.turnId
     val assistantTurn = AiChatTurn(
-      turnId = nextTurnId("asst_vis", reservedIds),
-      role = AiChatRole.ASSISTANT,
-      messageText = assistantMessage,
-      createdAtIso = nowIso,
-      visualIntakeResult = intakeResult,
-      responseSourceLabel = resolveActiveModelSourceLabel(),
+      turnId = coordV2NextTurnId("asst_vis", reservedIds), role = AiChatRole.ASSISTANT,
+      messageText = assistantMessage, createdAtIso = nowIso,
+      visualIntakeResult = intakeResult, responseSourceLabel = coordV2ResolveActiveModelSourceLabel(),
     )
-    val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
+    val history = coordV2AppendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
     // Confirmation gate: never auto-commit groundedRestockDeltas until ConfirmVisualRestock fires.
     return AiChefTurnOutcome(
       status = AiTurnResolutionStatus.MULTIMODAL_VISION_GROUNDED,
-      userTurn = userTurn,
-      assistantTurn = assistantTurn,
-      updatedTurnHistory = history,
+      userTurn = userTurn, assistantTurn = assistantTurn, updatedTurnHistory = history,
       updatedSnapshot = snapshot.copy(aiTurnHistory = history, updatedAtIso = nowIso),
       tempImageCleanedUp = true,
     )
   }
 
   // Construct a non-mutating warning turn preserving pantryEntries, weeklyBoard, and grocery queue.
-  private fun buildBlockedVisionOutcome(
+  private fun coordV2BuildBlockedVisionOutcome(
     snapshot: KitchenSnapshot,
     userTurn: AiChatTurn,
     status: AiTurnResolutionStatus,
@@ -494,166 +528,165 @@ class AiChefCoordinator(
   ): AiChefTurnOutcome {
     val reservedIds = snapshot.aiTurnHistory.map { it.turnId }.toSet() + userTurn.turnId
     val assistantTurn = AiChatTurn(
-      nextTurnId("asst_gate", reservedIds),
-      AiChatRole.ASSISTANT,
-      warningMessage,
-      nowIso,
+      coordV2NextTurnId("asst_gate", reservedIds), AiChatRole.ASSISTANT, warningMessage, nowIso,
     )
-    val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
+    val history = coordV2AppendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
     return AiChefTurnOutcome(
-      status = status,
-      userTurn = userTurn,
-      assistantTurn = assistantTurn,
+      status = status, userTurn = userTurn, assistantTurn = assistantTurn,
       updatedTurnHistory = history,
       updatedSnapshot = snapshot.copy(aiTurnHistory = history, updatedAtIso = nowIso),
-      visionWarningMessage = warningMessage,
-      blockingException = blockingException,
+      visionWarningMessage = warningMessage, blockingException = blockingException,
       tempImageCleanedUp = true,
     )
   }
 
-  // Text-only pipeline: deterministic NL tool -> on-device Ready LLM -> pantry-grounded fallback.
-  private suspend fun executeTextOnlyTurn(
+  // Shared proposal outcome builder deduplicating rolling-history append across vision, EGM, and offline paths.
+  // Never mutates weeklyBoard, pantryEntries, or grocery queues prior to explicit user confirmation.
+  private fun coordV2BuildProposalOutcome(
+    snapshot: KitchenSnapshot,
+    userTurn: AiChatTurn,
+    reservedIds: Set<String>,
+    prefix: String,
+    status: AiTurnResolutionStatus,
+    proposal: AiMenuOptimizationProposal,
+    sourceLabel: String?,
+    nowIso: String,
+    toastMessage: String? = null,
+    tempCleanedUp: Boolean = false,
+  ): AiChefTurnOutcome {
+    // Stamp monotonic collision-free turnId and active model provenance badge onto assistant reply.
+    val assistantTurn = AiChatTurn(
+      turnId = coordV2NextTurnId(prefix, reservedIds), role = AiChatRole.ASSISTANT,
+      messageText = proposal.assistantSummary, createdAtIso = nowIso,
+      proposal = proposal, responseSourceLabel = sourceLabel,
+    )
+    // Trim bounded chat window to maxTurnHistorySize so persisted snapshot stays compact.
+    val history = coordV2AppendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
+    // Persist updated aiTurnHistory in 1 atomic snapshot write at the ViewModel boundary.
+    return AiChefTurnOutcome(
+      status = status, userTurn = userTurn, assistantTurn = assistantTurn,
+      updatedTurnHistory = history,
+      updatedSnapshot = snapshot.copy(aiTurnHistory = history, updatedAtIso = nowIso),
+      toastMessage = toastMessage, tempImageCleanedUp = tempCleanedUp,
+    )
+  }
+
+  // Text-only pipeline: < 5ms reflex tool -> EGM Goldfish / conversational Ready LLM -> fallback.
+  private suspend fun coordV2ExecuteTextOnlyTurn(
     snapshot: KitchenSnapshot,
     promptText: String,
     deviceProfile: EdgeDeviceProfile,
     nowIso: String,
     activeDayIndex: Int = 0,
   ): AiChefTurnOutcome {
+    // Reject blank text-only submissions early with a typed domain ValidationException.
     val cleanPrompt = promptText.trim()
     if (cleanPrompt.isEmpty()) {
-      throw ValidationException(
-        message = "Enter a message or attach a kitchen photo before sending.",
-        issues = listOf("promptText: blank"),
-      )
+      throw ValidationException("Enter a message or attach a kitchen photo before sending.", listOf("promptText: blank"))
     }
 
     val existingIds = snapshot.aiTurnHistory.map { it.turnId }.toSet()
-    val userTurn = AiChatTurn(
-      turnId = nextTurnId("user_txt", existingIds),
-      role = AiChatRole.USER,
-      messageText = cleanPrompt,
-      createdAtIso = nowIso,
-    )
+    val userTurn = AiChatTurn(coordV2NextTurnId("user_txt", existingIds), AiChatRole.USER, cleanPrompt, nowIso)
     val reservedForAssistant = existingIds + userTurn.turnId
+    // Include heritage/world dishes automatically whenever canonical catalog ingredients are present.
+    val effectiveRecipes = snapshot.allHouseholdRecipes
 
-    // Step 1: check explicit natural-language batch commands (< 5ms deterministic tools).
+    // Step 1: check explicit natural-language batch commands (< 5ms deterministic reflex tools).
     val toolResult = tryExecuteDeterministicToolIntent(
-      userPrompt = cleanPrompt,
-      hasAttachedImage = false,
-      catalog = snapshot.ingredients,
-      recipes = snapshot.recipes,
-      board = snapshot.weeklyBoard,
-      pantry = snapshot.pantryEntries,
-      householdAllergens = snapshot.householdProfile.householdAllergens,
-      activeDayIndex = activeDayIndex,
+      userPrompt = cleanPrompt, hasAttachedImage = false, catalog = snapshot.ingredients,
+      recipes = effectiveRecipes, board = snapshot.weeklyBoard, pantry = snapshot.pantryEntries,
+      householdAllergens = snapshot.householdProfile.householdAllergens, activeDayIndex = activeDayIndex,
     )
     if (toolResult != null) {
       val assistantTurn = AiChatTurn(
-        turnId = nextTurnId("asst_tool", reservedForAssistant),
-        role = AiChatRole.ASSISTANT,
-        messageText = toolResult.summaryMessage,
-        createdAtIso = nowIso,
-        toolCallResult = toolResult,
-        responseSourceLabel = SOURCE_LABEL_KITCHEN_TOOL,
+        turnId = coordV2NextTurnId("asst_tool", reservedForAssistant), role = AiChatRole.ASSISTANT,
+        messageText = toolResult.summaryMessage, createdAtIso = nowIso,
+        toolCallResult = toolResult, responseSourceLabel = SOURCE_LABEL_KITCHEN_TOOL,
       )
-      val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
-      val mutatedSnapshot = applyToolResultToSnapshot(snapshot, toolResult, history, nowIso)
+      val history = coordV2AppendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
+      val mutatedSnapshot = coordV2ApplyToolResultToSnapshot(snapshot, toolResult, history, nowIso)
       return AiChefTurnOutcome(
         status = AiTurnResolutionStatus.DETERMINISTIC_TOOL_EXECUTED,
-        userTurn = userTurn,
-        assistantTurn = assistantTurn,
-        updatedTurnHistory = history,
-        updatedSnapshot = mutatedSnapshot,
+        userTurn = userTurn, assistantTurn = assistantTurn,
+        updatedTurnHistory = history, updatedSnapshot = mutatedSnapshot,
         toastMessage = toolResult.toastMessage,
       )
     }
 
-    // Step 2: when on-device or cloud runtime is Ready, run grounded flexible LLM inference.
+    // Step 2: when runtime is Ready, route meal/recipe proposals through SingleGemmaEgmGraphRunner
+    // (ADK tools + LoopAgent SafetyAuditor) and greetings/Q&A through multi-turn conversational prompt.
     var fallbackDiagnosticToast: String? = null
     if (aiEdgePort.runtimeState.value is AiRuntimeState.Ready) {
-      val activeSourceLabel = resolveActiveModelSourceLabel()
-      val systemPrompt = AiMenuAdvisorEngine.buildPantryAwareSystemPrompt(
-        userPrompt = cleanPrompt,
-        board = snapshot.weeklyBoard,
-        recipes = snapshot.recipes,
-        catalog = snapshot.ingredients,
-        pantry = snapshot.pantryEntries,
-        householdAllergens = snapshot.householdProfile.householdAllergens,
-        householdProfile = snapshot.householdProfile,
-        deviceProfile = deviceProfile,
-        recentTurns = snapshot.aiTurnHistory.takeLast(RECENT_PROMPT_TURNS_LIMIT),
-      )
-      val llmGroundedProposal = try {
-        val rawReply = aiEdgePort.generateText(systemPrompt)
-        AiMenuAdvisorEngine.groundFlexibleLlmTextReply(
-          rawModelOutput = rawReply,
-          userPrompt = cleanPrompt,
-          board = snapshot.weeklyBoard,
-          recipes = snapshot.recipes,
-          catalog = snapshot.ingredients,
-          pantry = snapshot.pantryEntries,
-          householdProfile = snapshot.householdProfile,
+      val activeSourceLabel = coordV2ResolveActiveModelSourceLabel()
+      if (isMealOrRecipeProposalRequest(cleanPrompt)) {
+        // Hydrate effectiveRecipes onto snapshot when running the 4-stage Single-Gemma EGM graph.
+        val egmSnapshot = if (effectiveRecipes.size != snapshot.recipes.size) snapshot.copy(recipes = effectiveRecipes) else snapshot
+        val egmOutcome = egmGraphRunner.executeTurn(egmSnapshot, cleanPrompt, snapshot.elephantMemory, activeDayIndex)
+        val approvedProposal = egmOutcome.proposal
+        // Accept Iteration-1 approvals and Iteration-2 LoopAgent repairs; otherwise fall back cleanly.
+        val isApprovedGraphPass =
+          egmOutcome.outcome == EgmGraphStageOutcome.GOLDFISH_APPROVED_ITERATION_1 ||
+            egmOutcome.outcome == EgmGraphStageOutcome.GOLDFISH_REPAIRED_ITERATION_2
+        if (isApprovedGraphPass && approvedProposal != null) {
+          val resolvedSource = egmOutcome.responseSourceLabel.ifBlank { activeSourceLabel.orEmpty() }.ifEmpty { null }
+          return coordV2BuildProposalOutcome(
+            snapshot = snapshot, userTurn = userTurn, reservedIds = reservedForAssistant,
+            prefix = "asst_llm", status = AiTurnResolutionStatus.ON_DEVICE_TEXT_GROUNDED,
+            proposal = approvedProposal, sourceLabel = resolvedSource, nowIso = nowIso,
+          )
+        }
+        fallbackDiagnosticToast = egmOutcome.fallbackToastMessage
+      } else {
+        // Conversational greeting / technique Q&A path preserves RECENT_CONVERSATION multi-turn window.
+        val systemPrompt = AiMenuAdvisorEngine.buildPantryAwareSystemPrompt(
+          userPrompt = cleanPrompt, board = snapshot.weeklyBoard, recipes = effectiveRecipes,
+          catalog = snapshot.ingredients, pantry = snapshot.pantryEntries,
+          householdAllergens = snapshot.householdProfile.householdAllergens,
+          householdProfile = snapshot.householdProfile, deviceProfile = deviceProfile,
+          recentTurns = snapshot.aiTurnHistory.takeLast(RECENT_PROMPT_TURNS_LIMIT),
         )
-      } catch (cancel: CancellationException) {
-        throw cancel
-      } catch (err: Throwable) {
-        // Record a secret-redacted diagnostic toast so Ready-mode fallbacks are never silent.
-        fallbackDiagnosticToast = formatAiFallbackToastMessage(err)
-        null
-      }
+        val llmGroundedProposal = try {
+          val rawReply = aiEdgePort.generateText(systemPrompt)
+          AiMenuAdvisorEngine.groundFlexibleLlmTextReply(
+            rawModelOutput = rawReply, userPrompt = cleanPrompt, board = snapshot.weeklyBoard,
+            recipes = effectiveRecipes, catalog = snapshot.ingredients,
+            pantry = snapshot.pantryEntries, householdProfile = snapshot.householdProfile,
+          )
+        } catch (cancel: CancellationException) {
+          throw cancel
+        } catch (err: Throwable) {
+          // Record a secret-redacted diagnostic toast so Ready-mode fallbacks are never silent.
+          fallbackDiagnosticToast = formatAiFallbackToastMessage(err)
+          null
+        }
 
-      if (llmGroundedProposal != null) {
-        val assistantTurn = AiChatTurn(
-          turnId = nextTurnId("asst_llm", reservedForAssistant),
-          role = AiChatRole.ASSISTANT,
-          messageText = llmGroundedProposal.assistantSummary,
-          createdAtIso = nowIso,
-          proposal = llmGroundedProposal,
-          responseSourceLabel = activeSourceLabel,
-        )
-        val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
-        return AiChefTurnOutcome(
-          status = AiTurnResolutionStatus.ON_DEVICE_TEXT_GROUNDED,
-          userTurn = userTurn,
-          assistantTurn = assistantTurn,
-          updatedTurnHistory = history,
-          updatedSnapshot = snapshot.copy(aiTurnHistory = history, updatedAtIso = nowIso),
-        )
+        if (llmGroundedProposal != null) {
+          return coordV2BuildProposalOutcome(
+            snapshot = snapshot, userTurn = userTurn, reservedIds = reservedForAssistant,
+            prefix = "asst_llm", status = AiTurnResolutionStatus.ON_DEVICE_TEXT_GROUNDED,
+            proposal = llmGroundedProposal, sourceLabel = activeSourceLabel, nowIso = nowIso,
+          )
+        }
       }
     }
 
-    // Step 3: 100% offline deterministic pantry-grounded menu & brain-booster advisor fallback.
+    // Step 3: 100% offline deterministic pantry-grounded advisor targeting real todayDayIndex first.
     val fallbackProposal = AiMenuAdvisorEngine.generatePantryGroundedMenuProposal(
-      userPrompt = cleanPrompt,
-      board = snapshot.weeklyBoard,
-      recipes = snapshot.recipes,
-      catalog = snapshot.ingredients,
-      pantry = snapshot.pantryEntries,
+      userPrompt = cleanPrompt, board = snapshot.weeklyBoard, recipes = effectiveRecipes,
+      catalog = snapshot.ingredients, pantry = snapshot.pantryEntries,
       householdAllergens = snapshot.householdProfile.householdAllergens,
-      householdProfile = snapshot.householdProfile,
+      householdProfile = snapshot.householdProfile, todayDayIndex = activeDayIndex,
     )
-    val assistantTurn = AiChatTurn(
-      turnId = nextTurnId("asst_det", reservedForAssistant),
-      role = AiChatRole.ASSISTANT,
-      messageText = fallbackProposal.assistantSummary,
-      createdAtIso = nowIso,
-      proposal = fallbackProposal,
-      responseSourceLabel = SOURCE_LABEL_OFFLINE_ADVISOR,
-    )
-    val history = appendRollingTurns(snapshot.aiTurnHistory, userTurn, assistantTurn)
-    return AiChefTurnOutcome(
-      status = AiTurnResolutionStatus.OFFLINE_DETERMINISTIC_PROPOSAL,
-      userTurn = userTurn,
-      assistantTurn = assistantTurn,
-      updatedTurnHistory = history,
-      updatedSnapshot = snapshot.copy(aiTurnHistory = history, updatedAtIso = nowIso),
-      toastMessage = fallbackDiagnosticToast,
+    return coordV2BuildProposalOutcome(
+      snapshot = snapshot, userTurn = userTurn, reservedIds = reservedForAssistant,
+      prefix = "asst_det", status = AiTurnResolutionStatus.OFFLINE_DETERMINISTIC_PROPOSAL,
+      proposal = fallbackProposal, sourceLabel = SOURCE_LABEL_OFFLINE_ADVISOR,
+      nowIso = nowIso, toastMessage = fallbackDiagnosticToast,
     )
   }
 
   // Apply explicit text-only tool results in one pure pass so persistence stays O(1).
-  private fun applyToolResultToSnapshot(
+  private fun coordV2ApplyToolResultToSnapshot(
     current: KitchenSnapshot,
     toolResult: AiToolCallResult,
     updatedHistory: List<AiChatTurn>,
@@ -661,8 +694,7 @@ class AiChefCoordinator(
   ): KitchenSnapshot =
     when (toolResult.toolName) {
       "restock_pantry_batch" -> {
-        // Upsert any newly synthesized spices/ingredients before merging restocked deltas.
-        val mergedCatalog = upsertCatalogItems(current.ingredients, toolResult.synthesizedCatalogItems)
+        val mergedCatalog = coordV2UpsertCatalogItems(current.ingredients, toolResult.synthesizedCatalogItems)
         val restocked = batchRestockPantry(
           pantry = current.pantryEntries,
           catalog = mergedCatalog,
@@ -679,7 +711,6 @@ class AiChefCoordinator(
         )
       }
       "deplete_pantry_items" -> {
-        // Mark matched Tier-1 items (0.0 / isOutOfStock = true) and Tier-2 staples (StapleStatus.OUT).
         val outIds = toolResult.outOfStockIngredientIds.toSet()
         val catalogById = current.catalogById
         val seenIds = mutableSetOf<String>()
@@ -713,8 +744,7 @@ class AiChefCoordinator(
         )
       }
       "queue_grocery_items" -> {
-        // Upsert synthesized catalog items and append requested IDs onto Smart Grocery List.
-        val mergedCatalog = upsertCatalogItems(current.ingredients, toolResult.synthesizedCatalogItems)
+        val mergedCatalog = coordV2UpsertCatalogItems(current.ingredients, toolResult.synthesizedCatalogItems)
         current.copy(
           ingredients = mergedCatalog,
           aiAddedGroceryIds = current.aiAddedGroceryIds + toolResult.queuedGroceryIngredientIds,
@@ -723,7 +753,6 @@ class AiChefCoordinator(
         )
       }
       "activate_life_event" -> {
-        // Upsert life event by eventId and rescale PLANNED slots to effectiveTargetServings.
         val event = toolResult.activatedLifeEvent
         val updatedProfile = when (event) {
           null -> current.householdProfile
@@ -771,6 +800,7 @@ class AiChefCoordinator(
         }
         current.copy(
           weeklyBoard = updatedBoard,
+          recipes = current.allHouseholdRecipes,
           aiTurnHistory = updatedHistory,
           updatedAtIso = nowIso,
         )
@@ -778,7 +808,7 @@ class AiChefCoordinator(
       else -> current.copy(aiTurnHistory = updatedHistory, updatedAtIso = nowIso)
     }
 
-  private fun upsertCatalogItems(
+  private fun coordV2UpsertCatalogItems(
     existing: List<IngredientCatalogItem>,
     additions: List<IngredientCatalogItem>,
   ): List<IngredientCatalogItem> {
@@ -790,7 +820,7 @@ class AiChefCoordinator(
   }
 
   // Format concise confirmation instructions for the grounded VisualIntakeResult card.
-  private fun formatVisualIntakeMessage(intakeResult: VisualIntakeResult): String {
+  private fun coordV2FormatVisualIntakeMessage(intakeResult: VisualIntakeResult): String {
     val totalCount = intakeResult.groundedRestockDeltas.size + intakeResult.proposedNewCatalogItems.size
     return when {
       totalCount > 0 ->
@@ -801,7 +831,7 @@ class AiChefCoordinator(
   }
 
   // Bound rolling chat history to maxTurnHistorySize and guarantee 100% unique turnIds across restarts.
-  private fun appendRollingTurns(
+  private fun coordV2AppendRollingTurns(
     existing: List<AiChatTurn>,
     userTurn: AiChatTurn,
     assistantTurn: AiChatTurn,
@@ -824,13 +854,13 @@ class AiChefCoordinator(
   }
 
   // Derive concise model provenance badge (e.g., "gemma-4-E2B-it" or "Gemini · gemini-3.8-flash").
-  private fun resolveActiveModelSourceLabel(): String? {
+  private fun coordV2ResolveActiveModelSourceLabel(): String? {
     val ready = aiEdgePort.runtimeState.value as? AiRuntimeState.Ready ?: return null
     return formatAiResponseSourceLabel(ready.capabilities.backendLabel, ready.capabilities.modelName)
   }
 
   // Generate monotonic epoch-backed turn IDs guaranteed never to collide with persisted history.
-  private fun nextTurnId(prefix: String, reservedIds: Set<String> = emptySet()): String {
+  private fun coordV2NextTurnId(prefix: String, reservedIds: Set<String> = emptySet()): String {
     val epochMillis = System.currentTimeMillis()
     while (true) {
       val seq = turnSequence.incrementAndGet()
@@ -849,7 +879,7 @@ class AiChefCoordinator(
     private const val DEFAULT_IMAGE_LABEL: String = "Attached Photo"
 
     // Default pure-JVM file deletion callback removing temporary preprocessed captures safely.
-    private fun defaultDeleteTempFile(filePath: String) {
+    private fun coordV2DefaultDeleteTempFile(filePath: String) {
       if (filePath.isBlank()) return
       runCatching {
         val target = File(filePath)

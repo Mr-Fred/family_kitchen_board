@@ -180,7 +180,7 @@ fun startCookSession(
   val enrichedSteps = rawSteps.mapIndexed { idx, step ->
     val resolvedIds = when {
       step.stepIngredientIds.isNotEmpty() -> step.stepIngredientIds
-      else -> inferStepIngredientIds(step.instruction, recipe.bomLines, catalogById, idx == 0)
+      else -> cookQaInferStepIngredientIds(step.instruction, recipe.bomLines, catalogById, idx == 0)
     }
     step.copy(stepIngredientIds = resolvedIds)
   }
@@ -412,14 +412,16 @@ fun parseCookModeVoiceIntent(transcript: String): CookModeVoiceIntent {
 }
 
 /**
- * Produces a 100% offline, recipe-grounded Sous-Chef answer for a spoken or tapped question on
- * [stepIndex] of [recipe], citing step visual cues, timers, substitutions, and child safety tips.
+ * Produces a 100% offline, recipe- and pantry-grounded Sous-Chef answer for a spoken or tapped
+ * question on [stepIndex] of [recipe], citing in-stock pantry substitutes and quantities first on
+ * missing-ingredient questions without echoing [MorningStep.instruction] verbatim.
  *
  * @param recipe Active [Recipe] in Cook Mode.
  * @param stepIndex 0-based active step index.
  * @param question User question text.
- * @param catalog Optional ingredient catalog resolving substitute options.
+ * @param catalog Optional ingredient catalog resolving display names and substitute groups.
  * @param youngestStage Active child growth stage for choking-safety questions (`EC-08`).
+ * @param pantryEntries Optional live household pantry entries for in-stock substitute resolution.
  * @return Concise grounded Sous-Chef response string.
  */
 fun answerCookStepQuestion(
@@ -428,10 +430,10 @@ fun answerCookStepQuestion(
   question: String,
   catalog: List<IngredientCatalogItem> = emptyList(),
   youngestStage: ChildGrowthStage = ChildGrowthStage.TODDLER_1_2Y,
+  pantryEntries: List<PantryLedgerEntry> = emptyList(),
 ): String {
   val step = recipe.morningSteps.getOrNull(stepIndex.coerceAtLeast(0)) ?: recipe.morningSteps.firstOrNull()
   val lower = question.trim().lowercase()
-  val catalogById = indexCatalogById(catalog)
 
   // 1. Child / toddler choking-safety & texture questions (EC-08).
   if (Regex("toddler|baby|kid|2yo|child|chok|safe|bébé|enfant").containsMatchIn(lower)) {
@@ -439,22 +441,9 @@ fun answerCookStepQuestion(
     return adapted ?: "${youngestStage.badgePrefix}: ${youngestStage.prepGuidance}"
   }
 
-  // 2. Substitution / swap questions during cooking.
-  if (Regex("substitut|swap|instead|replace|remplac|heavy\\s+cream|yogurt").containsMatchIn(lower)) {
-    if (lower.contains("cream") || lower.contains("yogurt") || lower.contains("butter")) {
-      return "Sous-Chef Rule: Temper Plain Greek Yogurt off the heat at the end of the step—it saves ~65 kcal/serving, boosts protein, and prevents curdling."
-    }
-    val subLine = recipe.bomLines.firstOrNull { !it.substituteGroupId.isNullOrBlank() }
-    if (subLine != null) {
-      val group = subLine.substituteGroupId.orEmpty()
-      val alts = catalog.filter { group in it.substituteGroupIds && it.ingredientId != subLine.ingredientId && it.isLocallyAvailable }
-        .take(3).joinToString(", ") { it.displayName }
-      if (alts.isNotEmpty()) {
-        val origName = catalogById[subLine.ingredientId]?.displayName ?: subLine.ingredientId
-        return "You can swap $origName 1:1 in the same base unit with $alts."
-      }
-    }
-    return "Keep moisture and fat balanced: use olive oil for butter or Greek yogurt tempered off-heat for rich dairy."
+  // 2. Missing-ingredient & substitution Q&A grounded in live pantry stock first.
+  if (cookQaIsMissingOrSubstituteQuestion(lower)) {
+    return cookQaResolveMissingOrSubstituteAnswer(recipe, lower, catalog, pantryEntries)
   }
 
   // 3. Pairing / serving / beverage questions.
@@ -496,6 +485,7 @@ fun answerCookStepQuestion(
  * @param transcript Recognized voice transcript.
  * @param catalog Optional ingredient catalog for Q&A grounding.
  * @param youngestStage Active child growth stage for safety Q&A.
+ * @param pantryEntries Optional live pantry ledger entries for in-stock substitute Q&A.
  * @return Updated [CookModeSessionState].
  */
 fun applyVoiceTranscriptToCookSession(
@@ -503,6 +493,7 @@ fun applyVoiceTranscriptToCookSession(
   transcript: String,
   catalog: List<IngredientCatalogItem> = emptyList(),
   youngestStage: ChildGrowthStage = ChildGrowthStage.TODDLER_1_2Y,
+  pantryEntries: List<PantryLedgerEntry> = emptyList(),
 ): CookModeSessionState {
   val clean = transcript.trim()
   if (clean.isEmpty()) return state
@@ -539,13 +530,233 @@ fun applyVoiceTranscriptToCookSession(
           question = intent.question,
           catalog = catalog,
           youngestStage = youngestStage,
+          pantryEntries = pantryEntries,
         ),
       )
   }
 }
 
+private data class CookQaTargetIngredient(
+  val conceptKey: String,
+  val displayLabel: String,
+  val catalogId: String?,
+  val substituteGroups: Set<String>,
+)
+
+// Detect missing-stock or culinary swap prompts in English and French so step text is never echoed.
+private fun cookQaIsMissingOrSubstituteQuestion(lower: String): Boolean =
+  Regex(
+    "out\\s+of|ran\\s+out|don'?t\\s+have|do\\s+not\\s+have|missing|no\\s+more|without|" +
+      "no\\s+[a-z]+\\s+left|substitut|swap|instead|replace|remplac|alternative|sans\\s+|plus\\s+de\\s+",
+  ).containsMatchIn(lower)
+
+// Check in-stock substituteGroupId items and culinary equivalents before generic offline rules.
+private fun cookQaResolveMissingOrSubstituteAnswer(
+  recipe: Recipe,
+  lowerQuestion: String,
+  catalog: List<IngredientCatalogItem>,
+  pantryEntries: List<PantryLedgerEntry>,
+): String {
+  val lookupById = LinkedHashMap<String, IngredientCatalogItem>().apply {
+    LOCAL_MARKET_PRESET_INGREDIENTS.forEach { put(it.ingredientId, it) }
+    catalog.forEach { put(it.ingredientId, it) }
+  }
+  val stockedEntries = pantryEntries.filter(::cookQaIsEntryStocked)
+  val stockedById = stockedEntries.associateBy { it.ingredientId }
+  val target = cookQaIdentifyTargetIngredient(recipe, lowerQuestion, lookupById)
+
+  if (stockedById.isNotEmpty()) {
+    // Priority 1: Check in-stock items sharing an explicit EC-03 substituteGroupId with the missing item.
+    if (target.substituteGroups.isNotEmpty()) {
+      val groupMatch = stockedEntries.firstOrNull { entry ->
+        val item = lookupById[entry.ingredientId]
+        entry.ingredientId != target.catalogId &&
+          item != null &&
+          item.isLocallyAvailable &&
+          item.substituteGroupIds.any { it in target.substituteGroups }
+      }
+      if (groupMatch != null) {
+        val partnerItem = lookupById.getValue(groupMatch.ingredientId)
+        val badge = cookQaFormatStockBadge(groupMatch, partnerItem)
+        return "Use your in-stock ${partnerItem.displayName} ($badge in stock) 1:1 in place of " +
+          "${target.displayLabel}—it belongs to the same culinary group and keeps cook times identical."
+      }
+    }
+
+    // Priority 2: Check curated culinary equivalents currently stocked in the household pantry.
+    for ((candidateId, techniqueNote) in cookQaCulinaryEquivalentsFor(target.conceptKey, target.catalogId)) {
+      if (candidateId == target.catalogId) continue
+      val entry = stockedById[candidateId] ?: continue
+      val item = lookupById[candidateId]
+      val itemName = item?.displayName ?: candidateId.removePrefix("ing_").replace('_', ' ')
+      val badge = cookQaFormatStockBadge(entry, item)
+      return "Use your in-stock $itemName ($badge in stock) in place of ${target.displayLabel}: $techniqueNote"
+    }
+  }
+
+  // Priority 3: Deterministic culinary guidance when pantry context is omitted or equivalents are out.
+  if (lowerQuestion.contains("cream") || lowerQuestion.contains("yogurt") || lowerQuestion.contains("butter")) {
+    return "Sous-Chef Rule: Temper Plain Greek Yogurt off the heat at the end of the step—it saves ~65 kcal/serving, boosts protein, and prevents curdling."
+  }
+  if (target.conceptKey == "coconut_milk") {
+    return "Sous-Chef Rule: Whisk Plain Greek Yogurt or Whole Fresh Milk off the heat with a teaspoon of olive oil or peanut paste to replace coconut milk without curdling."
+  }
+  if (target.conceptKey == "milk") {
+    return "Sous-Chef Rule: Thin Plain Greek Yogurt 1:1 with warm water off-heat, or whisk warm broth with a small pat of butter in place of milk."
+  }
+  val subLine = recipe.bomLines.firstOrNull { line ->
+    !line.substituteGroupId.isNullOrBlank() && (target.catalogId == null || line.ingredientId == target.catalogId)
+  } ?: recipe.bomLines.firstOrNull { !it.substituteGroupId.isNullOrBlank() }
+  if (subLine != null) {
+    val group = subLine.substituteGroupId.orEmpty()
+    val alts = lookupById.values
+      .filter { group in it.substituteGroupIds && it.ingredientId != subLine.ingredientId && it.isLocallyAvailable }
+      .take(3).joinToString(", ") { it.displayName }
+    if (alts.isNotEmpty()) {
+      val origName = lookupById[subLine.ingredientId]?.displayName ?: target.displayLabel
+      return "You can swap $origName 1:1 in the same base unit with $alts."
+    }
+  }
+  return "To replace ${target.displayLabel}, balance moisture and fat gently: use extra-virgin olive oil for pan fats or Plain Greek Yogurt tempered off-heat for creamy sauces."
+}
+
+// Check whether a pantry ledger row represents usable positive stock in the kitchen.
+private fun cookQaIsEntryStocked(entry: PantryLedgerEntry): Boolean =
+  when (entry.tier) {
+    IngredientTier.TIER_2_STAPLE -> !entry.isOutOfStock && entry.stapleStatus != StapleStatus.OUT
+    IngredientTier.TIER_1_QUANTITATIVE -> !entry.isOutOfStock && entry.currentQuantity > 0.0
+  }
+
+// Format stocked pantry quantity or Tier-2 status for spoken and visual Sous-Chef replies.
+private fun cookQaFormatStockBadge(
+  entry: PantryLedgerEntry,
+  item: IngredientCatalogItem?,
+): String =
+  when (entry.tier) {
+    // Tier-2 spices and oils display "Plenty" or "Low" rather than noisy gram counts.
+    IngredientTier.TIER_2_STAPLE -> entry.stapleStatus.name.lowercase().replaceFirstChar { it.uppercaseChar() }
+    // Tier-1 items render exact integer or 1-decimal quantities paired with their wire unit.
+    IngredientTier.TIER_1_QUANTITATIVE -> {
+      val rounded = entry.currentQuantity.roundToInt()
+      val qtyStr = if (kotlin.math.abs(entry.currentQuantity - rounded.toDouble()) < 0.05) {
+        rounded.toString()
+      } else {
+        ((entry.currentQuantity * 10.0).roundToInt() / 10.0).toString()
+      }
+      "$qtyStr ${item?.baseUnit?.wireCode ?: "units"}"
+    }
+  }
+
+// Identify the missing ingredient mentioned in the cook's question and gather its substitute groups.
+private fun cookQaIdentifyTargetIngredient(
+  recipe: Recipe,
+  lower: String,
+  lookupById: Map<String, IngredientCatalogItem>,
+): CookQaTargetIngredient {
+  val bomGroupById = recipe.bomLines
+    .filter { !it.substituteGroupId.isNullOrBlank() }
+    .associate { it.ingredientId to it.substituteGroupId.orEmpty() }
+
+  fun targetFor(concept: String, fallbackLabel: String, id: String?): CookQaTargetIngredient {
+    val item = id?.let { lookupById[it] }
+    val groups = buildSet {
+      item?.substituteGroupIds?.let(::addAll)
+      id?.let { bomGroupById[it]?.let(::add) }
+    }
+    return CookQaTargetIngredient(concept, item?.displayName ?: fallbackLabel, id, groups)
+  }
+
+  return when {
+    lower.contains("coconut milk") || lower.contains("gata") -> targetFor("coconut_milk", "coconut milk", "ing_gata")
+    lower.contains("spinach") || lower.contains("épinard") -> targetFor("leafy_greens", "Fresh Baby Spinach", "ing_spinach")
+    lower.contains("amaranth") || lower.contains("kulitis") -> targetFor("leafy_greens", "Fresh Amaranth Greens", "ing_amaranth_greens")
+    lower.contains("kale") || lower.contains("malunggay") || lower.contains("kangkong") || lower.contains("pechay") ->
+      targetFor("leafy_greens", "leafy greens", null)
+    lower.contains("butter") || lower.contains("beurre") -> targetFor("butter", "Unsalted Creamery Butter", "ing_butter")
+    lower.contains("heavy cream") || lower.contains("cream") -> targetFor("cream", "heavy cream", null)
+    lower.contains("milk") || lower.contains("lait") -> targetFor("milk", "Whole Fresh Milk", "ing_milk")
+    lower.contains("yogurt") -> targetFor("yogurt", "Plain Greek Yogurt", "ing_greek_yogurt")
+    lower.contains("olive oil") -> targetFor("oil", "Extra-Virgin Olive Oil", "ing_olive_oil")
+    lower.contains("palm oil") || lower.contains("zomi") -> targetFor("oil", "Unrefined Zomi Red Palm Oil", "ing_red_palm_oil")
+    lower.contains("plantain") || lower.contains("dodo") || lower.contains("saba") ->
+      targetFor("plantain", "Ripe Yellow Plantains", "ing_plantain")
+    lower.contains("banana") -> targetFor("fruit", "Sweet Ripe Bananas", "ing_banana")
+    lower.contains("lemon") || lower.contains("lime") || lower.contains("calamansi") ->
+      targetFor("citrus", "Fresh Lemons", "ing_lemon")
+    else -> {
+      val matchedBom = recipe.bomLines.firstOrNull { bom ->
+        val name = lookupById[bom.ingredientId]?.displayName?.lowercase().orEmpty()
+        val stem = bom.ingredientId.removePrefix("ing_").replace('_', ' ')
+        (name.isNotEmpty() && lower.contains(name)) || lower.contains(stem)
+      }
+      if (matchedBom != null) {
+        targetFor("bom_item", matchedBom.ingredientId, matchedBom.ingredientId)
+      } else {
+        CookQaTargetIngredient("generic", "that ingredient", null, emptySet())
+      }
+    }
+  }
+}
+
+// Ordered pantry fallback candidates with step-safe culinary instructions per ingredient family.
+private fun cookQaCulinaryEquivalentsFor(
+  conceptKey: String,
+  catalogId: String?,
+): List<Pair<String, String>> =
+  when (conceptKey) {
+    "coconut_milk" -> listOf(
+      "ing_gata" to "pour it in 1:1 over low simmer for rich coconut body.",
+      "ing_greek_yogurt" to "temper it off the heat with 2 tbsp warm cooking liquid so it stays silky without curdling.",
+      "ing_milk" to "warm it gently with a small drizzle of olive oil or butter for creamy body.",
+      "ing_peanut_butter" to "whisk 2 tbsp smooth with warm cooking broth for a velvety West African sauce base.",
+    )
+    "butter" -> listOf(
+      "ing_olive_oil" to "use 3/4 the amount for clean medium-heat searing and basting.",
+      "ing_greek_yogurt" to "fold in off the heat at the end to save ~65 kcal/serving and add protein.",
+      "ing_red_palm_oil" to "warm gently in the pan for rich savory depth.",
+    )
+    "milk", "cream" -> listOf(
+      "ing_greek_yogurt" to "thin 1:1 with warm water and fold in off the heat so it never curdles.",
+      "ing_gata" to "stir in 1:1 over gentle heat as a lush dairy-free cream swap.",
+      "ing_milk" to "use 1:1 over gentle low heat.",
+      "ing_butter" to "whisk a small pat into warm cooking water for smooth richness.",
+    )
+    "yogurt" -> listOf(
+      "ing_milk" to "use a splash over low heat to loosen the sauce.",
+      "ing_gata" to "swirl in off-heat for creamy richness.",
+    )
+    "leafy_greens" -> listOf(
+      "ing_amaranth_greens" to "fold in during the final 2 to 3 minutes until silky and bright.",
+      "ing_spinach" to "wilt in residual pan heat right before plating.",
+      "ing_malunggay_pechay" to "simmer 2 minutes until tender.",
+      "ing_kangkong" to "flash-wilt tender leaves in the final 2 minutes.",
+      "ing_pechay" to "slice stems thin and wilt leaves gently at the end.",
+      "ing_kale" to "ribbon finely and simmer 4 minutes until tender.",
+    )
+    "oil" -> listOf(
+      "ing_olive_oil" to "heat gently for clean pan searing.",
+      "ing_butter" to "melt over medium-low heat so milk solids stay golden.",
+      "ing_red_palm_oil" to "warm lightly as an aromatic stew base.",
+    )
+    "plantain", "fruit" -> listOf(
+      "ing_saba_banana" to "slice on the bias and pan-sear golden 1:1 like plantain Dodo.",
+      "ing_plantain" to "slice and caramelize in a lightly oiled skillet.",
+      "ing_banana" to "sear firm slices briefly or fold in gently.",
+      "ing_sweet_potato" to "dice small and pan-roast until caramelized and tender.",
+    )
+    "citrus" -> listOf(
+      "ing_calamansi" to "squeeze fresh off-heat for bright citrus acidity and iron uptake.",
+      "ing_lemon" to "add fresh juice off-heat right before serving.",
+      "ing_orange" to "use a squeeze of fresh juice to brighten the pan glaze.",
+    )
+    else -> buildList {
+      if (catalogId != "ing_olive_oil") add("ing_olive_oil" to "use a light drizzle to keep pan moisture balanced.")
+      if (catalogId != "ing_greek_yogurt") add("ing_greek_yogurt" to "temper off-heat if you need creamy body.")
+    }
+  }
+
 // Auto-link step ingredient chips by matching BOM display words against step prose.
-private fun inferStepIngredientIds(
+private fun cookQaInferStepIngredientIds(
   instruction: String,
   bomLines: List<BomLine>,
   catalogById: Map<String, IngredientCatalogItem>,
@@ -651,7 +862,7 @@ object CookModeEngine {
   fun parseCookModeVoiceIntent(transcript: String): CookModeVoiceIntent =
     com.familykitchen.board.domain.parseCookModeVoiceIntent(transcript)
 
-  // Grounded offline Sous-Chef step Q&A synthesizer.
+  // Grounded offline Sous-Chef step Q&A synthesizer with live pantry substitute resolution.
   /** Delegates to [com.familykitchen.board.domain.answerCookStepQuestion]. */
   fun answerCookStepQuestion(
     recipe: Recipe,
@@ -659,6 +870,7 @@ object CookModeEngine {
     question: String,
     catalog: List<IngredientCatalogItem> = emptyList(),
     youngestStage: ChildGrowthStage = ChildGrowthStage.TODDLER_1_2Y,
+    pantryEntries: List<PantryLedgerEntry> = emptyList(),
   ): String =
     com.familykitchen.board.domain.answerCookStepQuestion(
       recipe = recipe,
@@ -666,6 +878,7 @@ object CookModeEngine {
       question = question,
       catalog = catalog,
       youngestStage = youngestStage,
+      pantryEntries = pantryEntries,
     )
 
   /** Delegates to [com.familykitchen.board.domain.applyVoiceTranscriptToCookSession]. */
@@ -674,11 +887,13 @@ object CookModeEngine {
     transcript: String,
     catalog: List<IngredientCatalogItem> = emptyList(),
     youngestStage: ChildGrowthStage = ChildGrowthStage.TODDLER_1_2Y,
+    pantryEntries: List<PantryLedgerEntry> = emptyList(),
   ): CookModeSessionState =
     com.familykitchen.board.domain.applyVoiceTranscriptToCookSession(
       state = state,
       transcript = transcript,
       catalog = catalog,
       youngestStage = youngestStage,
+      pantryEntries = pantryEntries,
     )
 }

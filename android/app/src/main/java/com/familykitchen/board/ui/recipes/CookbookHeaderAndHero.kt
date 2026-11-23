@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmark
@@ -32,6 +34,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,34 +54,103 @@ import com.familykitchen.board.ui.theme.EditorialSerifFontFamily
 import com.familykitchen.board.ui.theme.KitchenTheme
 import kotlin.math.roundToInt
 
-// Cookbook browser filter pills, dynamic-height offline gourmet Hero Banner, and offline plain-text
-// ACTION_SEND recipe share helpers for CleanRecipeReaderScreen (zero sparkles, 360dp-scale resilient).
+// Cookbook top back-bar (`All Recipes`), browser filter pills, dynamic-height offline gourmet Hero
+// Banner, and offline plain-text ACTION_SEND recipe share helpers with zero slashes or parentheses.
 
 /**
- * Cookbook browser filter tabs surfaced at the top of `CleanRecipeReaderScreen`.
+ * Cookbook browser filter tabs surfaced inside `CleanRecipeReaderScreen`.
  *
- * @property displayLabel Concise filter pill label.
+ * @property displayLabel Concise filter pill label free of slashes and parentheses.
  */
 enum class CookbookFilterTab(val displayLabel: String) {
+  // Displays the full household recipe library without readiness filtering.
   /** Shows all locally schedulable household recipes. */
   ALL("All"),
 
+  // Filters down to household-bookmarked favorite dishes.
   /** Shows bookmarked favorite recipes (`isSavedFavorite` or in `savedRecipeIds`). */
   SAVED("Saved"),
 
+  // Enforces EC-01 1.4x calibrated morning cap <= 25 minutes.
   /** Shows weekday-eligible breakfasts (`<= 25m` calibrated active cap per `EC-01`). */
-  MORNING_25M("≤25m Breakfast"),
+  MORNING_25M("Quick Breakfast"),
 
+  // Surfaces EC-13 recipes with 0 missing pantry items.
   /** Shows recipes with `100%` of required ingredients currently in stock (`EC-13`). */
-  IN_STOCK_100("100% In Stock"),
+  IN_STOCK_100("Ready Now"),
 
+  // Prioritizes recipes rescuing EXPIRING_SOON or EXPIRED stock.
   /** Shows zero-waste rescue meals consuming `EXPIRING_SOON` or `EXPIRED` pantry stock. */
   EXPIRING_RESCUE("Expiring Rescue"),
 }
 
 /**
- * Horizontal Cookbook filter strip (`All`, `Saved`, `≤25m Breakfast`, `100% In Stock`,
- * `Expiring Rescue`, `+ Custom Meal`) plus non-clipping active recipe selector pills.
+ * Top navigation row inside `CleanRecipeReaderScreen` offering a `48.dp` `All Recipes` back button
+ * returning to `CookbookGridScreen` alongside a quick `Add Recipe` shortcut.
+ */
+@Composable
+internal fun ReaderTopBackBar(
+  onBackToCookbookGrid: () -> Unit,
+  onOpenAddRecipe: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val extendedColors = KitchenTheme.extendedColors
+  // Keep both All Recipes and Add Recipe at >= 48.dp touch target height with 0 slashes.
+  Row(
+    modifier = modifier
+      .fillMaxWidth()
+      .padding(horizontal = 16.dp, vertical = 8.dp),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    // Primary back navigation pill returning to the 2-column CookbookGridScreen.
+    OutlinedButton(
+      onClick = onBackToCookbookGrid,
+      shape = CircleShape,
+      border = BorderStroke(1.dp, extendedColors.borderSubtle),
+      contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+      modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+    ) {
+      Icon(
+        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+        contentDescription = null,
+        tint = extendedColors.herbalSage,
+        modifier = Modifier.size(18.dp),
+      )
+      Spacer(modifier = Modifier.width(6.dp))
+      Text(
+        text = "All Recipes",
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        softWrap = false,
+      )
+    }
+
+    // Secondary quick-launch chip opening the 3-mode AddOrEditRecipeSheet studio.
+    AssistChip(
+      onClick = onOpenAddRecipe,
+      shape = CircleShape,
+      modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+      leadingIcon = {
+        Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+      },
+      label = {
+        Text(
+          text = "Add Recipe",
+          style = MaterialTheme.typography.labelMedium,
+          maxLines = 1,
+          softWrap = false,
+        )
+      },
+    )
+  }
+}
+
+/**
+ * Horizontal Cookbook filter strip (`All`, `Saved`, `Quick Breakfast`, `Ready Now`,
+ * `Expiring Rescue`, `Add Recipe`) plus non-clipping active recipe selector pills.
  */
 @Composable
 internal fun CookbookBrowserHeader(
@@ -92,11 +164,12 @@ internal fun CookbookBrowserHeader(
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
+  // Stack filter tabs above the active recipe pill carousel for quick single-thumb switching.
   Column(
-    modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+    modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
     verticalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    // Pass horizontal padding via contentPadding so pills never clip mid-letter at the screen edge.
+    // Horizontal filter strip keeping 48.dp touch heights across all filter chips.
     LazyRow(
       contentPadding = PaddingValues(horizontal = 16.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -123,6 +196,7 @@ internal fun CookbookBrowserHeader(
           },
         )
       }
+      // Trailing Custom Meal shortcut pill.
       item(key = "custom_meal_action") {
         AssistChip(
           onClick = onOpenCustomMealBuilder,
@@ -143,10 +217,10 @@ internal fun CookbookBrowserHeader(
       }
     }
 
-    // Deduplicate recipe IDs so LazyRow keys never collide when presets & custom meals coexist.
+    // Deduplicate by recipeId before feeding LazyRow keys so duplicate snapshots never crash.
     val uniqueFilteredRecipes = filteredRecipes.distinctBy { it.recipeId }
     if (uniqueFilteredRecipes.isNotEmpty()) {
-      // Apply 16.dp horizontal contentPadding so recipe switcher pills never clip at screen edges.
+      // Secondary carousel letting readers jump between filtered dishes without leaving Reader.
       LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -154,7 +228,6 @@ internal fun CookbookBrowserHeader(
         items(items = uniqueFilteredRecipes, key = { it.recipeId }) { candidate ->
           val isCurrent = candidate.recipeId == activeRecipeId
           val isBookmarked = candidate.isSavedFavorite || candidate.recipeId in savedRecipeIds
-          // Enforce 48.dp touch height and 260.dp max width so multiple dishes peek in viewport.
           Surface(
             onClick = { onSelectRecipe(candidate.recipeId) },
             shape = CircleShape,
@@ -182,7 +255,7 @@ internal fun CookbookBrowserHeader(
                 )
               }
               Text(
-                text = "${candidate.title} (${candidate.calibratedActiveMinutes}m)",
+                text = "${readerHeroSanitize(candidate.title)} · ${candidate.calibratedActiveMinutes}m",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1,
@@ -199,8 +272,7 @@ internal fun CookbookBrowserHeader(
 
 /**
  * Dynamic-height (`heightIn(min = 228.dp)`) offline culinary Hero Banner sizing naturally around
- * `recipe.title` (`maxLines = 3`, `Newsreader` `26.sp`) so elevated `1.35x` font scaling never clips
- * or hides the dish title.
+ * `recipe.title` (`maxLines = 3`, `Newsreader` `26.sp`) so elevated `1.35x` font scaling never clips.
  */
 @Composable
 internal fun RecipeReaderHeroBanner(
@@ -213,15 +285,15 @@ internal fun RecipeReaderHeroBanner(
   val extendedColors = KitchenTheme.extendedColors
   val surfaceColor = MaterialTheme.colorScheme.surface
 
-  // Dynamic heightIn(min = 228.dp) grows naturally on 3-line titles instead of clipping at fixed 288.dp.
+  // Use heightIn(min = 228.dp) rather than fixed height so 3-line titles at 1.35x never clip.
   Box(
     modifier = modifier
       .fillMaxWidth()
       .heightIn(min = 228.dp),
   ) {
-    // 100% offline procedural cast-iron & warm botanical culinary artwork matching parent height.
+    // Offline warm procedural culinary hero backdrop (zero cold blue or purple hexes).
     Canvas(modifier = Modifier.matchParentSize()) {
-      // Mandatory zero-dimension Canvas guard preventing zero/negative radius draws.
+      // Mandatory zero-dimension Canvas guard preventing zero or negative radius draws.
       if (size.width <= 0f || size.height <= 0f) return@Canvas
       drawRect(
         brush = Brush.linearGradient(
@@ -235,17 +307,19 @@ internal fun RecipeReaderHeroBanner(
           end = Offset(size.width, size.height),
         ),
       )
-      // Ambient golden warmth, cast-iron skillet shadow, and terracotta reduction glaze accents.
+      // Soft golden-hour highlight glow in the upper right quadrant.
       drawCircle(
         color = Color(0x33FDE68A),
         radius = size.minDimension * 0.46f,
         center = Offset(size.width * 0.72f, size.height * 0.34f),
       )
+      // Subtle ceramic shadow grounding the plate silhouette.
       drawCircle(
         color = Color(0x44161C27),
         radius = size.minDimension * 0.42f,
         center = Offset(size.width * 0.48f, size.height * 0.52f),
       )
+      // Warm terracotta glaze center accent.
       drawCircle(
         color = Color(0x55E06D53),
         radius = size.minDimension * 0.24f,
@@ -253,7 +327,7 @@ internal fun RecipeReaderHeroBanner(
       )
     }
 
-    // Bottom gradient blending hero illustration seamlessly into the warm linen surface.
+    // Bottom scrim blending smoothly into MaterialTheme.colorScheme.surface for WCAG AA contrast.
     Box(
       modifier = Modifier
         .matchParentSize()
@@ -267,12 +341,11 @@ internal fun RecipeReaderHeroBanner(
         ),
     )
 
-    // Dynamic Column guarantees top actions and bottom 3-line title never overlap or clip.
     Column(
       modifier = Modifier.fillMaxWidth(),
       verticalArrangement = Arrangement.SpaceBetween,
     ) {
-      // Top row: concise culinary difficulty badge + 48.dp Bookmark & Share buttons (zero sparkles).
+      // Top hero action row: active time + difficulty pill, 48.dp Bookmark, and 48.dp Share.
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -280,7 +353,6 @@ internal fun RecipeReaderHeroBanner(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        // Warm parchment pill surfacing calibrated active time + difficulty level.
         Surface(
           shape = CircleShape,
           color = extendedColors.parchment.copy(alpha = 0.94f),
@@ -298,7 +370,6 @@ internal fun RecipeReaderHeroBanner(
           )
         }
 
-        // Right-hand 48.dp Bookmark and Offline Share circular buttons.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           Surface(
             shape = CircleShape,
@@ -336,21 +407,23 @@ internal fun RecipeReaderHeroBanner(
 
       Spacer(modifier = Modifier.height(68.dp))
 
-      // Bottom title block sizing naturally around up to 3 lines of Newsreader serif typography.
+      // Bottom hero editorial stack: sanitized attribution + Newsreader 26.sp title.
       Column(
         modifier = Modifier
           .fillMaxWidth()
           .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        // Source attribution + cuisine pill in warm parchment above the editorial headline.
+        // Warm parchment origin pill highlighting cuisine and household source attribution.
         Surface(
           shape = CircleShape,
           color = extendedColors.parchment,
           border = BorderStroke(1.dp, extendedColors.borderSubtle),
         ) {
+          // Strip slashes and parentheses from legacy seed attributions before display.
+          val cleanOrigin = readerHeroSanitize("${recipe.sourceAttribution} · ${recipe.cuisineTag}")
           Text(
-            text = "${recipe.sourceAttribution} · ${recipe.cuisineTag}",
+            text = cleanOrigin,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = extendedColors.herbalSage,
@@ -360,7 +433,7 @@ internal fun RecipeReaderHeroBanner(
           )
         }
 
-        // Newsreader 26.sp / 32.sp headline guaranteed visible at 1.35x display/font scaling.
+        // Newsreader display headline capped at 3 clean lines.
         Text(
           text = recipe.title,
           style = MaterialTheme.typography.displaySmall.copy(
@@ -377,24 +450,36 @@ internal fun RecipeReaderHeroBanner(
   }
 }
 
+// Replaces slashes and strips parentheses so UI badges stay 100% punctuation-clean.
+private fun readerHeroSanitize(raw: String): String =
+  raw
+    .replace(" / ", " and ")
+    .replace("/", " · ")
+    .replace("(", "")
+    .replace(")", "")
+    .replace(Regex("\\s+"), " ")
+    .trim()
+
 // Dispatches an offline Android ACTION_SEND text chooser with scaled BOM quantities and steps.
 internal fun shareRecipeOffline(
   context: Context,
   recipe: Recipe,
   catalogById: Map<String, IngredientCatalogItem>,
 ) {
-  // Format scaled BOM lines and numbered steps into a clean plain-text message card.
+  // Format each BOM line with clean integer/fractional numbers and wire units.
   val ingredientsBlock = recipe.bomLines.joinToString("\n") { line ->
     val item = catalogById[line.ingredientId]
     val qty = formatCleanNumber(line.baseQuantity)
     "- $qty ${item?.baseUnit?.wireCode ?: "units"} ${item?.displayName ?: line.ingredientId}"
   }
+  // Format numbered cooking method steps for plain-text offline messaging apps.
   val stepsBlock = recipe.morningSteps.joinToString("\n") { step ->
     "${step.stepNumber}. ${step.effectiveTitle}: ${step.instruction}"
   }
+  // Assemble complete shareable recipe card without requiring cloud links.
   val body = buildString {
-    appendLine("${recipe.title} (${recipe.baseServings} servings • ${recipe.caloriesPerServing} kcal/srv)")
-    appendLine("Prep: ${recipe.rawPrepMinutes}m | Cook: ${recipe.cookMinutes}m")
+    appendLine("${recipe.title} · ${recipe.baseServings} servings · ${recipe.caloriesPerServing} kcal per serving")
+    appendLine("Prep: ${recipe.rawPrepMinutes}m · Cook: ${recipe.cookMinutes}m")
     appendLine()
     appendLine("Ingredients:")
     appendLine(ingredientsBlock)
@@ -402,7 +487,7 @@ internal fun shareRecipeOffline(
     appendLine("Method:")
     append(stepsBlock)
   }
-  // Wrap startActivity in runCatching so headless preview/test contexts never throw ActivityNotFoundException.
+  // Wrap startActivity in runCatching so headless preview or test contexts never throw.
   runCatching {
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
       type = "text/plain"

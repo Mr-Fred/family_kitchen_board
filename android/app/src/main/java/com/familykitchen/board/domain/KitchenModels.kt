@@ -299,6 +299,7 @@ fun defaultPackagePriceUsdFor(
  * @property defaultShelfLifeDays Baseline post-purchase freshness window in days.
  * @property estimatedPackagePriceUsd Estimated package price in active household currency (`PHP` `₱` baseline; field name kept for wire compatibility).
  * @property optimalPrepHint Optional culinary suggestion surfaced on expiring Smart Pantry cards.
+ * @property preferredVenue Optional shopper override routing this item to `Palengke` vs `Supermarket`.
  */
 @Serializable
 data class IngredientCatalogItem(
@@ -315,6 +316,7 @@ data class IngredientCatalogItem(
   val defaultShelfLifeDays: Int = defaultShelfLifeDaysFor(category, tier),
   val estimatedPackagePriceUsd: Double = defaultPackagePriceUsdFor(category, tier),
   val optimalPrepHint: String? = null,
+  val preferredVenue: MarketVenue? = null,
 ) {
   /** Convenience secondary constructor accepting integer package quantities in tests and presets. */
   constructor(
@@ -449,6 +451,9 @@ data class MorningStep(
  * @property chefNote Optional culinary technique or make-ahead note for Clean Recipe Reader.
  * @property chefPairingNote Optional family-friendly beverage or side pairing suggestion.
  * @property isSavedFavorite Whether the household bookmarked this recipe in Clean Reader / AI Chef.
+ * @property parentRecipeId Optional source `recipeId` when forked as a household variation.
+ * @property isUserCreated `true` when created, imported, or forked by the household.
+ * @property cuisineTags Multi-tradition tags driving preferred-cuisine ranking and Cookbook filters.
  */
 @Serializable
 data class Recipe(
@@ -478,6 +483,9 @@ data class Recipe(
   val chefNote: String? = null,
   val chefPairingNote: String? = null,
   val isSavedFavorite: Boolean = false,
+  val parentRecipeId: String? = null,
+  val isUserCreated: Boolean = false,
+  val cuisineTags: List<String> = emptyList(),
 )
 
 /**
@@ -559,6 +567,9 @@ data class PantryLedgerEntry(
  * @property status Lifecycle status (`PLANNED` reserves BOM; `COOKED`/`COMPLETED_SKIPPED` reserve 0).
  * @property isPreppedAhead Whether station-grouped weekly prep has been completed for this slot.
  * @property preppedTimeSavedMinutes Active cook-time reduction earned from weekly batch prep.
+ * @property isPinned When `true`, weekly rollover retains this slot on its `(dayIndex, slotType)`.
+ * @property skipReason Optional explicit reason (`ATE_LEFTOVERS`, `EATING_OUT`, `SKIPPED`) on skip.
+ * @property leftoverSourceRecipeId Non-null when this slot consumes `0`-BOM batch-cooked leftovers.
  */
 @Serializable
 data class MealSlot(
@@ -572,6 +583,9 @@ data class MealSlot(
   val status: MealSlotStatus = MealSlotStatus.PLANNED,
   val isPreppedAhead: Boolean = false,
   val preppedTimeSavedMinutes: Int = 0,
+  val isPinned: Boolean = false,
+  val skipReason: SlotSkipReason? = null,
+  val leftoverSourceRecipeId: String? = null,
 )
 
 /**
@@ -920,6 +934,7 @@ data class CustomGroceryItem(
  * @property isChecked Whether this item is checked off in `KitchenSnapshot.checkedGroceryItemIds`.
  * @property isQuantityOverridden `true` when the shopper customized the buy amount away from plan.
  * @property plannedRestockQuantity Un-overridden whole-package quantity required by the meal plan.
+ * @property marketVenue Resolved `Palengke` vs `Supermarket` shopping venue for store-split filtering.
  */
 @Serializable
 data class GroceryListItem(
@@ -942,6 +957,7 @@ data class GroceryListItem(
   val isChecked: Boolean = false,
   val isQuantityOverridden: Boolean = false,
   val plannedRestockQuantity: Double = restockQuantity,
+  val marketVenue: MarketVenue = MarketVenue.SUPERMARKET,
 ) {
   /** Currency-neutral alias for [estimatedCostUsd] (`PHP` `₱` default). */
   val estimatedCost: Double
@@ -1075,6 +1091,7 @@ sealed interface GroceryAndCatalogEditAction {
  * @property deduplicationSavingsUsd Estimated amount saved by automatic pantry deduplication (`PHP` `₱` baseline).
  * @property plannedMealCount Active `PLANNED` meal slots evaluated across the 7-day board.
  * @property estimatedTotalCostUsd Estimated total for remaining unchecked grocery items (`PHP` `₱` baseline).
+ * @property skippedStockedItems Transparent summaries of planned items 100% covered by Pantry stock.
  */
 @Serializable
 data class WeeklyGroceryDiff(
@@ -1087,6 +1104,7 @@ data class WeeklyGroceryDiff(
   val deduplicationSavingsUsd: Double = 0.0,
   val plannedMealCount: Int = 0,
   val estimatedTotalCostUsd: Double = 0.0,
+  val skippedStockedItems: List<SkippedPantryItemSummary> = emptyList(),
 ) {
   /** Currency-neutral alias for [deduplicationSavingsUsd]. */
   val deduplicationSavings: Double

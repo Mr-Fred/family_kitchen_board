@@ -347,14 +347,24 @@ class KitchenExportAndPdfLayoutTest {
     )
     assertValidMultiPageA4Plan(pantryPages)
 
-    // 3. Paginate a full multi-section Grocery List from an EMPTY_KITCHEN 21-slot weekly board.
+    // 3. Paginate a full multi-section Grocery List from an EMPTY_KITCHEN 0-stock pantry + 21-slot board.
     val emptyKitchenOutcome = computeFirstRunOnboardingOutcome(
       catalog = seed.ingredients, recipes = seed.recipes, seedPantry = seed.initialPantry,
       currentBoard = WeeklyBoard("board_shop", "household_family_4", "2026-10-26", emptyList()),
       draft = FirstRunOnboardingDraft(pantryMode = StartingPantryMode.EMPTY_KITCHEN),
     )
+    val draftedTwentyOneSlotBoard = MenuPlannerEngine.autoDraftWeeklyBoard(
+      boardId = "board_shop",
+      householdId = "household_family_4",
+      weekStartDateIso = "2026-10-26",
+      recipes = seed.recipes,
+      catalog = seed.ingredients,
+      householdAllergens = emptyKitchenOutcome.householdProfile.householdAllergens,
+      defaultServings = emptyKitchenOutcome.householdProfile.effectiveTargetServings,
+      pantry = emptyKitchenOutcome.pantryEntries,
+    )
     val fullWeekDiff = GroceryDiffEngine.computeWeeklyGroceryDiff(
-      emptyKitchenOutcome.weeklyBoard, seed.recipes, seed.ingredients, emptyKitchenOutcome.pantryEntries,
+      draftedTwentyOneSlotBoard, seed.recipes, seed.ingredients, emptyKitchenOutcome.pantryEntries,
     )
     val groceryDoc = buildGroceryExportDocument(
       groceryDiff = fullWeekDiff,

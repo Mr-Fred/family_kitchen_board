@@ -472,16 +472,18 @@ private fun executeExpiringPantrySlice(snapshot: KitchenDomainToolState, call: A
   )
 }
 
-// Tool 2: Member nutrition goals, allergens, child growth stages, and active life events.
+// Tool 2: Member nutrition goals, preferred cuisines, market region, allergens, and life events.
 private fun executeFamilyGoalsAndEvents(snapshot: KitchenDomainToolState, elephantMemory: HouseholdElephantMemory): AdkToolResult {
   val profile = snapshot.householdProfile
   val memberFacts = selectRelevantElephantFacts(elephantMemory, GoldfishAgentRole.MENU_NUTRITION_SPECIALIST, maxFacts = 3)
   val payloadObj = buildJsonObject {
     put("householdName", profile.householdName)
+    put("marketRegionLabel", profile.marketRegionLabel)
     put("effectiveTargetServings", profile.effectiveTargetServings)
     put("fredMorningCapMinutes", profile.fredMorningCapMinutes)
     put("youngestStage", profile.youngestStage.name)
     put("youngestPrepGuidance", profile.youngestStage.prepGuidance)
+    putJsonArray("preferredCuisines") { profile.preferredCuisines.forEach { add(JsonPrimitive(it)) } }
     putJsonArray("householdAllergens") { profile.householdAllergens.forEach { add(JsonPrimitive(it)) } }
     putJsonArray("members") {
       for (m in profile.members) {
@@ -513,7 +515,7 @@ private fun executeFamilyGoalsAndEvents(snapshot: KitchenDomainToolState, elepha
   }
   return AdkToolResult(
     toolName = "get_family_goals_and_events",
-    summaryText = "${profile.members.size} member goal(s), allergens=${profile.householdAllergens}, youngest=${profile.youngestStage.shortLabel}.",
+    summaryText = "${profile.members.size} member goal(s), cuisines=${profile.preferredCuisines}, market=${profile.marketRegionLabel}, allergens=${profile.householdAllergens}.",
     payloadJson = payloadObj.toString(),
   )
 }
@@ -555,29 +557,34 @@ private fun executeWeeklyBoardDishes(snapshot: KitchenDomainToolState, call: Adk
   return AdkToolResult("get_weekly_board_dishes", summaryText = "Resolved ${matchedSlots.size} board slot(s) ($preview).", payloadJson = payloadObj.toString())
 }
 
-// Tool 4: Searches schedulable recipes enforcing EC-01 <=25m breakfast cap and EC-02/EC-03 swaps.
+// Tool 4: Searches schedulable recipes enforcing EC-01/EC-02/EC-03 and ranking preferred cuisines + rescues first.
 private fun executeSearchSchedulableRecipes(snapshot: KitchenDomainToolState, call: AdkToolCall): AdkToolResult {
   val requestedSlot = call.arguments["slotType"]?.trim()?.uppercase()?.let { raw -> MealSlotType.entries.find { it.name == raw } }
   val explicitMaxMin = call.arguments["maxActiveMinutes"]?.toIntOrNull()
   val mustUseId = call.arguments["mustUseIngredientId"]?.trim()?.takeIf { it.isNotEmpty() }
-  val limit = call.arguments["limit"]?.toIntOrNull()?.coerceIn(1, 20) ?: 8
-  val morningCap = min(MAX_WEEKDAY_BREAKFAST_MINUTES, snapshot.householdProfile.fredMorningCapMinutes.coerceAtLeast(1))
+  val limit = call.arguments["limit"]?.toIntOrNull()?.coerceIn(1, 20) ?: 10
+  val profile = snapshot.householdProfile
+  val morningCap = min(MAX_WEEKDAY_BREAKFAST_MINUTES, profile.fredMorningCapMinutes.coerceAtLeast(1))
+  val catalogById = indexCatalogById(snapshot.ingredients)
+  val pantryById = indexPantryById(snapshot.pantryEntries)
 
-  // filterSchedulableRecipes enforces EC-02 allergen/market gate & EC-03 substituteGroupId rewrites.
-  val schedulable = filterSchedulableRecipes(snapshot.recipes, snapshot.ingredients, snapshot.householdProfile.householdAllergens, snapshot.pantryEntries)
-  val filtered = schedulable.filter { recipe ->
-    val calibrated = computeCalibratedMorningMinutes(recipe)
-    val slotOk = requestedSlot == null || (requestedSlot in recipe.allowedSlots && (requestedSlot != MealSlotType.BREAKFAST || calibrated <= morningCap))
+  // Strictly enforce EC-02 allergen/local-market gate and EC-03 substituteGroupId BOM rewrites.
+  val filtered = snapshot.recipes.mapNotNull { rawRecipe ->
+    val availability = evaluateRecipeAvailability(rawRecipe, catalogById, profile.householdAllergens, pantryById)
+    if (!availability.isSchedulable) return@mapNotNull null
+    val resolved = rawRecipe.copy(bomLines = availability.resolvedBomLines)
+    val calibrated = computeCalibratedMorningMinutes(resolved)
+    val slotOk = requestedSlot == null || (requestedSlot in resolved.allowedSlots && (requestedSlot != MealSlotType.BREAKFAST || calibrated <= morningCap))
     val timeOk = explicitMaxMin == null || calibrated <= explicitMaxMin
-    val ingOk = mustUseId == null || recipe.bomLines.any { it.ingredientId == mustUseId }
-    slotOk && timeOk && ingOk
-  }.map { recipe ->
-    recipe to evaluateRecipePantryMatch(
-      recipe, snapshot.pantryEntries, snapshot.ingredients,
-      snapshot.householdProfile.effectiveTargetServings, snapshot.householdProfile.householdAllergens,
-    )
+    val ingOk = mustUseId == null || resolved.bomLines.any { it.ingredientId == mustUseId }
+    if (!slotOk || !timeOk || !ingOk) return@mapNotNull null
+    val match = evaluateRecipePantryMatch(resolved, snapshot.pantryEntries, snapshot.ingredients, profile.effectiveTargetServings, profile.householdAllergens)
+    val cuisineHit = doesRecipeMatchPreferredCuisines(resolved, profile.preferredCuisines)
+    val nativeLocalBonus = if (availability.substitutionsApplied.isEmpty()) 1 else 0
+    Triple(resolved, match, (if (cuisineHit) 50 else 0) + (if (match.rescuedExpiringIngredientIds.isNotEmpty()) 35 else 0) + nativeLocalBonus)
   }.sortedWith(
-    compareByDescending<Pair<Recipe, RecipePantryMatchSummary>> { it.second.rescuedExpiringIngredientIds.size }
+    compareByDescending<Triple<Recipe, RecipePantryMatchSummary, Int>> { it.third }
+      .thenByDescending { it.second.rescuedExpiringIngredientIds.size }
       .thenByDescending { it.second.matchPercentage }
       .thenBy { computeCalibratedMorningMinutes(it.first) },
   ).take(limit)
@@ -585,11 +592,12 @@ private fun executeSearchSchedulableRecipes(snapshot: KitchenDomainToolState, ca
   val payloadObj = buildJsonObject {
     put("count", filtered.size)
     putJsonArray("recipes") {
-      for ((recipe, match) in filtered) {
+      for ((recipe, match, _) in filtered) {
         add(
           buildJsonObject {
             put("recipeId", recipe.recipeId)
             put("title", recipe.title)
+            put("matchesPreferredCuisine", doesRecipeMatchPreferredCuisines(recipe, profile.preferredCuisines))
             put("calibratedActiveMinutes", computeCalibratedMorningMinutes(recipe))
             put("pantryMatchPercentage", match.matchPercentage)
             put("proteinGrams", recipe.proteinGrams)

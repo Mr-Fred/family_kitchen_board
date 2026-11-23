@@ -1,12 +1,15 @@
 package com.familykitchen.board.data
 
 import android.content.Context
+import com.familykitchen.board.domain.DEFAULT_STARTER_MENU_TEMPLATES
 import com.familykitchen.board.domain.SchemaValidator
 import com.familykitchen.board.domain.SeedCatalogDataset
 import com.familykitchen.board.domain.ValidationException
+import com.familykitchen.board.domain.mergeHeritageRecipesIntoLibrary
 import com.familykitchen.board.domain.migrateUntangledCatalogData
 import com.familykitchen.board.ports.KitchenSnapshot
 import com.familykitchen.board.ports.KitchenStoragePort
+import com.familykitchen.board.ports.storageV2SupportsHeritageLibrary
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -29,8 +32,8 @@ import kotlinx.serialization.json.Json
  * Offline-first persistent implementation of [KitchenStoragePort] backed by an atomic JSON snapshot
  * file (`kitchen_snapshot_v1.json`) inside app-private storage (`Context.filesDir`).
  *
- * Every cooked meal deduction, Smart Grocery restock, weekly station-prep commit, or AI Chef
- * proposal update executes inside [storageMutex] as a **single `O(1)` atomic batch write**:
+ * Every cooked meal deduction, Smart Grocery restock, unpack batch, weekly station-prep commit, or
+ * AI Chef proposal update executes inside [storageMutex] as a **single `O(1)` atomic batch write**:
  * 1. Serializes the complete [KitchenSnapshot] to `kitchen_snapshot_v1.json.tmp`,
  * 2. Flushes and syncs the OS file descriptor (`fd.sync()`) to survive sudden power loss,
  * 3. Atomically renames `.tmp` over `kitchen_snapshot_v1.json` (with safe overwrite copy fallback),
@@ -90,8 +93,9 @@ class LocalJsonKitchenStorage(
    * Loads the existing persisted [KitchenSnapshot] from [snapshotFile], or initializes and persists
    * a fresh snapshot from [seedCatalog] when starting cold (or recovering from corrupt disk state).
    *
-   * Cold-start seeding does not increment [batchWriteCallCount] so user mutation counters start at
-   * `0` after app launch.
+   * Cold-start seeding and silent v2 schema upgrades (`migrateUntangledCatalogData`, starter
+   * `savedMenus`, and canonical heritage recipes) do not increment [batchWriteCallCount] so user
+   * mutation counters always start at `0` after app launch.
    *
    * @param seedCatalog Validated offline seed catalog dataset.
    * @return Loaded or freshly seeded [KitchenSnapshot].
@@ -108,27 +112,20 @@ class LocalJsonKitchenStorage(
           // Detect whether a durable snapshot file existed prior to cold-start evaluation.
           val hadExistingFile = targetFile.isFile && targetFile.length() > 0L
           val existingSnapshot = when {
-            hadExistingFile -> tryReadExistingSnapshot(targetFile)
+            hadExistingFile -> storageV2TryReadExistingSnapshot(targetFile)
             else -> null
           }
           when {
             existingSnapshot != null -> {
-              // Seamlessly untangle legacy bundled catalog names & append 0-stock seed partners
-              // without incrementing user batchWriteCallCount telemetry.
-              val migration = migrateUntangledCatalogData(
-                ingredients = existingSnapshot.ingredients,
-                pantryEntries = existingSnapshot.pantryEntries,
-                recipes = existingSnapshot.recipes,
+              // Seamlessly upgrade legacy bundled catalog names, starter savedMenus, and canonical
+              // 12-dish heritage recipes without incrementing user batchWriteCallCount telemetry.
+              val (upgradedSnapshot, didUpgrade) = storageV2UpgradeExistingSnapshot(
+                existingSnapshot = existingSnapshot,
                 seedCatalog = seedCatalog,
               )
               when {
-                migration.didMutate -> {
-                  val upgradedSnapshot = existingSnapshot.copy(
-                    ingredients = migration.ingredients,
-                    pantryEntries = migration.pantryEntries,
-                    recipes = migration.recipes,
-                  )
-                  writeSnapshotAtomicallyLocked(upgradedSnapshot, incrementWriteCounter = false)
+                didUpgrade -> {
+                  storageV2WriteSnapshotAtomicallyLocked(upgradedSnapshot, incrementWriteCounter = false)
                   mutableSnapshotFlow.value = upgradedSnapshot
                   upgradedSnapshot
                 }
@@ -146,7 +143,7 @@ class LocalJsonKitchenStorage(
                 seedCatalog = seedCatalog,
                 hasCompletedOnboarding = hadExistingFile,
               )
-              writeSnapshotAtomicallyLocked(seeded, incrementWriteCounter = false)
+              storageV2WriteSnapshotAtomicallyLocked(seeded, incrementWriteCounter = false)
               seeded
             }
           }
@@ -167,7 +164,7 @@ class LocalJsonKitchenStorage(
     try {
       storageMutex.withLock {
         withContext(ioDispatcher) {
-          writeSnapshotAtomicallyLocked(snapshot, incrementWriteCounter = true)
+          storageV2WriteSnapshotAtomicallyLocked(snapshot, incrementWriteCounter = true)
         }
       }
     } catch (cancel: CancellationException) {
@@ -188,7 +185,7 @@ class LocalJsonKitchenStorage(
         withContext(ioDispatcher) {
           SchemaValidator.validateSeedCatalogDataset(seedCatalog)
           val restored = KitchenSnapshot.fromSeedCatalog(seedCatalog)
-          writeSnapshotAtomicallyLocked(restored, incrementWriteCounter = true)
+          storageV2WriteSnapshotAtomicallyLocked(restored, incrementWriteCounter = true)
           restored
         }
       }
@@ -197,23 +194,57 @@ class LocalJsonKitchenStorage(
     }
   }
 
+  // Upgrade legacy bundled catalog items, empty savedMenus, and canonical heritage recipes cleanly.
+  private fun storageV2UpgradeExistingSnapshot(
+    existingSnapshot: KitchenSnapshot,
+    seedCatalog: SeedCatalogDataset,
+  ): Pair<KitchenSnapshot, Boolean> {
+    val migration = migrateUntangledCatalogData(
+      ingredients = existingSnapshot.ingredients,
+      pantryEntries = existingSnapshot.pantryEntries,
+      recipes = existingSnapshot.recipes,
+      seedCatalog = seedCatalog,
+    )
+    val baseRecipes = migration.recipes
+    val upgradedRecipes = when {
+      storageV2SupportsHeritageLibrary(migration.ingredients) ->
+        mergeHeritageRecipesIntoLibrary(baseRecipes)
+      else -> baseRecipes
+    }
+    val upgradedMenus = existingSnapshot.savedMenus.ifEmpty { DEFAULT_STARTER_MENU_TEMPLATES }
+    val didUpgrade = migration.didMutate ||
+      upgradedRecipes.size != existingSnapshot.recipes.size ||
+      existingSnapshot.savedMenus.isEmpty()
+
+    val next = when {
+      didUpgrade -> existingSnapshot.copy(
+        ingredients = migration.ingredients,
+        pantryEntries = migration.pantryEntries,
+        recipes = upgradedRecipes,
+        savedMenus = upgradedMenus,
+      )
+      else -> existingSnapshot
+    }
+    return next to didUpgrade
+  }
+
   // Attempt strict JSON decode + domain validation; heal duplicate turn IDs or return null if corrupt.
-  private fun tryReadExistingSnapshot(file: File): KitchenSnapshot? =
+  private fun storageV2TryReadExistingSnapshot(file: File): KitchenSnapshot? =
     try {
       val rawJson = file.readText(Charsets.UTF_8)
       if (rawJson.isBlank()) {
         null
       } else {
         val decoded = jsonCodec.decodeFromString(KitchenSnapshot.serializer(), rawJson)
-        validateSnapshotBoundary(decoded)
-        sanitizeSnapshotTurnIds(decoded)
+        storageV2ValidateSnapshotBoundary(decoded)
+        storageV2SanitizeSnapshotTurnIds(decoded)
       }
     } catch (_: Throwable) {
       null
     }
 
   // Deduplicate any legacy colliding aiTurnHistory keys so LazyColumn never crashes after app update.
-  private fun sanitizeSnapshotTurnIds(snapshot: KitchenSnapshot): KitchenSnapshot {
+  private fun storageV2SanitizeSnapshotTurnIds(snapshot: KitchenSnapshot): KitchenSnapshot {
     if (snapshot.aiTurnHistory.size <= 1) return snapshot
     val seenIds = mutableSetOf<String>()
     var mutated = false
@@ -237,11 +268,11 @@ class LocalJsonKitchenStorage(
   }
 
   // Core O(1) atomic persistence routine: validate -> write .tmp -> fsync -> rename -> emit StateFlow.
-  private fun writeSnapshotAtomicallyLocked(
+  private fun storageV2WriteSnapshotAtomicallyLocked(
     snapshot: KitchenSnapshot,
     incrementWriteCounter: Boolean,
   ) {
-    validateSnapshotBoundary(snapshot)
+    storageV2ValidateSnapshotBoundary(snapshot)
     if (!storageDirectory.exists() && !storageDirectory.mkdirs() && !storageDirectory.isDirectory) {
       throw ValidationException(
         message = "Unable to create offline storage directory '${storageDirectory.name}'.",
@@ -286,9 +317,10 @@ class LocalJsonKitchenStorage(
     }
   }
 
-  // Verify board slot bounds, catalog items, and non-negative pantry quantities prior to disk commit.
-  private fun validateSnapshotBoundary(snapshot: KitchenSnapshot) {
+  // Verify board slot bounds, optional nextWeekBoard, catalog items, and non-negative pantry quantities.
+  private fun storageV2ValidateSnapshotBoundary(snapshot: KitchenSnapshot) {
     SchemaValidator.validateWeeklyBoard(snapshot.weeklyBoard)
+    snapshot.nextWeekBoard?.let(SchemaValidator::validateWeeklyBoard)
     snapshot.ingredients.forEach(SchemaValidator::validateIngredientCatalogItem)
     snapshot.pantryEntries.forEach { entry ->
       SchemaValidator.validatePantryLedgerEntry(entry)

@@ -125,16 +125,16 @@ enum class CustomUnitChoice(
   val suggestedPackageQty: Int,
 ) {
   /** Quantitative weight tracking in grams (`±100 g` Fridge Pulse step). */
-  GRAM("Grams (g)", IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 500),
+  GRAM("Grams · g", IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 500),
 
   /** Quantitative liquid volume tracking in milliliters (`±100 ml` Fridge Pulse step). */
-  MILLILITER("Milliliters (ml)", IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.MILLILITER, 500),
+  MILLILITER("Milliliters · ml", IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.MILLILITER, 500),
 
   /** Discrete countable unit tracking (`±1 count` Fridge Pulse step). */
-  COUNT("Count (items)", IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 6),
+  COUNT("Count · items", IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 6),
 
   /** Tri-state kitchen staple (`PLENTY | LOW | OUT`, never auto-deducted gram-by-gram). */
-  TIER_2_STAPLE("Staple (Plenty/Low/Out)", IngredientTier.TIER_2_STAPLE, BaseUnit.MILLILITER, 250),
+  TIER_2_STAPLE("Staple · Plenty · Low · Out", IngredientTier.TIER_2_STAPLE, BaseUnit.MILLILITER, 250),
 }
 
 // Destination routed when a user taps one of the 1-tap local-market preset chips.
@@ -237,7 +237,7 @@ fun AddIngredientCard(
               overflow = TextOverflow.Ellipsis,
             )
             Text(
-              text = "$presetCount local presets · Fridge / Pantry / Freezer",
+              text = "$presetCount local presets · Fridge · Pantry · Freezer",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               maxLines = 1,
@@ -276,7 +276,7 @@ fun AddIngredientCard(
             OutlinedTextField(
               value = packageQtyInput,
               onValueChange = { next -> if (next.all { ch -> ch.isDigit() || ch == '.' }) packageQtyInput = next },
-              label = { Text("Pkg (${selectedUnitChoice.baseUnit.wireCode})", maxLines = 1, softWrap = false) },
+              label = { Text("Pkg · ${selectedUnitChoice.baseUnit.wireCode}", maxLines = 1, softWrap = false) },
               keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Decimal,
                 imeAction = ImeAction.Done,
@@ -320,7 +320,7 @@ fun AddIngredientCard(
               shape = CircleShape,
               modifier = Modifier.weight(1.25f).defaultMinSize(minHeight = 48.dp),
             ) {
-              Text("+ Pantry (${expiresInDays}d)", maxLines = 1, softWrap = false)
+              Text("+ Pantry · ${expiresInDays}d", maxLines = 1, softWrap = false)
             }
           }
 
@@ -444,7 +444,7 @@ fun AddIngredientCard(
                     modifier = Modifier.defaultMinSize(minHeight = 48.dp),
                     label = {
                       Text(
-                        text = "${preset.displayName} ($qtyText)",
+                        text = "${preset.displayName} · $qtyText",
                         style = MaterialTheme.typography.labelMedium,
                         maxLines = 1,
                         softWrap = false,

@@ -153,6 +153,7 @@ fun FirstRunOnboardingHost(
   var marketRegionLabel by rememberSaveable { mutableStateOf(seedDraft.marketRegionLabel) }
   var pantryModeName by rememberSaveable { mutableStateOf(seedDraft.pantryMode.name) }
   var selectedBasicsList by rememberSaveable { mutableStateOf<List<String>>(ArrayList(seedDraft.selectedBasicIngredientIds)) }
+  var preferredCuisinesList by rememberSaveable { mutableStateOf<List<String>>(ArrayList(seedDraft.preferredCuisines)) }
   var importNotice by rememberSaveable { mutableStateOf<String?>(null) }
 
   // Reconstruct typed domain draft deterministically from Bundle-safe primitive state holders.
@@ -168,6 +169,7 @@ fun FirstRunOnboardingHost(
     marketRegionLabel = marketRegionLabel,
     pantryMode = StartingPantryMode.entries.find { it.name == pantryModeName } ?: seedDraft.pantryMode,
     selectedBasicIngredientIds = selectedBasicsList.toSet(),
+    preferredCuisines = preferredCuisinesList,
   )
 
   // Synchronize user edits back into individual primitive rememberSaveable slots.
@@ -183,6 +185,7 @@ fun FirstRunOnboardingHost(
     marketRegionLabel = updated.marketRegionLabel
     pantryModeName = updated.pantryMode.name
     selectedBasicsList = ArrayList(updated.selectedBasicIngredientIds)
+    preferredCuisinesList = ArrayList(updated.preferredCuisines)
   }
 
   // Intercept system back: step backward on Steps 2..4, or dismiss replay on Step 1.
@@ -331,13 +334,15 @@ private fun OnboardingProgressTopBar(
   onDismissReplay: () -> Unit,
 ) {
   val extendedColors = KitchenTheme.extendedColors
+  // Map step index 0..3 to concise, punctuation-clean subtitle text.
   val stepLabel = when (safeStep) {
     0 -> "Household"
-    1 -> "Currency & Market"
+    1 -> "Currency and Market"
     2 -> "Starting Pantry"
     else -> "AI Sous-Chef"
   }
 
+  // Top bar combining brand medallion, Step N of 4 label, escape hatch, and 4 progress segments.
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
       Row(modifier = Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -443,6 +448,7 @@ private fun OnboardingFeedbackStrip(
   if (!message.isNullOrBlank()) {
     lastNonBlankMessage = message
   }
+  // Auto-dismiss transient toast feedback after reading-time proportional delay.
   LaunchedEffect(toastEventId, message) {
     if (!message.isNullOrBlank()) {
       delay(computeToastAutoDismissMillis(message))
@@ -450,6 +456,7 @@ private fun OnboardingFeedbackStrip(
     }
   }
 
+  // Smooth vertical expand/shrink toast banner keeping bottom navigation anchored.
   AnimatedVisibility(
     visible = isVisible,
     enter = fadeIn(tween(180)) + expandVertically(tween(200)),
@@ -462,6 +469,7 @@ private fun OnboardingFeedbackStrip(
     ) {
       Row(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(lastNonBlankMessage, style = MaterialTheme.typography.bodySmall, color = extendedColors.onSageContainer, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
+        // 48.dp close icon button dismissing the notification banner immediately.
         IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
           Icon(Icons.Filled.Close, contentDescription = "Dismiss notification", tint = extendedColors.onSageContainer, modifier = Modifier.size(16.dp))
         }
@@ -481,11 +489,14 @@ private fun rememberSafOnboardingModelPicker(
   val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.OpenDocument()) { docUri: Uri? ->
     if (docUri != null) {
       when {
+        // Prevent overlapping native model imports while a download or load is already running.
         runtimeState.isBackgroundBusy -> onImportNotice("Model setup is already running — check the progress bar above.")
         else -> {
+          // Request read permission gracefully before streaming into temporary .part storage.
           runCatching { context.contentResolver.takePersistableUriPermission(docUri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
           val displayName = resolveOnboardingDocName(context, docUri)
           val ext = displayName.substringAfterLast('.', "").lowercase()
+          // Validate supported LiteRT-LM / MediaPipe model package extensions upfront.
           when {
             ext in ALLOWED_ONBOARDING_MODEL_EXTENSIONS -> {
               onImportNotice(null)

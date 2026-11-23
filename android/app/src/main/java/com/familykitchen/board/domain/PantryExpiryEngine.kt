@@ -5,8 +5,8 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.serialization.Serializable
 
-// Pure zero-waste pantry expiry analytics, recipe match scoring, yield scaling, and swap engine.
-// Zero Android, Compose, Room, DataStore, LiteRT, MediaPipe, or java.io imports permitted here.
+// Pure zero-waste pantry expiry analytics, live expiryDateIso calendar aging, recipe match scoring,
+// yield scaling, and macro-recomputing swap engine.
 
 /**
  * Rich UI-ready expiring ingredient model rendered inside Smart Pantry's `Action Required` banner.
@@ -52,14 +52,19 @@ data class ExpiringPantryCardModel(
  * Complete Smart Pantry dashboard snapshot computed deterministically from pantry, catalog, and
  * recipe state (`smart_pantry_expiry` spec).
  *
+ * Active zone lists ([fridgeItems], [dryPantryItems], [freezerItems]) contain **actively stocked**
+ * entries only so depleted `0g` rows never render phantom freshness bars, while depleted items are
+ * separated cleanly into [outOfStockItems].
+ *
  * @property totalItems Count of stocked household items across all storage zones.
  * @property expiringItems Sorted list of urgent `EXPIRING_SOON` and `EXPIRED` stock cards.
- * @property fridgeItems All pantry ledger entries stored in [StorageLocation.FRIDGE].
- * @property dryPantryItems All pantry ledger entries stored in [StorageLocation.PANTRY].
- * @property freezerItems All pantry ledger entries stored in [StorageLocation.FREEZER].
+ * @property fridgeItems Actively stocked pantry ledger entries stored in [StorageLocation.FRIDGE].
+ * @property dryPantryItems Actively stocked pantry ledger entries stored in [StorageLocation.PANTRY].
+ * @property freezerItems Actively stocked pantry ledger entries stored in [StorageLocation.FREEZER].
  * @property atRiskValueUsd Total value across [expiringItems] at risk of food waste (`PHP` `₱` baseline).
  * @property wasteScorePercent Household food-rescue score (`0..100`, `96%` baseline on seed data).
  * @property rescueRecipes Distinct schedulable recipes ranked by number of expiring items rescued.
+ * @property outOfStockItems Depleted (`0g` or `StapleStatus.OUT`) ledger entries ready for restock.
  */
 @Serializable
 data class PantryExpiryDashboard(
@@ -71,6 +76,7 @@ data class PantryExpiryDashboard(
   val atRiskValueUsd: Double,
   val wasteScorePercent: Int,
   val rescueRecipes: List<Recipe> = emptyList(),
+  val outOfStockItems: List<PantryLedgerEntry> = emptyList(),
 ) {
   /** Currency-neutral alias for [atRiskValueUsd] (`PHP` `₱` baseline). */
   val atRiskValue: Double
@@ -122,7 +128,7 @@ data class RecipePantryMatchSummary(
   ): String = currency.formatAmount(rescuedValueUsd, includeDecimals)
 }
 
-private data class MacroDensityProfile(
+private data class ExpiryCoreMacroDensityProfile(
   val kcalPer100Unit: Double,
   val proteinPer100Unit: Double,
   val carbsPer100Unit: Double,
@@ -131,15 +137,17 @@ private data class MacroDensityProfile(
 )
 
 /**
- * Computes the complete [PantryExpiryDashboard] for `SmartPantryScreen`, partitioning items by
- * storage zone, ranking expiring stock, matching rescue recipes, identifying co-expiring culinary
- * pairs, and scoring household waste prevention.
+ * Computes the complete [PantryExpiryDashboard] for `SmartPantryScreen`, filtering active storage
+ * zones to stocked items, isolating depleted items into `outOfStockItems`, aging `expiryDateIso`
+ * dynamically when [todayIso] is supplied, ranking expiring stock, matching rescue recipes, and
+ * scoring household waste prevention.
  *
  * @param pantry Current household pantry ledger entries.
  * @param catalog Household ingredient catalog metadata.
  * @param recipes Household recipe library for matching zero-waste rescue meals.
  * @param householdAllergens Active household allergen exclusions (`EC-02`).
  * @param rescuedMealsCount Historical rescued expiring meals counter (`KitchenSnapshot`).
+ * @param todayIso Optional `"YYYY-MM-DD"` calendar date driving live `expiryDateIso` aging.
  * @return Immutable [PantryExpiryDashboard].
  */
 fun evaluatePantryExpiryDashboard(
@@ -148,6 +156,7 @@ fun evaluatePantryExpiryDashboard(
   recipes: List<Recipe>,
   householdAllergens: List<String> = emptyList(),
   rescuedMealsCount: Int = 12,
+  todayIso: String? = null,
 ): PantryExpiryDashboard {
   val catalogById = indexCatalogById(catalog)
   val pantryById = indexPantryById(pantry)
@@ -156,39 +165,53 @@ fun evaluatePantryExpiryDashboard(
   val fridgeItems = mutableListOf<PantryLedgerEntry>()
   val dryPantryItems = mutableListOf<PantryLedgerEntry>()
   val freezerItems = mutableListOf<PantryLedgerEntry>()
-  var stockedCount = 0
+  val outOfStockItems = mutableListOf<PantryLedgerEntry>()
+  val stockedAgedEntries = mutableListOf<Pair<PantryLedgerEntry, Int?>>()
 
-  // Partition ledger entries into Fridge, Dry Pantry, and Freezer zones in one pass.
+  // Partition stocked items into Fridge, Dry Pantry, and Freezer while isolating 0g/OUT rows.
+  // Keeping 0g items out of active zone shelves prevents the Empty-Fridge Mirage on fresh onboarding.
   for (entry in pantry) {
+    if (!expiryCoreIsEntryActivelyStocked(entry)) {
+      outOfStockItems.add(entry)
+      continue
+    }
+    val remainingDays = computeRemainingShelfLifeDays(entry, todayIso)
+    // Stamp live calendar-aged expiresInDays when todayIso advances past the purchase day.
+    val effectiveEntry = when {
+      todayIso != null && remainingDays != entry.expiresInDays ->
+        entry.copy(expiresInDays = remainingDays)
+      else -> entry
+    }
+    stockedAgedEntries.add(effectiveEntry to remainingDays)
+
+    // Fall back to catalog defaultStorageLocation when an entry has no explicit zone override.
     val item = catalogById[entry.ingredientId]
-    val effectiveZone = entry.storageLocation
+    val effectiveZone = effectiveEntry.storageLocation
       ?: item?.defaultStorageLocation
       ?: StorageLocation.PANTRY
     when (effectiveZone) {
-      StorageLocation.FRIDGE -> fridgeItems.add(entry)
-      StorageLocation.PANTRY -> dryPantryItems.add(entry)
-      StorageLocation.FREEZER -> freezerItems.add(entry)
-    }
-    if (isEntryActivelyStocked(entry)) {
-      stockedCount += 1
+      StorageLocation.FRIDGE -> fridgeItems.add(effectiveEntry)
+      StorageLocation.PANTRY -> dryPantryItems.add(effectiveEntry)
+      StorageLocation.FREEZER -> freezerItems.add(effectiveEntry)
     }
   }
 
+  val stockedCount = stockedAgedEntries.size
+
   // Filter stocked items with EXPIRING_SOON (1..2d) or EXPIRED (<= 0d) status, most urgent first.
-  val urgentEntries = pantry
-    .filter { entry ->
-      isEntryActivelyStocked(entry) && entry.effectiveExpiryStatus != ExpiryStatus.FRESH
+  val urgentPairs = stockedAgedEntries
+    .mapNotNull { (entry, remainingDays) ->
+      if (remainingDays != null && remainingDays <= 2) entry to remainingDays else null
     }
     .sortedWith(
-      compareBy<PantryLedgerEntry> { it.expiresInDays ?: Int.MAX_VALUE }
-        .thenBy { it.ingredientId },
+      compareBy<Pair<PantryLedgerEntry, Int>> { it.second }
+        .thenBy { it.first.ingredientId },
     )
 
-  val urgentIds = urgentEntries.map { it.ingredientId }.toSet()
+  val urgentIds = urgentPairs.map { it.first.ingredientId }.toSet()
 
-  val expiringCards = urgentEntries.mapNotNull { entry ->
+  val expiringCards = urgentPairs.mapNotNull { (entry, days) ->
     val item = catalogById[entry.ingredientId] ?: return@mapNotNull null
-    val days = entry.expiresInDays ?: return@mapNotNull null
     val zone = entry.storageLocation ?: item.defaultStorageLocation
     val matchingRecipes = schedulableRecipes.filter { recipe ->
       recipe.bomLines.any { bom -> bom.ingredientId == entry.ingredientId }
@@ -200,8 +223,9 @@ fun evaluatePantryExpiryDashboard(
       .flatMap { it.bomLines.asSequence() }
       .map { it.ingredientId }
       .firstOrNull { id -> id != entry.ingredientId && id in urgentIds }
-    val fallbackPartnerId = urgentEntries
-      .firstOrNull { it.ingredientId != entry.ingredientId }
+    val fallbackPartnerId = urgentPairs
+      .firstOrNull { it.first.ingredientId != entry.ingredientId }
+      ?.first
       ?.ingredientId
     val pairItem = (recipePartnerId ?: fallbackPartnerId)?.let { catalogById[it] }
 
@@ -209,13 +233,13 @@ fun evaluatePantryExpiryDashboard(
       entry = entry,
       catalogItem = item,
       effectiveStorageLocation = zone,
-      expiryStatus = entry.effectiveExpiryStatus,
+      expiryStatus = expiryCoreStatusForDays(days),
       expiresInDays = days,
-      urgencyLabel = entry.urgencyBadgeLabel,
-      freshnessProgress = computeExpiryUrgencyBar(days),
-      atRiskValueUsd = estimateEntryValueUsd(entry, item),
+      urgencyLabel = expiryCoreUrgencyBadgeForDays(days),
+      freshnessProgress = expiryCoreComputeUrgencyBar(days),
+      atRiskValueUsd = expiryCoreEstimateEntryValueUsd(entry, item),
       optimalPrepHint = item.optimalPrepHint?.takeIf { it.isNotBlank() }
-        ?: defaultPrepHintForCategory(item.category),
+        ?: expiryCoreDefaultPrepHint(item.category),
       matchingRescueRecipes = matchingRecipes,
       coExpiringPairIngredient = pairItem,
     )
@@ -236,10 +260,10 @@ fun evaluatePantryExpiryDashboard(
     )
     .map { it.first }
 
-  val totalAtRiskUsd = roundExpiryUsd(expiringCards.sumOf { it.atRiskValueUsd })
+  val totalAtRiskUsd = expiryCoreRoundUsd(expiringCards.sumOf { it.atRiskValueUsd })
   val expiredCount = expiringCards.count { it.expiryStatus == ExpiryStatus.EXPIRED }
   val expiringSoonCount = expiringCards.count { it.expiryStatus == ExpiryStatus.EXPIRING_SOON }
-  val wasteScorePercent = computeHouseholdWasteScore(
+  val wasteScorePercent = expiryCoreComputeWasteScore(
     stockedCount = stockedCount,
     rescuedMealsCount = max(0, rescuedMealsCount),
     expiredCount = expiredCount,
@@ -255,6 +279,7 @@ fun evaluatePantryExpiryDashboard(
     atRiskValueUsd = totalAtRiskUsd,
     wasteScorePercent = wasteScorePercent,
     rescueRecipes = rescueRecipes,
+    outOfStockItems = outOfStockItems,
   )
 }
 
@@ -267,6 +292,7 @@ fun evaluatePantryExpiryDashboard(
  * @param catalog Household ingredient catalog metadata.
  * @param targetServings Desired family serving count (defaults to [Recipe.baseServings]).
  * @param householdAllergens Active household allergen exclusions for `EC-03` substitutions.
+ * @param todayIso Optional `"YYYY-MM-DD"` calendar date for live `expiryDateIso` rescue checks.
  * @return Immutable [RecipePantryMatchSummary].
  */
 fun evaluateRecipePantryMatch(
@@ -275,6 +301,7 @@ fun evaluateRecipePantryMatch(
   catalog: List<IngredientCatalogItem>,
   targetServings: Int = recipe.baseServings,
   householdAllergens: List<String> = emptyList(),
+  todayIso: String? = null,
 ): RecipePantryMatchSummary {
   val catalogById = indexCatalogById(catalog)
   val pantryById = indexPantryById(pantry)
@@ -295,7 +322,7 @@ fun evaluateRecipePantryMatch(
 
   for ((ingredientId, requiredQty) in effectiveBom) {
     if (requiredQty <= 0.0) continue
-    val item = catalogById[ingredientId] ?: fallbackCatalogItem(ingredientId)
+    val item = catalogById[ingredientId] ?: expiryCoreFallbackCatalogItem(ingredientId)
     val entry = pantryById[ingredientId]
     val tier = entry?.tier ?: item.tier
 
@@ -311,9 +338,10 @@ fun evaluateRecipePantryMatch(
       isSatisfied -> {
         matchedIngredients.add(item)
         // Credit rescued food-waste savings whenever an EXPIRING_SOON or EXPIRED item is used.
-        if (entry != null && entry.effectiveExpiryStatus != ExpiryStatus.FRESH) {
+        val remDays = entry?.let { computeRemainingShelfLifeDays(it, todayIso) }
+        if (entry != null && remDays != null && remDays <= 2) {
           rescuedExpiringIds.add(ingredientId)
-          rescuedValue += estimateRescuedPortionUsd(requiredQty, entry, item)
+          rescuedValue += expiryCoreEstimateRescuedPortionUsd(requiredQty, entry, item)
         }
       }
       else -> {
@@ -351,7 +379,7 @@ fun evaluateRecipePantryMatch(
     matchPercentage = matchPct,
     isZeroFoodWasteMatch = rescuedExpiringIds.isNotEmpty(),
     rescuedExpiringIngredientIds = rescuedExpiringIds,
-    rescuedValueUsd = roundExpiryUsd(rescuedValue),
+    rescuedValueUsd = expiryCoreRoundUsd(rescuedValue),
   )
 }
 
@@ -370,7 +398,7 @@ fun scaleRecipeForYield(
   catalog: List<IngredientCatalogItem> = emptyList(),
 ): Recipe {
   requireDomainValid(yieldMultiplier.isFinite() && yieldMultiplier > 0.0, "YieldScale") {
-    "yieldMultiplier must be finite and > 0 (got $yieldMultiplier)"
+    "yieldMultiplier must be finite and > 0, got $yieldMultiplier"
   }
   val safeBaseServings = if (recipe.baseServings > 0) recipe.baseServings else 4
   val scaledServings = max(1, (safeBaseServings.toDouble() * yieldMultiplier).roundToInt())
@@ -440,7 +468,7 @@ fun swapRecipeIngredient(
     when {
       line.ingredientId != fromIngredientId -> line
       else -> {
-        val convertedQty = convertSwapQuantity(line.baseQuantity, fromItem, targetItem)
+        val convertedQty = expiryCoreConvertSwapQuantity(line.baseQuantity, fromItem, targetItem)
         totalReplacedBaseQty += line.baseQuantity
         line.copy(ingredientId = toIngredientId, baseQuantity = convertedQty)
       }
@@ -464,13 +492,13 @@ fun swapRecipeIngredient(
   }
 
   // Compute deterministic per-serving calorie and macro deltas between old and new ingredients.
-  val oldProfile = inferMacroProfile(fromIngredientId, fromItem)
-  val newProfile = inferMacroProfile(toIngredientId, targetItem)
-  val oldGrams = toApproximateGrams(totalReplacedBaseQty, fromItem?.baseUnit ?: BaseUnit.GRAM, oldProfile)
+  val oldProfile = expiryCoreInferMacroProfile(fromIngredientId, fromItem)
+  val newProfile = expiryCoreInferMacroProfile(toIngredientId, targetItem)
+  val oldGrams = expiryCoreToApproxGrams(totalReplacedBaseQty, fromItem?.baseUnit ?: BaseUnit.GRAM, oldProfile)
   val convertedTotalQty = updatedBomLines
     .filter { it.ingredientId == toIngredientId }
     .sumOf { it.baseQuantity }
-  val newGrams = toApproximateGrams(convertedTotalQty, targetItem.baseUnit, newProfile)
+  val newGrams = expiryCoreToApproxGrams(convertedTotalQty, targetItem.baseUnit, newProfile)
 
   val kcalDeltaPerServing =
     (((newGrams / 100.0) * newProfile.kcalPer100Unit - (oldGrams / 100.0) * oldProfile.kcalPer100Unit) / safeServings)
@@ -495,15 +523,32 @@ fun swapRecipeIngredient(
   )
 }
 
-// Exclude out-of-stock or zero-quantity rows from active household stock counts.
-private fun isEntryActivelyStocked(entry: PantryLedgerEntry): Boolean =
+// Exclude out-of-stock or zero-quantity rows from active household storage zone lists.
+private fun expiryCoreIsEntryActivelyStocked(entry: PantryLedgerEntry): Boolean =
   when (entry.tier) {
     IngredientTier.TIER_2_STAPLE -> !entry.isOutOfStock && entry.stapleStatus != StapleStatus.OUT
     IngredientTier.TIER_1_QUANTITATIVE -> !entry.isOutOfStock && entry.currentQuantity > 0.0
   }
 
+// Classify <= 0 days as EXPIRED and 1..2 days as EXPIRING_SOON for 48h Action Required banners.
+private fun expiryCoreStatusForDays(days: Int): ExpiryStatus =
+  when {
+    days <= 0 -> ExpiryStatus.EXPIRED
+    days <= 2 -> ExpiryStatus.EXPIRING_SOON
+    else -> ExpiryStatus.FRESH
+  }
+
+// Format concise urgency pill text matching PantryLedgerEntry.urgencyBadgeLabel semantics.
+private fun expiryCoreUrgencyBadgeForDays(days: Int): String =
+  when {
+    days < 0 -> "Expired"
+    days == 0 -> "Today"
+    days == 1 -> "Tomorrow"
+    else -> "In $days days"
+  }
+
 // Map remaining shelf-life days to SavorAI urgency bar fill ratios (90% for Tomorrow, 76% for 2d).
-private fun computeExpiryUrgencyBar(expiresInDays: Int): Float =
+private fun expiryCoreComputeUrgencyBar(expiresInDays: Int): Float =
   when {
     expiresInDays <= 0 -> 0.96f
     expiresInDays == 1 -> 0.90f
@@ -512,17 +557,17 @@ private fun computeExpiryUrgencyBar(expiresInDays: Int): Float =
   }
 
 // Prorate dollar value at risk from remaining quantity vs standard package size (0.25x..4.0x).
-private fun estimateEntryValueUsd(
+private fun expiryCoreEstimateEntryValueUsd(
   entry: PantryLedgerEntry,
   item: IngredientCatalogItem,
 ): Double {
   val pkgQty = if (item.defaultPackageQuantity > 0.0) item.defaultPackageQuantity else 1.0
   val ratio = (entry.currentQuantity / pkgQty).coerceIn(0.25, 4.0)
-  return roundExpiryUsd(ratio * max(0.50, item.estimatedPackagePriceUsd))
+  return expiryCoreRoundUsd(ratio * max(0.50, item.estimatedPackagePriceUsd))
 }
 
 // Cap rescued portion credit at the stock actually on hand so savings never exceed pantry value.
-private fun estimateRescuedPortionUsd(
+private fun expiryCoreEstimateRescuedPortionUsd(
   usedQty: Double,
   entry: PantryLedgerEntry,
   item: IngredientCatalogItem,
@@ -530,10 +575,10 @@ private fun estimateRescuedPortionUsd(
   val pkgQty = if (item.defaultPackageQuantity > 0.0) item.defaultPackageQuantity else 1.0
   val cappedQty = minOf(max(0.0, entry.currentQuantity), usedQty)
   val ratio = (cappedQty / pkgQty).coerceAtLeast(0.25)
-  return roundExpiryUsd(ratio * max(0.50, item.estimatedPackagePriceUsd))
+  return expiryCoreRoundUsd(ratio * max(0.50, item.estimatedPackagePriceUsd))
 }
 
-private fun computeHouseholdWasteScore(
+private fun expiryCoreComputeWasteScore(
   stockedCount: Int,
   rescuedMealsCount: Int,
   expiredCount: Int,
@@ -548,7 +593,7 @@ private fun computeHouseholdWasteScore(
 }
 
 // Provide culinary preparation guidance whenever an ingredient omits an explicit optimalPrepHint.
-private fun defaultPrepHintForCategory(category: IngredientCategory): String =
+private fun expiryCoreDefaultPrepHint(category: IngredientCategory): String =
   when (category) {
     IngredientCategory.PROTEIN -> "Optimal: Pan-Sear, Sheet-Pan Roast or Braise"
     IngredientCategory.PRODUCE -> "Optimal: Garlic Sauté, Omelette Fold or Fresh Bowl"
@@ -558,7 +603,7 @@ private fun defaultPrepHintForCategory(category: IngredientCategory): String =
   }
 
 // Synthesize a safe placeholder catalog record if a custom recipe references an unindexed ID.
-private fun fallbackCatalogItem(ingredientId: String): IngredientCatalogItem =
+private fun expiryCoreFallbackCatalogItem(ingredientId: String): IngredientCatalogItem =
   IngredientCatalogItem(
     ingredientId = ingredientId,
     displayName = ingredientId,
@@ -569,15 +614,15 @@ private fun fallbackCatalogItem(ingredientId: String): IngredientCatalogItem =
   )
 
 // Convert quantities cleanly across count/g/ml boundaries using culinary unit-weight equivalents.
-private fun convertSwapQuantity(
+private fun expiryCoreConvertSwapQuantity(
   baseQty: Double,
   fromItem: IngredientCatalogItem?,
   toItem: IngredientCatalogItem,
 ): Double {
   if (fromItem == null || fromItem.baseUnit == toItem.baseUnit) return baseQty
-  val fromProfile = inferMacroProfile(fromItem.ingredientId, fromItem)
-  val toProfile = inferMacroProfile(toItem.ingredientId, toItem)
-  val approxGrams = toApproximateGrams(baseQty, fromItem.baseUnit, fromProfile)
+  val fromProfile = expiryCoreInferMacroProfile(fromItem.ingredientId, fromItem)
+  val toProfile = expiryCoreInferMacroProfile(toItem.ingredientId, toItem)
+  val approxGrams = expiryCoreToApproxGrams(baseQty, fromItem.baseUnit, fromProfile)
   return when (toItem.baseUnit) {
     BaseUnit.GRAM, BaseUnit.MILLILITER -> max(1.0, approxGrams.roundToInt().toDouble())
     BaseUnit.COUNT -> max(1.0, (approxGrams / max(20.0, toProfile.gramsEquivalentPerCount)).roundToInt().toDouble())
@@ -585,10 +630,10 @@ private fun convertSwapQuantity(
 }
 
 // Normalize count/ml/g quantities into approximate gram weights for per-serving kcal/macro math.
-private fun toApproximateGrams(
+private fun expiryCoreToApproxGrams(
   quantity: Double,
   unit: BaseUnit,
-  profile: MacroDensityProfile,
+  profile: ExpiryCoreMacroDensityProfile,
 ): Double =
   when (unit) {
     BaseUnit.GRAM, BaseUnit.MILLILITER -> max(0.0, quantity)
@@ -596,51 +641,53 @@ private fun toApproximateGrams(
   }
 
 // Deterministic USDA FoodData Central per-100g macro lookup powering offline swap calorie deltas.
-private fun inferMacroProfile(
+private fun expiryCoreInferMacroProfile(
   ingredientId: String,
   item: IngredientCatalogItem?,
-): MacroDensityProfile {
+): ExpiryCoreMacroDensityProfile {
   val key = "${ingredientId.lowercase()} ${item?.displayName?.lowercase().orEmpty()}"
   // Order specific USDA FoodData Central items (butter 717, olive oil 813/100ml, yogurt 73, eggs 143).
   return when {
-    key.contains("butter") -> MacroDensityProfile(717.0, 0.9, 0.1, 81.1)
-    key.contains("oil") -> MacroDensityProfile(813.0, 0.0, 0.0, 92.0)
-    key.contains("greek_yogurt") || key.contains("yogurt") -> MacroDensityProfile(73.0, 10.0, 3.9, 1.9)
-    key.contains("cheese") -> MacroDensityProfile(403.0, 24.9, 1.3, 33.1)
-    key.contains("milk") -> MacroDensityProfile(61.0, 3.2, 4.8, 3.3)
-    key.contains("egg") -> MacroDensityProfile(143.0, 12.6, 0.7, 9.5, gramsEquivalentPerCount = 50.0)
-    key.contains("salmon") -> MacroDensityProfile(208.0, 20.4, 0.0, 13.4)
-    key.contains("tuna") -> MacroDensityProfile(198.0, 29.1, 0.0, 8.2)
-    key.contains("chicken") || key.contains("turkey") -> MacroDensityProfile(165.0, 24.0, 0.0, 7.0)
+    key.contains("butter") -> ExpiryCoreMacroDensityProfile(717.0, 0.9, 0.1, 81.1)
+    key.contains("oil") -> ExpiryCoreMacroDensityProfile(813.0, 0.0, 0.0, 92.0)
+    key.contains("greek_yogurt") || key.contains("yogurt") -> ExpiryCoreMacroDensityProfile(73.0, 10.0, 3.9, 1.9)
+    key.contains("cheese") -> ExpiryCoreMacroDensityProfile(403.0, 24.9, 1.3, 33.1)
+    key.contains("milk") -> ExpiryCoreMacroDensityProfile(61.0, 3.2, 4.8, 3.3)
+    key.contains("egg") -> ExpiryCoreMacroDensityProfile(143.0, 12.6, 0.7, 9.5, gramsEquivalentPerCount = 50.0)
+    key.contains("salmon") -> ExpiryCoreMacroDensityProfile(208.0, 20.4, 0.0, 13.4)
+    key.contains("tuna") -> ExpiryCoreMacroDensityProfile(198.0, 29.1, 0.0, 8.2)
+    key.contains("chicken") || key.contains("turkey") -> ExpiryCoreMacroDensityProfile(165.0, 24.0, 0.0, 7.0)
     key.contains("fish") || key.contains("tilapia") || key.contains("bangus") || key.contains("shrimp") ->
-      MacroDensityProfile(96.0, 20.1, 0.0, 1.7)
-    key.contains("gata") || key.contains("coconut") -> MacroDensityProfile(197.0, 2.0, 2.8, 21.3)
-    key.contains("tofu") || key.contains("tokwa") -> MacroDensityProfile(94.0, 10.0, 2.0, 5.0)
-    key.contains("bean") || key.contains("lentil") || key.contains("monggo") -> MacroDensityProfile(116.0, 7.7, 20.8, 0.5)
-    key.contains("egusi") -> MacroDensityProfile(567.0, 28.4, 10.6, 47.4)
+      ExpiryCoreMacroDensityProfile(96.0, 20.1, 0.0, 1.7)
+    key.contains("gata") || key.contains("coconut") -> ExpiryCoreMacroDensityProfile(197.0, 2.0, 2.8, 21.3)
+    key.contains("tofu") || key.contains("tokwa") -> ExpiryCoreMacroDensityProfile(94.0, 10.0, 2.0, 5.0)
+    key.contains("bean") || key.contains("lentil") || key.contains("monggo") ->
+      ExpiryCoreMacroDensityProfile(116.0, 7.7, 20.8, 0.5)
+    key.contains("egusi") -> ExpiryCoreMacroDensityProfile(567.0, 28.4, 10.6, 47.4)
     key.contains("peanut") || key.contains("nut") || key.contains("kasuy") ||
       key.contains("almond") || key.contains("pumpkin_seed") || key.contains("seed") ->
-      MacroDensityProfile(588.0, 25.1, 20.0, 50.4)
-    key.contains("avocado") -> MacroDensityProfile(160.0, 2.0, 8.5, 14.7, gramsEquivalentPerCount = 150.0)
+      ExpiryCoreMacroDensityProfile(588.0, 25.1, 20.0, 50.4)
+    key.contains("avocado") -> ExpiryCoreMacroDensityProfile(160.0, 2.0, 8.5, 14.7, gramsEquivalentPerCount = 150.0)
     key.contains("spinach") || key.contains("amaranth") || key.contains("kale") ||
       key.contains("malunggay") || key.contains("pechay") || key.contains("kangkong") ->
-      MacroDensityProfile(23.0, 2.9, 3.6, 0.4)
-    key.contains("oat") -> MacroDensityProfile(389.0, 16.9, 66.3, 6.9)
+      ExpiryCoreMacroDensityProfile(23.0, 2.9, 3.6, 0.4)
+    key.contains("oat") -> ExpiryCoreMacroDensityProfile(389.0, 16.9, 66.3, 6.9)
     key.contains("rice") || key.contains("pasta") || key.contains("cornmeal") || key.contains("gari") ->
-      MacroDensityProfile(365.0, 8.5, 78.0, 1.5)
+      ExpiryCoreMacroDensityProfile(365.0, 8.5, 78.0, 1.5)
     key.contains("baguette") ->
-      MacroDensityProfile(272.0, 10.8, 51.9, 2.4, gramsEquivalentPerCount = 250.0)
+      ExpiryCoreMacroDensityProfile(272.0, 10.8, 51.9, 2.4, gramsEquivalentPerCount = 250.0)
     key.contains("wrap") ->
-      MacroDensityProfile(306.0, 9.3, 52.2, 6.9, gramsEquivalentPerCount = 45.0)
-    key.contains("plantain") || key.contains("saba") -> MacroDensityProfile(122.0, 1.3, 31.9, 0.4, gramsEquivalentPerCount = 179.0)
-    key.contains("sweet_potato") || key.contains("kamote") -> MacroDensityProfile(86.0, 1.6, 20.1, 0.1)
-    key.contains("banana") -> MacroDensityProfile(89.0, 1.1, 22.8, 0.3)
-    else -> MacroDensityProfile(55.0, 1.2, 12.5, 0.3, gramsEquivalentPerCount = 115.0)
+      ExpiryCoreMacroDensityProfile(306.0, 9.3, 52.2, 6.9, gramsEquivalentPerCount = 45.0)
+    key.contains("plantain") || key.contains("saba") ->
+      ExpiryCoreMacroDensityProfile(122.0, 1.3, 31.9, 0.4, gramsEquivalentPerCount = 179.0)
+    key.contains("sweet_potato") || key.contains("kamote") -> ExpiryCoreMacroDensityProfile(86.0, 1.6, 20.1, 0.1)
+    key.contains("banana") -> ExpiryCoreMacroDensityProfile(89.0, 1.1, 22.8, 0.3)
+    else -> ExpiryCoreMacroDensityProfile(55.0, 1.2, 12.5, 0.3, gramsEquivalentPerCount = 115.0)
   }
 }
 
 // Round currency figures to two decimal places while guarding against negative or NaN values.
-private fun roundExpiryUsd(value: Double): Double =
+private fun expiryCoreRoundUsd(value: Double): Double =
   if (!value.isFinite() || value <= 0.0) 0.0 else (value * 100.0).roundToInt() / 100.0
 
 /**
@@ -655,13 +702,10 @@ object PantryExpiryEngine {
     recipes: List<Recipe>,
     householdAllergens: List<String> = emptyList(),
     rescuedMealsCount: Int = 12,
+    todayIso: String? = null,
   ): PantryExpiryDashboard =
     com.familykitchen.board.domain.evaluatePantryExpiryDashboard(
-      pantry = pantry,
-      catalog = catalog,
-      recipes = recipes,
-      householdAllergens = householdAllergens,
-      rescuedMealsCount = rescuedMealsCount,
+      pantry, catalog, recipes, householdAllergens, rescuedMealsCount, todayIso,
     )
 
   // Recipe readiness evaluator backing Clean Recipe Reader and SavorAI Sous-Chef cards.
@@ -672,13 +716,10 @@ object PantryExpiryEngine {
     catalog: List<IngredientCatalogItem>,
     targetServings: Int = recipe.baseServings,
     householdAllergens: List<String> = emptyList(),
+    todayIso: String? = null,
   ): RecipePantryMatchSummary =
     com.familykitchen.board.domain.evaluateRecipePantryMatch(
-      recipe = recipe,
-      pantry = pantry,
-      catalog = catalog,
-      targetServings = targetServings,
-      householdAllergens = householdAllergens,
+      recipe, pantry, catalog, targetServings, householdAllergens, todayIso,
     )
 
   // Yield multiplier (1x, 2x, 4x, Custom) scaling BOM quantities with tabular precision.
@@ -705,10 +746,5 @@ object PantryExpiryEngine {
     toIngredientId: String,
     catalog: List<IngredientCatalogItem>,
   ): Recipe =
-    com.familykitchen.board.domain.swapRecipeIngredient(
-      recipe = recipe,
-      fromIngredientId = fromIngredientId,
-      toIngredientId = toIngredientId,
-      catalog = catalog,
-    )
+    com.familykitchen.board.domain.swapRecipeIngredient(recipe, fromIngredientId, toIngredientId, catalog)
 }

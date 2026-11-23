@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestaurantMenu
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -79,14 +80,24 @@ import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import com.familykitchen.board.ui.theme.KitchenTheme
 import kotlin.math.min
 
-// Modal sheet and stateless content for creating or scheduling preset & custom family meals
-// with 48.dp+ steppers stacked cleanly in 2 rows for compact 360dp 1.35x font-scale legibility.
+// Modal sheet and stateless content for scheduling any preset recipe (zero .take(4) truncation)
+// or authoring custom family meals with full Tier-1 + Tier-2 catalog search and zero pre-checked items.
 
+// Short Monday..Sunday labels rendered in the Target Days selector strip.
 private val DAY_LABELS: List<String> = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 /**
  * Immutable submission payload emitted when the user saves a custom household meal inside
  * [CustomMealSheet].
+ *
+ * @property title User-authored custom meal title.
+ * @property targetSlotType Target meal slot category (`BREAKFAST`, `LUNCH`, or `DINNER`).
+ * @property targetDayIndex Target 0-based weekday index (`0 = Mon`..`6 = Sun`).
+ * @property applyMondayThroughFriday Schedules across Monday through Friday when `true`.
+ * @property rawPrepMinutes Hands-on preparation duration in minutes.
+ * @property cookMinutes Active cooking duration in minutes.
+ * @property bomLines Selected Tier-1 and Tier-2 [BomLine] requirements.
+ * @property queueIngredientsToGrocery Queues missing selected items onto `Shop` when `true`.
  */
 data class CustomFamilyMealDraft(
   val title: String,
@@ -163,54 +174,75 @@ fun CustomMealSheetContent(
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
-  // Persist form selections as Bundle-safe primitives/Strings across configuration changes.
+  // Persist primitive form state across IME resize and device rotation.
   var selectedDayIndex by rememberSaveable { mutableIntStateOf(initialDayIndex.coerceIn(0, 6)) }
   var applyMonThroughFri by rememberSaveable { mutableStateOf(false) }
   var selectedSlotTypeName by rememberSaveable { mutableStateOf(initialSlotType.name) }
   val selectedSlotType = MealSlotType.entries.find { it.name == selectedSlotTypeName } ?: initialSlotType
+  // Independent search queries for Cookbook preset recipes vs custom BOM ingredients.
+  var presetSearchQuery by rememberSaveable { mutableStateOf("") }
   var customTitle by rememberSaveable { mutableStateOf("") }
   var rawPrepMinutes by rememberSaveable { mutableIntStateOf(6) }
   var cookMinutes by rememberSaveable { mutableIntStateOf(12) }
+  var ingredientSearchQuery by rememberSaveable { mutableStateOf("") }
   var queueToGrocery by rememberSaveable { mutableStateOf(true) }
   var inlineNewItemName by rememberSaveable { mutableStateOf("") }
   var showInlineNewItem by rememberSaveable { mutableStateOf(false) }
 
-  // Filter BOM choices strictly to locally available Tier-1 items to satisfy EC-02 at authoring time.
-  val availableTier1Items = remember(catalog) {
-    catalog.filter { it.isLocallyAvailable && it.tier == IngredientTier.TIER_1_QUANTITATIVE }
+  // Include ALL locally available catalog items (both Tier-1 perishables and Tier-2 spices/oils).
+  val availableCatalogItems = remember(catalog) {
+    catalog.filter { it.isLocallyAvailable }
   }
-  // Pre-select the first 2 local Tier-1 items in remember (never raw Set inside rememberSaveable).
+  // Start with ZERO pre-selected Eggs + Milk so custom recipes contain only user-chosen items.
   var selectedIngredientIds by remember {
-    mutableStateOf(availableTier1Items.take(2).map { it.ingredientId }.toSet())
+    mutableStateOf(emptySet<String>())
   }
 
-  // Enforce EC-01 calibrated morning time math live as prep/cook steppers change.
+  // Keep already-checked items visible alongside live query matches across Tier-1 and Tier-2.
+  val filteredCatalogItems = remember(availableCatalogItems, ingredientSearchQuery, selectedIngredientIds) {
+    val cleanQuery = ingredientSearchQuery.trim().lowercase()
+    availableCatalogItems.filter { item ->
+      item.ingredientId in selectedIngredientIds ||
+        cleanQuery.isEmpty() ||
+        item.displayName.lowercase().contains(cleanQuery) ||
+        item.category.displayLabel.lowercase().contains(cleanQuery)
+    }
+  }
+
+  // Compute EC-01 1.4x morning buffer live to guard weekday Breakfast scheduling.
   val calibratedMinutes = computeCalibratedMorningMinutes(rawPrepMinutes, 0, cookMinutes)
   val exceedsBreakfastCap =
     selectedSlotType == MealSlotType.BREAKFAST && calibratedMinutes > MAX_WEEKDAY_BREAKFAST_MINUTES
 
-  // Filter 1-tap preset recipes by slot eligibility and <= 25m morning cap on BREAKFAST.
-  val slotEligiblePresets = remember(schedulableRecipes, selectedSlotType) {
+  // Filter ALL slot-eligible recipes with zero .take(4) truncation.
+  val slotEligiblePresets = remember(schedulableRecipes, selectedSlotType, presetSearchQuery) {
+    val cleanPresetQuery = presetSearchQuery.trim().lowercase()
     schedulableRecipes.filter { recipe ->
-      selectedSlotType in recipe.allowedSlots &&
+      val fitsSlot = selectedSlotType in recipe.allowedSlots &&
         (selectedSlotType != MealSlotType.BREAKFAST || recipe.calibratedActiveMinutes <= MAX_WEEKDAY_BREAKFAST_MINUTES)
+      val fitsSearch = cleanPresetQuery.isEmpty() ||
+        recipe.title.lowercase().contains(cleanPresetQuery) ||
+        recipe.cuisineTag.lowercase().contains(cleanPresetQuery)
+      fitsSlot && fitsSearch
     }
   }
 
-  // Synthesize base-4-serving BomLines from selected Tier-1 ingredient chips.
-  val draftBomLines = remember(selectedIngredientIds, availableTier1Items) {
-    val byId = availableTier1Items.associateBy { it.ingredientId }
+  // Synthesize base-4-serving BomLines across both Tier-1 measured items and Tier-2 staples.
+  val draftBomLines = remember(selectedIngredientIds, availableCatalogItems) {
+    val byId = availableCatalogItems.associateBy { it.ingredientId }
     selectedIngredientIds.mapNotNull { id ->
       val item = byId[id] ?: return@mapNotNull null
-      val defaultMealPortion = when (item.baseUnit) {
-        BaseUnit.COUNT -> min(4.0, item.defaultPackageQuantity)
-        BaseUnit.GRAM, BaseUnit.MILLILITER -> min(350.0, item.defaultPackageQuantity)
+      // Use a light 10 g/ml culinary pinch for Tier-2 spices/oils vs full meal portions for Tier-1.
+      val defaultMealPortion = when {
+        item.tier == IngredientTier.TIER_2_STAPLE && item.baseUnit != BaseUnit.COUNT -> 10.0
+        item.baseUnit == BaseUnit.COUNT -> min(4.0, item.defaultPackageQuantity)
+        else -> min(350.0, item.defaultPackageQuantity)
       }
       BomLine(ingredientId = id, baseQuantity = defaultMealPortion)
     }
   }
 
-  // Preview 1-pot 4-member family plating dynamically while authoring the custom dish.
+  // Synthesize live 4-member plating instructions from selected ingredients and household goals.
   val livePlatingMap = remember(customTitle, draftBomLines, householdProfile, selectedSlotType) {
     val previewRecipe = Recipe(
       recipeId = "rec_custom_preview",
@@ -233,7 +265,7 @@ fun CustomMealSheetContent(
     )
   }
 
-  // Scrollable sheet column padded for IME keyboard insets on compact phones.
+  // Scrollable .imePadding() body resilient down to 360dp width at 1.35x font scaling.
   Column(
     modifier = modifier
       .fillMaxWidth()
@@ -242,7 +274,7 @@ fun CustomMealSheetContent(
       .padding(horizontal = 16.dp, vertical = 10.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
-    // Weighted sheet header + 48.dp Close IconButton.
+    // Sheet header with 48.dp Close button.
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -255,7 +287,7 @@ fun CustomMealSheetContent(
         Icon(Icons.Filled.RestaurantMenu, contentDescription = null, tint = extendedColors.herbalSage)
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-          text = "Add / Schedule Meal",
+          text = "Add or Schedule Meal",
           style = MaterialTheme.typography.titleMedium,
           fontWeight = FontWeight.Bold,
           maxLines = 1,
@@ -271,7 +303,7 @@ fun CustomMealSheetContent(
     }
 
     // 48.dp Single-day (`Mon`..`Sun`) or `Mon–Fri` batch weekday selector chips.
-    Text("Target Day(s)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+    Text("Target Days", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       DAY_LABELS.forEachIndexed { dayIdx, label ->
         FilterChip(
@@ -292,27 +324,40 @@ fun CustomMealSheetContent(
       )
     }
 
-    // 48.dp MealSlotType segmented control (`BREAKFAST | LUNCH | DINNER`).
+    // 48.dp MealSlotType segmented control (`Breakfast · Lunch · Dinner`).
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
       MealSlotType.entries.forEachIndexed { idx, slotType ->
+        val slotLabel = slotType.name.lowercase().replaceFirstChar { it.uppercase() }
         SegmentedButton(
           selected = selectedSlotType == slotType,
           onClick = { selectedSlotTypeName = slotType.name },
           shape = SegmentedButtonDefaults.itemShape(index = idx, count = MealSlotType.entries.size),
           modifier = Modifier.defaultMinSize(minHeight = 48.dp),
-          label = { Text(slotType.name, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) },
+          label = { Text(slotLabel, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) },
         )
       }
     }
 
-    // 1-tap preset scheduling cards pre-filtered for EC-01 and EC-02 compliance.
-    if (slotEligiblePresets.isNotEmpty()) {
+    // Full searchable preset list without .take(4) truncation.
+    if (schedulableRecipes.isNotEmpty()) {
+      // Header displaying exact count of slot-eligible Cookbook recipes.
       Text(
-        text = "1-Tap Presets (${slotEligiblePresets.size})",
+        text = "Cookbook Recipes · ${slotEligiblePresets.size}",
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
       )
-      slotEligiblePresets.take(4).forEach { preset ->
+      // Search bar filtering Cookbook presets by dish title or cuisine tag.
+      OutlinedTextField(
+        value = presetSearchQuery,
+        onValueChange = { presetSearchQuery = it },
+        placeholder = { Text("Search cookbook dishes", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+      )
+      // Render every matching Cookbook dish without any artificial 4-item cap.
+      slotEligiblePresets.forEach { preset ->
         Card(
           modifier = Modifier.fillMaxWidth(),
           shape = RoundedCornerShape(14.dp),
@@ -332,12 +377,15 @@ fun CustomMealSheetContent(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
               )
+              // Map CookOwner enum to configured household cook name ("Fred" or "Wife").
+              val ownerText = householdProfile.displayLabelForCookOwner(preset.preferredOwner)
               Text(
-                text = "${preset.calibratedActiveMinutes}m active · ${preset.preferredOwner.name}",
+                text = "${preset.calibratedActiveMinutes}m active · $ownerText",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
             }
+            // 48.dp 1-tap Schedule button committing single-day or Mon-Fri batch assignment.
             FilledTonalButton(
               onClick = { onSelectPresetRecipe(preset, selectedSlotType, selectedDayIndex, applyMonThroughFri) },
               contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
@@ -355,13 +403,15 @@ fun CustomMealSheetContent(
     }
 
     HorizontalDivider(color = extendedColors.borderSubtle)
+    // Section 2: Custom Family Meal builder starting with 0 pre-checked ingredients.
     Text("Build Custom Family Meal", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
+    // Custom dish title field supporting sentence/word capitalization.
     OutlinedTextField(
       value = customTitle,
       onValueChange = { customTitle = it },
       label = { Text("Custom Meal Title") },
-      placeholder = { Text("e.g., Plantain & Spinach Skillet") },
+      placeholder = { Text("Plantain and Spinach Skillet") },
       singleLine = true,
       keyboardOptions = KeyboardOptions(
         capitalization = KeyboardCapitalization.Words,
@@ -370,7 +420,7 @@ fun CustomMealSheetContent(
       modifier = Modifier.fillMaxWidth(),
     )
 
-    // Stack 48.dp Prep & Cook steppers cleanly in 2 rows to prevent horizontal 360dp row crush.
+    // Warm parchment timing card computing live 1.4x calibrated active minutes.
     Surface(
       shape = RoundedCornerShape(16.dp),
       color = extendedColors.parchment,
@@ -386,17 +436,17 @@ fun CustomMealSheetContent(
           verticalAlignment = Alignment.CenterVertically,
         ) {
           Text(
-            text = "Prep & Cook Timing",
+            text = "Prep and Cook Timing",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
           )
-          // Live calibrated active-minute capsule turns red when weekday BREAKFAST exceeds 25m.
+          // Color-code active timing pill red if Breakfast exceeds the 25m weekday cap.
           Surface(
             shape = CircleShape,
             color = if (exceedsBreakfastCap) MaterialTheme.colorScheme.errorContainer else extendedColors.sageContainer,
           ) {
             Text(
-              text = "Active: ${calibratedMinutes}m",
+              text = "Active · ${calibratedMinutes}m",
               style = MaterialTheme.typography.labelSmall,
               fontWeight = FontWeight.Bold,
               color = if (exceedsBreakfastCap) MaterialTheme.colorScheme.onErrorContainer else extendedColors.onSageContainer,
@@ -407,14 +457,12 @@ fun CustomMealSheetContent(
           }
         }
 
-        // Row 1: Hands-on Prep minutes (multiplied by 1.4x slow-cooker calibration buffer).
-        MinuteStepperRow(
+        customMealMinuteStepperRow(
           label = "Hands-on Prep",
           minutes = rawPrepMinutes,
           onDelta = { rawPrepMinutes = (rawPrepMinutes + it).coerceIn(1, 45) },
         )
-        // Row 2: Active Cook minutes on the stove.
-        MinuteStepperRow(
+        customMealMinuteStepperRow(
           label = "Active Cook",
           minutes = cookMinutes,
           onDelta = { cookMinutes = (cookMinutes + it).coerceIn(1, 60) },
@@ -422,23 +470,22 @@ fun CustomMealSheetContent(
       }
     }
 
-    // Inline EC-01 validation warning disabling Save until timing or target slot is valid.
     if (exceedsBreakfastCap) {
       Text(
-        text = "EC-01 Guard: Weekday BREAKFAST requires <= ${MAX_WEEKDAY_BREAKFAST_MINUTES}m calibrated active time (currently ${calibratedMinutes}m).",
+        text = "Weekday Breakfast requires at most ${MAX_WEEKDAY_BREAKFAST_MINUTES}m calibrated active time · currently ${calibratedMinutes}m.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.error,
       )
     }
 
-    // Tier-1 ingredient selector header + inline "+ Local Item" quick creator.
+    // Searchable Tier-1 + Tier-2 catalog ingredient selector + inline local item creator.
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Text(
-        text = "Tier-1 Ingredients (${selectedIngredientIds.size})",
+        text = "Ingredients · ${selectedIngredientIds.size} selected",
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.weight(1f),
@@ -448,14 +495,14 @@ fun CustomMealSheetContent(
         shape = CircleShape,
         modifier = Modifier.defaultMinSize(minHeight = 48.dp),
       ) {
-        Text("+ Local Item", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+        Text("Add Local Item", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
       }
     }
 
-    // Optional inline local-market ingredient creator registering directly into household catalog.
+    // Inline 0g-stock local ingredient entry when a neighborhood market item is missing.
     if (showInlineNewItem) {
       val addInlineLocalItem = {
-        val clean = inlineNewItemName.trim()
+        val clean = customMealSanitizeLabel(inlineNewItemName)
         if (clean.isNotEmpty()) {
           val slug = clean.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').ifEmpty { "local" }
           val newItem = IngredientCatalogItem("ing_local_$slug", clean, IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 500.0)
@@ -484,7 +531,7 @@ fun CustomMealSheetContent(
         )
         Button(
           onClick = addInlineLocalItem,
-          enabled = inlineNewItemName.isNotBlank(),
+          enabled = customMealSanitizeLabel(inlineNewItemName).isNotBlank(),
           shape = CircleShape,
           modifier = Modifier.defaultMinSize(minHeight = 48.dp),
         ) {
@@ -493,22 +540,35 @@ fun CustomMealSheetContent(
       }
     }
 
-    // 48.dp FilterChips toggling BOM membership across locally available Tier-1 stock.
+    // Search input filtering both Tier-1 perishables and Tier-2 pantry staples/spices.
+    OutlinedTextField(
+      value = ingredientSearchQuery,
+      onValueChange = { ingredientSearchQuery = it },
+      placeholder = { Text("Search all produce, proteins, grains, oils, and spices", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+      leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+      singleLine = true,
+      shape = RoundedCornerShape(14.dp),
+      modifier = Modifier.fillMaxWidth(),
+    )
+
+    // Multi-select FilterChip grid marking Tier-2 spices/oils with a · Staple hint.
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      availableTier1Items.forEach { item ->
+      filteredCatalogItems.forEach { item ->
         val selected = item.ingredientId in selectedIngredientIds
+        val cleanName = customMealSanitizeLabel(item.displayName)
+        val tierSuffix = if (item.tier == IngredientTier.TIER_2_STAPLE) " · Staple" else ""
         FilterChip(
           selected = selected,
           onClick = {
             selectedIngredientIds = if (selected) selectedIngredientIds - item.ingredientId else selectedIngredientIds + item.ingredientId
           },
           modifier = Modifier.defaultMinSize(minHeight = 48.dp),
-          label = { Text(item.displayName, style = MaterialTheme.typography.labelMedium) },
+          label = { Text("$cleanName$tierSuffix", style = MaterialTheme.typography.labelMedium) },
         )
       }
     }
 
-    // Optional toggle queueing selected BOM items onto the Smart Grocery List in the same batch.
+    // 48.dp row toggling automatic Smart Grocery List queueing on save.
     Row(
       modifier = Modifier
         .fillMaxWidth()
@@ -524,7 +584,7 @@ fun CustomMealSheetContent(
       )
     }
 
-    // Live 4-member plating preview card verifying 1-pot household goal synthesis before saving.
+    // Live 1-Pot 4-Way Family Plating preview synthesized from buildFamilyGoalPlatingGuide.
     Card(
       modifier = Modifier.fillMaxWidth(),
       shape = RoundedCornerShape(14.dp),
@@ -543,15 +603,15 @@ fun CustomMealSheetContent(
       }
     }
 
-    // Gate primary Save CTA on non-blank title, >= 1 BOM line, and EC-01 morning cap compliance.
+    // Require non-blank title, >= 1 user-selected ingredient, and EC-01 morning cap compliance.
     val canSave = customTitle.isNotBlank() && draftBomLines.isNotEmpty() && !exceedsBreakfastCap
 
-    // Primary 52.dp Save CTA committing recipe + scheduled slot(s) in 1 O(1) snapshot write.
+    // Primary 52.dp Save Custom Family Meal CTA.
     Button(
       onClick = {
         onSaveCustomMeal(
           CustomFamilyMealDraft(
-            title = customTitle.trim(),
+            title = customMealSanitizeLabel(customTitle),
             targetSlotType = selectedSlotType,
             targetDayIndex = selectedDayIndex,
             applyMondayThroughFriday = applyMonThroughFri,
@@ -580,15 +640,14 @@ fun CustomMealSheetContent(
   }
 }
 
-// Full-width 48.dp x 48.dp minute stepper row preventing horizontal 360dp row crush.
 @Composable
-private fun MinuteStepperRow(label: String, minutes: Int, onDelta: (Int) -> Unit) {
+private fun customMealMinuteStepperRow(label: String, minutes: Int, onDelta: (Int) -> Unit) {
+  // Reusable 48.dp +/- 2-minute stepper row updating live calibrated morning timing.
   Row(
     modifier = Modifier.fillMaxWidth(),
     horizontalArrangement = Arrangement.SpaceBetween,
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    // Weight left label so right-hand 48.dp - / + steppers never collide or clip.
     Text(
       text = label,
       style = MaterialTheme.typography.bodyMedium,
@@ -599,7 +658,7 @@ private fun MinuteStepperRow(label: String, minutes: Int, onDelta: (Int) -> Unit
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      // Step by +-2 minutes per tap for fast one-handed recipe timing entry.
+      // 48.dp decrement button (-2 minutes).
       FilledTonalIconButton(
         onClick = { onDelta(-2) },
         modifier = Modifier.size(48.dp),
@@ -613,6 +672,7 @@ private fun MinuteStepperRow(label: String, minutes: Int, onDelta: (Int) -> Unit
         maxLines = 1,
         softWrap = false,
       )
+      // 48.dp increment button (+2 minutes).
       FilledTonalIconButton(
         onClick = { onDelta(2) },
         modifier = Modifier.size(48.dp),
@@ -623,29 +683,48 @@ private fun MinuteStepperRow(label: String, minutes: Int, onDelta: (Int) -> Unit
   }
 }
 
-@Preview(showBackground = true, widthDp = 412, heightDp = 860)
+// Strips slashes and parentheses from user-entered titles and catalog display names.
+private fun customMealSanitizeLabel(raw: String): String =
+  raw
+    .replace(" / ", " and ")
+    .replace("/", " · ")
+    .replace(" (", " · ")
+    .replace("(", "")
+    .replace(")", "")
+    .replace(Regex("\\s+"), " ")
+    .trim()
+
+// Hermetic Warm Daylight preview verifying zero pre-checked Eggs+Milk and full Tier-1/Tier-2 search.
+@Preview(name = "CustomMealSheet Daylight", showBackground = true, widthDp = 412, heightDp = 860)
 @Composable
 private fun CustomMealSheetPreview() {
-  // Seed local Tier-1 produce/protein items and 1 <=25m breakfast preset for hermetic previewing.
+  // Include both Tier-1 quantitative items and a Tier-2 oil staple in preview fixtures.
   val catalog = listOf(
     IngredientCatalogItem("ing_egg", "Farm Eggs", IngredientCategory.DAIRY_EGGS, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 12),
     IngredientCatalogItem("ing_spinach", "Fresh Baby Spinach", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 300),
-    IngredientCatalogItem("ing_plantain", "Ripe Yellow Plantains", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 6),
+    IngredientCatalogItem("ing_olive_oil", "Extra-Virgin Olive Oil", IngredientCategory.PANTRY_STAPLE, IngredientTier.TIER_2_STAPLE, BaseUnit.MILLILITER, 750),
   )
-  // Verify 2-row 48.dp minute steppers and live 4-member plating preview in Warm Daylight theme.
   val preset = Recipe(
-    recipeId = "rec_plantain_eggs", title = "Golden Plantain & Spinach Egg Skillet",
-    sourceAttribution = "Family Kitchen", allowedSlots = listOf(MealSlotType.BREAKFAST, MealSlotType.DINNER),
-    preferredOwner = CookOwner.FRED, rawPrepMinutes = 5, cookMinutes = 10, calibratedActiveMinutes = 17,
+    recipeId = "rec_plantain_eggs",
+    title = "Golden Plantain and Spinach Egg Skillet",
+    sourceAttribution = "Family Kitchen",
+    allowedSlots = listOf(MealSlotType.BREAKFAST, MealSlotType.DINNER),
+    preferredOwner = CookOwner.FRED,
+    rawPrepMinutes = 5,
+    cookMinutes = 10,
+    calibratedActiveMinutes = 17,
     toddlerPrepTip = "Slice plantains lengthwise into soft strips for 2yo.",
-    bomLines = listOf(BomLine("ing_egg", 4), BomLine("ing_plantain", 3)),
+    bomLines = listOf(BomLine("ing_egg", 4), BomLine("ing_spinach", 150)),
   )
-  // Render CustomMealSheetContent directly so preview requires zero modal window tokens.
   FamilyKitchenBoardTheme {
     Surface(color = KitchenTheme.extendedColors.linen) {
       CustomMealSheetContent(
-        catalog = catalog, schedulableRecipes = listOf(preset), householdProfile = HouseholdProfile(),
-        initialSlotType = MealSlotType.BREAKFAST, onSelectPresetRecipe = { _, _, _, _ -> }, onSaveCustomMeal = {},
+        catalog = catalog,
+        schedulableRecipes = listOf(preset),
+        householdProfile = HouseholdProfile(),
+        initialSlotType = MealSlotType.BREAKFAST,
+        onSelectPresetRecipe = { _, _, _, _ -> },
+        onSaveCustomMeal = {},
       )
     }
   }

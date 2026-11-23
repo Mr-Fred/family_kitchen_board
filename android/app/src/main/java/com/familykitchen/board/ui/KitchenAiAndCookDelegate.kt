@@ -16,7 +16,9 @@ import com.familykitchen.board.domain.IntakeCommitTarget
 import com.familykitchen.board.domain.MealSlotStatus
 import com.familykitchen.board.domain.MealSlotType
 import com.familykitchen.board.domain.PantryLedgerEngine
+import com.familykitchen.board.domain.PostCookCompletionSummary
 import com.familykitchen.board.domain.Recipe
+import com.familykitchen.board.domain.RecipeCreationMode
 import com.familykitchen.board.domain.RestockDelta
 import com.familykitchen.board.domain.WorkoutTiming
 import com.familykitchen.board.domain.isWeekdayBreakfastEligible
@@ -34,8 +36,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// Cohesive AI Chef multimodal turn dispatcher, Step-by-Step Cook Mode controller, and bilingual
-// voice-routing delegate keeping KitchenBoardViewModel modular and well below 700 logical LOC.
+// Cohesive AI Sous-Chef multimodal turn dispatcher, Step-by-Step Cook Mode controller (with
+// Mini-Timer minimize & Post-Cook summary emission), and bilingual voice-routing delegate.
 
 /**
  * Normalizes `content://` gallery URIs and `FileProvider` camera captures in `cacheDir/captures/`
@@ -76,8 +78,8 @@ internal suspend fun preprocessImagePathOrUri(safeContext: Context?, rawUriOrPat
 
 /**
  * Internal delegate coordinating `SavorAI` (`AiChefAction`) multimodal/text turns, `Step-by-Step
- * Cook Mode` transitions, and bilingual (`en-US` / `fr-FR`) voice transcript routing on behalf of
- * [KitchenBoardViewModel].
+ * Cook Mode` transitions (including persistent Mini-Timer minimize & Post-Cook summaries), and
+ * bilingual (`en-US` / `fr-FR`) voice transcript routing on behalf of [KitchenBoardViewModel].
  */
 internal class KitchenAiAndCookDelegate(
   private val scope: CoroutineScope,
@@ -90,7 +92,7 @@ internal class KitchenAiAndCookDelegate(
   private val deleteTempImage: (String?) -> Unit,
   private val nowIso: () -> String,
   private val runGuarded: (suspend () -> Unit) -> Unit,
-  private val onOpenCustomMealSheet: (MealSlotType) -> Unit,
+  private val onOpenAddRecipeStudio: (RecipeCreationMode) -> Unit,
   private val onSchedulePresetRecipe: (Recipe, MealSlotType, Int, Boolean) -> Unit,
   private val onToggleSavedRecipe: (String) -> Unit,
   private val onQueueMissingIngredients: (Set<String>, List<RestockDelta>) -> Unit,
@@ -105,7 +107,7 @@ internal class KitchenAiAndCookDelegate(
   // Single-flight flag blocking duplicate SAF import coroutine launches on rapid double-taps.
   private val modelImportDispatched = AtomicBoolean(false)
 
-  // Dedicated Cloud AI setup & Keystore verification delegate keeping this class < 600 logical LOC.
+  // Dedicated Cloud AI setup & Keystore verification delegate keeping this class well under 700 LOC.
   private val cloudConfigDelegate = KitchenCloudConfigDelegate(
     scope = scope,
     mutableUiState = mutableUiState,
@@ -131,7 +133,8 @@ internal class KitchenAiAndCookDelegate(
     val state = mutableUiState.value
     // Inherit scheduled slot servings (including +1 postpartum / +2 guests) when tied to a slot.
     val resolvedServings = slotId?.let { id ->
-      state.snapshot.weeklyBoard.slots.firstOrNull { it.slotId == id }?.targetServings
+      state.activeDisplayedBoard.slots.firstOrNull { it.slotId == id }?.targetServings
+        ?: state.snapshot.weeklyBoard.slots.firstOrNull { it.slotId == id }?.targetServings
     } ?: recipe.baseServings.coerceAtLeast(1)
 
     // Pre-populate step ingredient chips and multi-step countdown timers via CookModeEngine.
@@ -146,12 +149,30 @@ internal class KitchenAiAndCookDelegate(
     mutableUiState.update {
       it.copy(
         activeCookModeSession = session,
+        isCookModeMinimized = false,
+        postCookSummary = null,
         activeVoiceTarget = if (handsFreeVoiceActive) VoiceCaptureTarget.COOK_MODE else it.activeVoiceTarget,
       )
     }
     // Start offline SpeechRecognizer immediately when launched from the Hands-Free Sous-Chef bar.
     if (handsFreeVoiceActive) {
       voiceInputPort.startListening(VoiceInputPort.LOCALE_EN_US)
+    }
+  }
+
+  /** Collapses full-screen Cook Mode into the persistent Mini-Timer bar while keeping timers live. */
+  fun minimizeCookMode() {
+    // Only minimize when an active CookModeSessionState exists so countdown ticks keep running.
+    if (mutableUiState.value.activeCookModeSession != null) {
+      mutableUiState.update { it.copy(isCookModeMinimized = true) }
+    }
+  }
+
+  /** Restores a minimized Cook Mode session back to full screen. */
+  fun resumeMinimizedCookMode() {
+    // Re-expand the existing CookModeSessionState without resetting step index or timer progress.
+    if (mutableUiState.value.activeCookModeSession != null) {
+      mutableUiState.update { it.copy(isCookModeMinimized = false) }
     }
   }
 
@@ -167,9 +188,8 @@ internal class KitchenAiAndCookDelegate(
             activeCookModeSession = currentSession.copy(isHandsFreeVoiceActive = true),
           )
         }
-        val started = voiceInputPort.startListening(VoiceInputPort.LOCALE_EN_US)
-        // Revert active indicator and inform cook if platform speech binding is unavailable.
-        if (!started) {
+        // Revert mic toggle state non-silently if Android SpeechRecognizer is unavailable offline.
+        if (!voiceInputPort.startListening(VoiceInputPort.LOCALE_EN_US)) {
           mutableUiState.update {
             it.copy(activeCookModeSession = currentSession.copy(isHandsFreeVoiceActive = false))
               .withToast("Hands-free speech service unavailable; use quick Q&A chips.")
@@ -177,11 +197,9 @@ internal class KitchenAiAndCookDelegate(
         }
       }
       else -> {
-        // Stop Main-Looper SpeechRecognizer cleanly when the cook mutes the hands-free HUD.
+        // Deterministically stop native microphone recognition when user disables hands-free mic.
         voiceInputPort.stopListening()
-        mutableUiState.update {
-          it.copy(activeCookModeSession = currentSession.copy(isHandsFreeVoiceActive = false))
-        }
+        mutableUiState.update { it.copy(activeCookModeSession = currentSession.copy(isHandsFreeVoiceActive = false)) }
       }
     }
   }
@@ -190,7 +208,7 @@ internal class KitchenAiAndCookDelegate(
   fun openCookModePantryAdjuster() {
     val state = mutableUiState.value
     val session = state.activeCookModeSession ?: return
-    // Match the explicit board slotId, today's planned slot, or any planned weekly slot for this dish.
+    // Resolve explicit session slotId first, then fall back to matching PLANNED slot on today/board.
     val matchingSlotId = session.slotId
       ?: state.dayMealCards
         .firstOrNull { it.recipe.recipeId == session.recipe.recipeId && it.slot.status == MealSlotStatus.PLANNED }
@@ -201,77 +219,81 @@ internal class KitchenAiAndCookDelegate(
 
     when {
       matchingSlotId != null -> onOpenAdjustSlotSheet(matchingSlotId)
-      else -> {
-        // Keep activeCookModeSession and running step timers intact on ad-hoc Reader/AI sessions.
-        mutableUiState.update {
-          it.withToast("Schedule '${session.recipe.title}' on your Meal Plan to customize per-slot ingredient overrides.")
-        }
+      else -> mutableUiState.update {
+        it.withToast("Schedule ${session.recipe.title} on your Meal Plan to customize per-slot ingredient overrides.")
       }
     }
   }
 
-  /** Completes Step-by-Step Cook Mode and commits `commitCookedMealBatch` in 1 `O(1)` write. */
-  fun completeCookModeAndDeductPantry(session: CookModeSessionState) {
-    runGuarded {
-      val state = mutableUiState.value
-      val current = state.snapshot
-      // Link ad-hoc Reader/AI Cook Mode launches to a matching PLANNED slot when available.
-      val resolvedSlot = session.slotId?.let { id ->
-        current.weeklyBoard.slots.firstOrNull { it.slotId == id }
-      } ?: state.dayMealCards
+  /**
+   * Completes Step-by-Step Cook Mode, commits `commitCookedMealBatch` in 1 `O(1)` write, and
+   * opens `PostCookCompletionSheet` with leftover portion & family reaction chips.
+   */
+  fun completeCookModeAndDeductPantry(session: CookModeSessionState) = runGuarded {
+    val state = mutableUiState.value
+    val current = state.snapshot
+    // Match the scheduled board slot so workout boosts and slot completion status update together.
+    val resolvedSlot = session.slotId?.let { id -> current.weeklyBoard.slots.firstOrNull { it.slotId == id } }
+      ?: state.dayMealCards
         .firstOrNull { it.recipe.recipeId == session.recipe.recipeId && it.slot.status == MealSlotStatus.PLANNED }
         ?.slot
 
-      val targetSlotId = resolvedSlot?.slotId ?: "cookmode_adhoc_${session.recipe.recipeId}"
-      // Compute single-pass O(M) pantry deduction respecting EC-07 flat 1x workout boosts & EC-10/11.
-      val deduction = PantryLedgerEngine.applyCookedDeduction(
-        pantry = current.pantryEntries,
-        recipe = session.recipe,
-        catalog = current.ingredients,
-        payload = CookedDeductionPayload(
-          slotId = targetSlotId,
-          recipeId = session.recipe.recipeId,
-          targetServings = session.targetServings,
-          activeWorkoutModifier = resolvedSlot?.activeWorkoutModifier ?: WorkoutTiming.NONE,
-        ),
-        nowIso = nowIso(),
-        householdAllergens = current.householdProfile.householdAllergens,
-      )
-      // Release active microphone capture before closing the full-screen Cook Mode overlay.
-      if (session.isHandsFreeVoiceActive) {
-        voiceInputPort.stopListening()
-      }
-      // Persist deducted pantry, slot status, and rescued expiring counter in 1 O(1) write.
-      storagePort.commitCookedMealBatch(current, targetSlotId, deduction, nowIso())
-      mutableUiState.update {
-        it.copy(activeCookModeSession = null)
-          .withToast("Completed '${session.recipe.title}' and updated your Pantry.")
-      }
+    val targetSlotId = resolvedSlot?.slotId ?: "cookmode_adhoc_${session.recipe.recipeId}"
+    val stamp = nowIso()
+    // Compute scaled BOM + flat 1x workout boost deduction clamped at 0.0 (EC-07 & EC-10).
+    val deduction = PantryLedgerEngine.applyCookedDeduction(
+      pantry = current.pantryEntries, recipe = session.recipe, catalog = current.ingredients,
+      payload = CookedDeductionPayload(
+        slotId = targetSlotId, recipeId = session.recipe.recipeId,
+        targetServings = session.targetServings,
+        activeWorkoutModifier = resolvedSlot?.activeWorkoutModifier ?: WorkoutTiming.NONE,
+      ),
+      nowIso = stamp, householdAllergens = current.householdProfile.householdAllergens,
+    )
+    // Release active SpeechRecognizer session before closing full-screen Cook Mode.
+    if (session.isHandsFreeVoiceActive) voiceInputPort.stopListening()
+    storagePort.commitCookedMealBatch(current, targetSlotId, deduction, stamp)
+
+    // Build PostCookCompletionSummary so extra batch-cooked portions can fill tomorrow's 0-BOM lunch.
+    val householdServings = current.householdProfile.effectiveTargetServings
+    val cookedServings = session.targetServings.coerceAtLeast(1)
+    val extraLeftovers = (cookedServings - householdServings).coerceAtLeast(0)
+    val cookedDay = (resolvedSlot?.dayIndex ?: state.todayDayIndex).coerceIn(0, 6)
+    val summary = PostCookCompletionSummary(
+      recipeId = session.recipe.recipeId, recipeTitle = session.recipe.title,
+      cookedSlotId = resolvedSlot?.slotId, cookedDayIndex = cookedDay,
+      cookedServings = cookedServings, householdServings = householdServings,
+      extraLeftoverServings = extraLeftovers,
+    )
+    mutableUiState.update {
+      it.copy(activeCookModeSession = null, isCookModeMinimized = false, postCookSummary = summary)
+        .withToast("Completed ${session.recipe.title} and updated your Pantry.")
     }
   }
 
-  /** Exits full-screen `StepByStepCookModeScreen` cleanly without deducting pantry stock. */
+  /** Ends `StepByStepCookModeScreen` (and any minimized Mini-Timer bar) without deducting stock. */
   fun exitCookMode() {
-    val session = mutableUiState.value.activeCookModeSession
-    if (session?.isHandsFreeVoiceActive == true) {
+    // Stop active speech recognition and clear both full-screen and minimized Mini-Timer state.
+    if (mutableUiState.value.activeCookModeSession?.isHandsFreeVoiceActive == true) {
       voiceInputPort.stopListening()
     }
-    mutableUiState.update { it.copy(activeCookModeSession = null) }
+    mutableUiState.update { it.copy(activeCookModeSession = null, isCookModeMinimized = false) }
   }
 
-  /** Dispatches all unidirectional [AiChefAction] intents emitted by `AiChefScreen`. */
+  /** Dispatches all unidirectional [AiChefAction] intents emitted by `AiChefScreen` / `SousChefSheet`. */
   fun handleAiChefAction(action: AiChefAction) {
-    // Exhaustive sealed-interface dispatch ensures zero unhandled AI Chef UI actions.
     when (action) {
       is AiChefAction.SubmitPrompt -> submitTurn(action.promptText, action.attachedImagePath)
 
       is AiChefAction.SelectQuickPrompt -> {
-        // Route recipe-import pills to CustomMealSheet and guide photo-scan pills cleanly.
+        // Route recipe-import pills straight to the 3-mode AddOrEditRecipeSheet (SMART_PASTE tab).
         val lowerPrompt = action.promptText.lowercase()
         val stagedImage = mutableUiState.value.attachedImagePath
         when {
-          lowerPrompt.contains("paste recipe") || lowerPrompt.contains("import recipe") ->
-            onOpenCustomMealSheet(MealSlotType.DINNER)
+          lowerPrompt.contains("paste recipe") || lowerPrompt.contains("import recipe") -> {
+            mutableUiState.update { it.copy(isSousChefSheetOpen = false) }
+            onOpenAddRecipeStudio(RecipeCreationMode.SMART_PASTE)
+          }
           (lowerPrompt.contains("scan fridge") || lowerPrompt.contains("scan spice")) && stagedImage.isNullOrBlank() ->
             mutableUiState.update {
               it.withToast("Tap Camera or Photo below to scan your fridge or spice rack.")
@@ -280,10 +302,10 @@ internal class KitchenAiAndCookDelegate(
         }
       }
 
-      is AiChefAction.AttachImage -> attachAndPreprocessImage(action.sourceUriOrPath, action.displayLabel)
+      is AiChefAction.AttachImage -> aiDelV2AttachAndPreprocessImage(action.sourceUriOrPath, action.displayLabel)
 
       AiChefAction.ClearAttachedImage -> {
-        // Deterministically delete staged temp JPEG when user taps 'X' on the composer thumbnail.
+        // Delete temporary preprocessed JPEG immediately when user removes attachment chip.
         deleteTempImage(mutableUiState.value.attachedImagePath)
         mutableUiState.update { it.copy(attachedImagePath = null, attachedImageLabel = null) }
       }
@@ -291,17 +313,13 @@ internal class KitchenAiAndCookDelegate(
       is AiChefAction.SelectDeviceProfile ->
         mutableUiState.update { it.copy(activeDeviceProfile = action.profile) }
 
-      is AiChefAction.ImportModelUri -> importOnDeviceModel(action.sourceUriString, action.displayName)
+      is AiChefAction.ImportModelUri -> aiDelV2ImportOnDeviceModel(action.sourceUriString, action.displayName)
 
       is AiChefAction.ApplyMealSwaps -> runGuarded {
-        // Apply approved pantry-grounded meal swaps in 1 O(1) snapshot write with Undo capture.
+        // Commit approved AI slot swaps in 1 O(1) write and retain pre-swap snapshot for 1-tap Undo.
         val current = mutableUiState.value.snapshot
-        val next = aiChefCoordinator.applyConfirmedMealSwaps(
-          snapshot = current,
-          proposal = action.proposal,
-          nowIso = nowIso(),
-        )
-        val summary = "Applied ${action.proposal.slotSwaps.size} meal swap(s) to Meal Plan."
+        val next = aiChefCoordinator.applyConfirmedMealSwaps(current, action.proposal, nowIso())
+        val summary = "Applied ${action.proposal.slotSwaps.size} meal swaps to Meal Plan."
         storagePort.saveSnapshotBatch(next)
         recordUndoSnapshot(current, summary, TopLevelDestination.PLAN)
         mutableUiState.update {
@@ -311,14 +329,10 @@ internal class KitchenAiAndCookDelegate(
       }
 
       is AiChefAction.QueueSuggestedIngredients -> runGuarded {
-        // Merge suggested brain-booster items into catalog + grocery queue in 1 O(1) write.
+        // Merge newly discovered catalog staples and queue onto Smart Grocery in 1 atomic write.
         val current = mutableUiState.value.snapshot
-        val next = aiChefCoordinator.queueSuggestedBrainBoosters(
-          snapshot = current,
-          proposal = action.proposal,
-          nowIso = nowIso(),
-        )
-        val summary = "Added ${action.proposal.newIngredientSuggestions.size} item(s) to Grocery List."
+        val next = aiChefCoordinator.queueSuggestedBrainBoosters(current, action.proposal, nowIso())
+        val summary = "Added ${action.proposal.newIngredientSuggestions.size} items to Grocery List."
         storagePort.saveSnapshotBatch(next)
         recordUndoSnapshot(current, summary, TopLevelDestination.GROCERIES)
         mutableUiState.update {
@@ -328,68 +342,50 @@ internal class KitchenAiAndCookDelegate(
       }
 
       is AiChefAction.ConfirmVisualRestock -> runGuarded {
-        // User-confirmed visual scan restock: never runs automatically prior to explicit tap.
+        // Apply confirmation-gated visual scan restock deltas only after explicit user approval.
         val current = mutableUiState.value.snapshot
         val next = aiChefCoordinator.applyConfirmedVisualRestock(current, action.intakeResult, nowIso())
-        val itemCount = action.intakeResult.groundedRestockDeltas.size +
-          action.intakeResult.proposedNewCatalogItems.size
-        val summary = "Stocked $itemCount scanned item(s) in Pantry."
+        val itemCount = action.intakeResult.groundedRestockDeltas.size + action.intakeResult.proposedNewCatalogItems.size
+        val summary = "Stocked $itemCount scanned items in Pantry."
         if (next != current) {
           storagePort.saveSnapshotBatch(next)
           recordUndoSnapshot(current, summary, TopLevelDestination.PANTRY)
         }
-        val confirmedIds = current.aiTurnHistory
-          .filter { it.visualIntakeResult == action.intakeResult }
-          .map { it.turnId }
-          .toSet()
+        val confirmedIds = current.aiTurnHistory.filter { it.visualIntakeResult == action.intakeResult }.map { it.turnId }.toSet()
         mutableUiState.update {
-          it.copy(confirmedVisualTurnIds = it.confirmedVisualTurnIds + confirmedIds)
-            .withToast(summary)
+          it.copy(confirmedVisualTurnIds = it.confirmedVisualTurnIds + confirmedIds).withToast(summary)
         }
       }
 
       is AiChefAction.CommitVisualIntakeSelection -> runGuarded {
-        // Selective chip commit for matched catalog items and synthesized spices/ingredients.
+        // Commit selectively checked scanned foods/spices to Pantry or Grocery in 1 O(1) write.
         val current = mutableUiState.value.snapshot
         val next = aiChefCoordinator.applySelectiveVisualIntakeCommit(
-          snapshot = current,
-          intakeResult = action.intakeResult,
-          selectedIngredientIds = action.selectedIngredientIds,
-          selectedNewLabels = action.selectedNewLabels,
-          destination = action.destination,
-          nowIso = nowIso(),
+          current, action.intakeResult, action.selectedIngredientIds,
+          action.selectedNewLabels, action.destination, nowIso(),
         )
         if (next == current) {
-          mutableUiState.update {
-            it.withToast("Select at least one detected item to add.")
-          }
+          mutableUiState.update { it.withToast("Select at least one detected item to add.") }
           return@runGuarded
         }
         storagePort.saveSnapshotBatch(next)
         val newCatalogCount = (next.ingredients.size - current.ingredients.size).coerceAtLeast(0)
-        val matchedCount = action.intakeResult.groundedRestockDeltas.count {
-          it.ingredientId in action.selectedIngredientIds
-        }
+        val matchedCount = action.intakeResult.groundedRestockDeltas.count { it.ingredientId in action.selectedIngredientIds }
         val committedCount = when (action.destination) {
           IntakeCommitTarget.PANTRY -> (matchedCount + newCatalogCount).coerceAtLeast(1)
           IntakeCommitTarget.GROCERY -> (next.aiAddedGroceryIds - current.aiAddedGroceryIds).size.coerceAtLeast(1)
         }
-        val adjustTarget = when (action.destination) {
-          IntakeCommitTarget.PANTRY -> TopLevelDestination.PANTRY
-          IntakeCommitTarget.GROCERY -> TopLevelDestination.GROCERIES
-        }
+        val adjustTarget = if (action.destination == IntakeCommitTarget.PANTRY) TopLevelDestination.PANTRY else TopLevelDestination.GROCERIES
         val summary = when (action.destination) {
-          IntakeCommitTarget.PANTRY -> "Stocked $committedCount item(s) in Pantry."
-          IntakeCommitTarget.GROCERY -> "Added $committedCount item(s) to Grocery List."
+          IntakeCommitTarget.PANTRY -> "Stocked $committedCount items in Pantry."
+          IntakeCommitTarget.GROCERY -> "Added $committedCount items to Grocery List."
         }
         val confirmedIds = current.aiTurnHistory
           .filter { it.turnId == action.turnId || it.visualIntakeResult == action.intakeResult }
-          .map { it.turnId }
-          .toSet() + setOfNotNull(action.turnId.takeIf { it.isNotBlank() })
+          .map { it.turnId }.toSet() + setOfNotNull(action.turnId.takeIf { it.isNotBlank() })
         recordUndoSnapshot(current, summary, adjustTarget)
         mutableUiState.update {
-          it.copy(confirmedVisualTurnIds = it.confirmedVisualTurnIds + confirmedIds)
-            .withToast(summary)
+          it.copy(confirmedVisualTurnIds = it.confirmedVisualTurnIds + confirmedIds).withToast(summary)
         }
       }
 
@@ -398,6 +394,7 @@ internal class KitchenAiAndCookDelegate(
       AiChefAction.DismissAgentActionBanner -> onDismissAgentActionBanner()
 
       is AiChefAction.StartVoiceInput -> {
+        // Route microphone transcripts to the Sous-Chef composer input field.
         mutableUiState.update { it.copy(activeVoiceTarget = VoiceCaptureTarget.AI_CHEF) }
         voiceInputPort.startListening(action.languageTag)
       }
@@ -405,6 +402,7 @@ internal class KitchenAiAndCookDelegate(
       AiChefAction.StopVoiceInput -> voiceInputPort.stopListening()
 
       AiChefAction.ResetConversation -> runGuarded {
+        // Reset native LiteRT/Cloud conversation context while keeping ElephantMemory intact.
         aiEdgePort.resetConversation()
         onDismissAgentActionBanner()
         val current = mutableUiState.value.snapshot
@@ -418,23 +416,27 @@ internal class KitchenAiAndCookDelegate(
         }
       }
 
-      is AiChefAction.StartCookModeFromAi ->
+      is AiChefAction.StartCookModeFromAi -> {
+        // Close modal SousChefSheet cleanly before expanding full-screen StepByStepCookModeScreen.
+        mutableUiState.update { it.copy(isSousChefSheetOpen = false) }
         startCookMode(recipe = action.recipe, slotId = action.slotId, handsFreeVoiceActive = false)
+      }
 
       is AiChefAction.AddRecipeToPlanFromAi -> {
-        // Respect EC-01 <= 25m Breakfast cap when selecting a default target slot for AI recipes.
+        // Default AI recipe scheduling to real todayDayIndex (never hardcoded Monday 0).
+        // Respect EC-01 weekday breakfast <= 25m cap when picking a default MealSlotType.
         val state = mutableUiState.value
         val resolvedSlotType = action.slotType ?: action.recipe.allowedSlots.firstOrNull { cand ->
           cand != MealSlotType.BREAKFAST || isWeekdayBreakfastEligible(action.recipe)
         } ?: MealSlotType.DINNER
-        val resolvedDay = action.dayIndex ?: state.activeDayIndex
+        val resolvedDay = action.dayIndex ?: state.todayDayIndex
         onSchedulePresetRecipe(action.recipe, resolvedSlotType, resolvedDay, false)
       }
 
       is AiChefAction.ToggleSaveRecipe -> onToggleSavedRecipe(action.recipeId)
 
       is AiChefAction.ApplyRecipeSubstitution -> runGuarded {
-        // Rewrite BOM line and recompute per-serving USDA/FNRI kcal & macros deterministically.
+        // Recompute BOM macros and sync matching assistant turn cards in 1 atomic batch write.
         val current = mutableUiState.value.snapshot
         val reduced = reduceAiRecipeSubstitution(
           snapshot = current,
@@ -443,7 +445,7 @@ internal class KitchenAiAndCookDelegate(
           toIngredientId = action.toIngredientId,
           nowIso = nowIso(),
         ) ?: return@runGuarded
-        val summary = "Updated '${reduced.second.title}' (${reduced.second.caloriesPerServing} kcal/srv)."
+        val summary = "Updated ${reduced.second.title} to ${reduced.second.caloriesPerServing} kcal per serving."
         storagePort.saveSnapshotBatch(reduced.first)
         recordUndoSnapshot(current, summary, TopLevelDestination.RECIPES)
         mutableUiState.update {
@@ -495,7 +497,6 @@ internal class KitchenAiAndCookDelegate(
   /** Submits a text or multimodal image turn through [AiChefCoordinator] and persists in `O(1)`. */
   fun submitTurn(promptText: String, attachedImagePath: String?) {
     val stateSnapshot = mutableUiState.value
-    // Block overlapping AI turns while inference or photo EXIF preprocessing is already active.
     if (stateSnapshot.isAiGenerating || stateSnapshot.isPreprocessingImage) {
       mutableUiState.update {
         it.withToast(
@@ -509,7 +510,6 @@ internal class KitchenAiAndCookDelegate(
       }
       return
     }
-    // Pass explicit per-turn image path rather than mutable @Volatile side-channel state.
     val effectiveImagePath = attachedImagePath ?: stateSnapshot.attachedImagePath
     if (promptText.isBlank() && effectiveImagePath.isNullOrBlank()) return
     val isVisionTurn = !effectiveImagePath.isNullOrBlank()
@@ -524,6 +524,7 @@ internal class KitchenAiAndCookDelegate(
       try {
         val currentState = mutableUiState.value
         val preTurnSnapshot = currentState.snapshot
+        // Pass real todayDayIndex so "tonight" and "today" commands target the real household day.
         val outcome = aiChefCoordinator.submitTurn(
           snapshot = preTurnSnapshot,
           promptText = promptText,
@@ -531,9 +532,8 @@ internal class KitchenAiAndCookDelegate(
           attachedImageLabel = currentState.attachedImageLabel,
           deviceProfile = currentState.activeDeviceProfile,
           nowIso = nowIso(),
-          activeDayIndex = currentState.activeDayIndex,
+          activeDayIndex = currentState.todayDayIndex,
         )
-        // Persist updated rolling 6-turn history (plus any deterministic text tool mutations).
         storagePort.saveSnapshotBatch(outcome.updatedSnapshot)
         if (outcome.status == AiTurnResolutionStatus.DETERMINISTIC_TOOL_EXECUTED) {
           val adjustTarget = when (outcome.assistantTurn.toolCallResult?.toolName) {
@@ -546,7 +546,6 @@ internal class KitchenAiAndCookDelegate(
             ?: "Updated kitchen state."
           recordUndoSnapshot(preTurnSnapshot, summary, adjustTarget)
         }
-        // Increment toastEventId strictly when this turn emits a fresh vision warning or toast.
         val newOutcomeToast = outcome.visionWarningMessage ?: outcome.toastMessage
         mutableUiState.update {
           val cleared = it.copy(
@@ -579,19 +578,18 @@ internal class KitchenAiAndCookDelegate(
     val state = mutableUiState.value
     when (state.activeVoiceTarget) {
       VoiceCaptureTarget.COOK_MODE -> {
-        // Parse bilingual en-US / fr-FR Cook Mode commands or grounded Sous-Chef step Q&A.
         val session = state.activeCookModeSession ?: return
         val nextSession = CookModeEngine.applyVoiceTranscriptToCookSession(
           state = session,
           transcript = transcript,
           catalog = state.snapshot.ingredients,
           youngestStage = state.snapshot.householdProfile.youngestStage,
+          pantryEntries = state.snapshot.pantryEntries,
         )
         mutableUiState.update { it.copy(activeCookModeSession = nextSession) }
       }
 
       VoiceCaptureTarget.GROCERY_DICTATION -> {
-        // Append spoken shopping item straight onto Smart Grocery List in 1 O(1) write.
         val clean = transcript.trim()
         if (clean.isNotEmpty()) {
           val slug = clean.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').ifEmpty { "dictated" }
@@ -603,15 +601,13 @@ internal class KitchenAiAndCookDelegate(
     }
   }
 
-  private fun attachAndPreprocessImage(rawUriOrPath: String, displayLabel: String) {
-    // Guard against overlapping camera/gallery preprocessing calls while resizing a photo.
+  private fun aiDelV2AttachAndPreprocessImage(rawUriOrPath: String, displayLabel: String) {
     if (mutableUiState.value.isPreprocessingImage) {
       mutableUiState.update {
         it.withToast("Still optimizing your previous photo — watch the spinner below.")
       }
       return
     }
-    // Clean up any previously staged photo before preprocessing the newly selected image.
     val previousPath = mutableUiState.value.attachedImagePath
     if (!previousPath.isNullOrBlank() && previousPath != rawUriOrPath) {
       deleteTempImage(previousPath)
@@ -649,8 +645,7 @@ internal class KitchenAiAndCookDelegate(
     }
   }
 
-  private fun importOnDeviceModel(sourceUriString: String, displayName: String?) {
-    // Reject duplicate model import requests while discovery, SAF copy, or GPU shader init runs.
+  private fun aiDelV2ImportOnDeviceModel(sourceUriString: String, displayName: String?) {
     if (
       aiEdgePort.runtimeState.value.isBackgroundBusy ||
       mutableUiState.value.aiRuntimeState.isBackgroundBusy ||
@@ -665,7 +660,6 @@ internal class KitchenAiAndCookDelegate(
     mutableUiState.update {
       it.withToast("Importing ${cleanDisplayName ?: "Gemma model"} — see live progress spinner...")
     }
-    // Stream SAF document via <name>.part temp file + atomic rename inside LiteRtMultimodalEngine.
     scope.launch {
       try {
         val result = aiEdgePort.importAndLoadModel(sourceUriString, displayName)

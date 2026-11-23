@@ -5,11 +5,10 @@ import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-// Pure chronological 21-slot BOM reservation and whole-package grocery diff engine.
-// Enforces EC-09 (chronological contention + ceil rounding), EC-11 (Tier-2 LOW/OUT queueing),
-// EC-12 (skipped/cooked reservation release), meal usage labels, and pantry deduplication savings.
+// Pure chronological 21-slot BOM reservation, 0-BOM leftover skip, Palengke/Supermarket venue tagging,
+// transparent skipped-staples reporting, and whole-package grocery diff engine (EC-09, EC-11, EC-12).
 
-private val GROCERY_WEEKDAY_LABELS: List<String> = listOf(
+private val GROCERY_CORE_WEEKDAY_LABELS: List<String> = listOf(
   "Monday",
   "Tuesday",
   "Wednesday",
@@ -31,10 +30,10 @@ fun sortSlotsChronologically(slots: List<MealSlot>): List<MealSlot> =
   slots.sortedWith(compareBy<MealSlot> { it.dayIndex }.thenBy { it.slotType.chronologicalRank })
 
 /**
- * Computes chronological 21-slot Tier-1 reservations, mid-week shortage alerts, whole-package
- * ceiling rounding (`ceil(netDeficit / defaultPackageQuantity)`), Tier-2 `LOW`/`OUT` restock
- * queueing, skipped/cooked reservation release, planned meal attributions, package descriptors,
- * deduplication savings, and sort-mode ordering (`EC-09`, `EC-11`, `EC-12`).
+ * Computes chronological 21-slot Tier-1 reservations, `0`-BOM leftover-lunch bypass, mid-week
+ * shortage alerts, whole-package ceiling rounding (`ceil(netDeficit / defaultPackageQuantity)`),
+ * Tier-2 `LOW`/`OUT` restock queueing, `Palengke` vs `Supermarket` venue tags, transparent
+ * `skippedStockedItems` summaries, deduplication savings, and sort-mode ordering (`EC-09`, `EC-11`, `EC-12`).
  *
  * @param board Current 7-day household menu board.
  * @param recipes Recipe collection indexed by `recipeId`.
@@ -82,10 +81,11 @@ fun computeWeeklyGroceryDiff(
   var plannedMealCount = 0
 
   for (slot in sortedSlots) {
-    // EC-12: Only PLANNED slots reserve stock; COOKED and COMPLETED_SKIPPED release reservations.
-    // Tapping "Ate Leftovers / Skip" immediately frees reserved stock for downstream weekday meals.
+    // EC-12 + V2 Leftover Guard: COOKED, COMPLETED_SKIPPED, and 0-BOM leftover slots reserve 0 groceries.
+    // Batch-cooking 2x tonight already reserved 2x BOM on the source meal, so tomorrow's lunch is free.
     val recipe = recipeById[slot.recipeId]
-    if (slot.status != MealSlotStatus.PLANNED || recipe == null) {
+    val isLeftoverLunch = !slot.leftoverSourceRecipeId.isNullOrBlank()
+    if (slot.status != MealSlotStatus.PLANNED || recipe == null || isLeftoverLunch) {
       val inactiveSummary = SlotReservationSummary(slot.slotId, slot.dayIndex, slot.slotType, slot.status)
       slotSummaries.add(inactiveSummary)
       slotSummariesBySlotId[slot.slotId] = inactiveSummary
@@ -93,7 +93,7 @@ fun computeWeeklyGroceryDiff(
     }
 
     plannedMealCount += 1
-    val slotUsageLabel = formatSlotAttributionLabel(slot.dayIndex, slot.slotType, recipe.title)
+    val slotUsageLabel = groceryCoreFormatSlotAttribution(slot.dayIndex, slot.slotType, recipe.title)
 
     // Resolve scaled BOM quantities, substitute rewrites (EC-03), and flat 1x Dad workout boosts (EC-07).
     val effectiveBom = resolveEffectiveMealBom(
@@ -158,7 +158,6 @@ fun computeWeeklyGroceryDiff(
   val boughtPackagesByIngredientId = linkedMapOf<String, Int>()
 
   // Step 1: Compute Tier-1 net weekly deficits and whole-package ceiling rounding (EC-09).
-  // Example: needing 8 eggs with 6 in stock -> netDeficit = 2 -> ceil(2 / 12) = 1 carton (12 eggs).
   for ((ingredientId, totalReservedQty) in totalPlannedUsage) {
     val currentStockQty = initialStock[ingredientId] ?: 0.0
     val netDeficit = max(0.0, totalReservedQty - currentStockQty)
@@ -169,12 +168,12 @@ fun computeWeeklyGroceryDiff(
     val catalogItem = catalogById[ingredientId]
     val category = catalogItem?.category ?: IngredientCategory.PRODUCE
     val baseUnit = catalogItem?.baseUnit ?: BaseUnit.COUNT
-    val pkgQty = safePackageQuantity(catalogItem)
+    val pkgQty = groceryCoreSafePackageQuantity(catalogItem)
     // Ceiling-round uncovered weekly deficit to whole store packages before checking overrides.
     val packagesToBuy = ceil(netDeficit / pkgQty).toInt().coerceAtLeast(1)
-    val unitPkgPrice = safePackagePriceUsd(catalogItem, category, IngredientTier.TIER_1_QUANTITATIVE)
+    val unitPkgPrice = groceryCoreSafePackagePriceUsd(catalogItem, category, IngredientTier.TIER_1_QUANTITATIVE)
     // Apply any active shopper buy-quantity override (e.g. 4 kg -> 2 kg) and prorate package cost.
-    val buyTerms = resolveEffectiveGroceryBuyTerms(
+    val buyTerms = groceryCoreResolveBuyTerms(
       basePackagesToBuy = packagesToBuy,
       pkgQty = pkgQty,
       unitPkgPrice = unitPkgPrice,
@@ -204,25 +203,23 @@ fun computeWeeklyGroceryDiff(
         isChecked = ingredientId in checkedGroceryItemIds,
         isQuantityOverridden = buyTerms.isOverridden,
         plannedRestockQuantity = buyTerms.plannedRestockQty,
+        marketVenue = groceryCoreResolveVenue(catalogItem, category),
       ),
     )
     includedGroceryIds.add(ingredientId)
     boughtPackagesByIngredientId[ingredientId] = buyTerms.effectivePackages
-    // Emit effectiveRestockQty so 1-tap Restock adds the exact edited quantity into Pantry.
     restockDeltas.add(
       RestockDelta(ingredientId = ingredientId, addedBaseQuantity = buyTerms.effectiveRestockQty),
     )
   }
 
   // Step 2: Queue 1 default package for any Tier-2 staple marked LOW or OUT (EC-11).
-  // Restocking a Tier-2 item resets its stapleStatus back to PLENTY in 1 atomic batch.
   val candidateStapleIds = linkedSetOf<String>().apply {
     addAll(pantryById.keys)
     addAll(boardTouchedIngredients)
   }
 
   for (ingredientId in candidateStapleIds) {
-    // Skip Tier-2 staples already covered above or dismissed for the current shopping trip.
     if (ingredientId in includedGroceryIds || ingredientId in dismissedGroceryItemIds) continue
     val pantryEntry = pantryById[ingredientId] ?: continue
     if (pantryEntry.tier != IngredientTier.TIER_2_STAPLE) continue
@@ -236,9 +233,9 @@ fun computeWeeklyGroceryDiff(
     val catalogItem = catalogById[ingredientId]
     val category = catalogItem?.category ?: IngredientCategory.PANTRY_STAPLE
     val baseUnit = catalogItem?.baseUnit ?: BaseUnit.MILLILITER
-    val pkgQty = safePackageQuantity(catalogItem)
-    val unitPkgPrice = safePackagePriceUsd(catalogItem, category, IngredientTier.TIER_2_STAPLE)
-    val buyTerms = resolveEffectiveGroceryBuyTerms(
+    val pkgQty = groceryCoreSafePackageQuantity(catalogItem)
+    val unitPkgPrice = groceryCoreSafePackagePriceUsd(catalogItem, category, IngredientTier.TIER_2_STAPLE)
+    val buyTerms = groceryCoreResolveBuyTerms(
       basePackagesToBuy = 1,
       pkgQty = pkgQty,
       unitPkgPrice = unitPkgPrice,
@@ -271,6 +268,7 @@ fun computeWeeklyGroceryDiff(
         isChecked = ingredientId in checkedGroceryItemIds,
         isQuantityOverridden = buyTerms.isOverridden,
         plannedRestockQuantity = buyTerms.plannedRestockQty,
+        marketVenue = groceryCoreResolveVenue(catalogItem, category),
       ),
     )
     includedGroceryIds.add(ingredientId)
@@ -285,7 +283,6 @@ fun computeWeeklyGroceryDiff(
   }
 
   // Step 3: Append manually queued or AI-suggested items (`aiAddedGroceryIds`) not already covered.
-  // Supports 1-tap "+ Need to Buy" in Pantry and "+ Add Suggested Ingredients" in AI Chef.
   for (manualId in aiAddedGroceryIds) {
     if (manualId.isBlank() || manualId in includedGroceryIds || manualId in dismissedGroceryItemIds) {
       continue
@@ -295,9 +292,9 @@ fun computeWeeklyGroceryDiff(
     val tier = pantryEntry?.tier ?: catalogItem?.tier ?: IngredientTier.TIER_1_QUANTITATIVE
     val category = catalogItem?.category ?: IngredientCategory.PRODUCE
     val baseUnit = catalogItem?.baseUnit ?: BaseUnit.GRAM
-    val pkgQty = safePackageQuantity(catalogItem)
-    val unitPkgPrice = safePackagePriceUsd(catalogItem, category, tier)
-    val buyTerms = resolveEffectiveGroceryBuyTerms(
+    val pkgQty = groceryCoreSafePackageQuantity(catalogItem)
+    val unitPkgPrice = groceryCoreSafePackagePriceUsd(catalogItem, category, tier)
+    val buyTerms = groceryCoreResolveBuyTerms(
       basePackagesToBuy = 1,
       pkgQty = pkgQty,
       unitPkgPrice = unitPkgPrice,
@@ -334,6 +331,7 @@ fun computeWeeklyGroceryDiff(
         isChecked = manualId in checkedGroceryItemIds,
         isQuantityOverridden = buyTerms.isOverridden,
         plannedRestockQuantity = buyTerms.plannedRestockQty,
+        marketVenue = groceryCoreResolveVenue(catalogItem, category),
       ),
     )
     includedGroceryIds.add(manualId)
@@ -348,26 +346,41 @@ fun computeWeeklyGroceryDiff(
     )
   }
 
-  // Step 4: Quantify automatic pantry deduplication count and USD savings across planned meals.
+  // Step 4: Quantify pantry deduplication savings and populate transparent skippedStockedItems.
+  val skippedStockedItems = mutableListOf<SkippedPantryItemSummary>()
   var skippedStockedStapleCount = 0
   var deduplicationSavings = 0.0
+
   for (ingredientId in boardTouchedIngredients) {
     val catalogItem = catalogById[ingredientId]
     val pantryEntry = pantryById[ingredientId]
     val tier = pantryEntry?.tier ?: catalogItem?.tier ?: IngredientTier.TIER_1_QUANTITATIVE
     val category = catalogItem?.category ?: IngredientCategory.PRODUCE
-    val unitPkgPrice = safePackagePriceUsd(catalogItem, category, tier)
+    val baseUnit = catalogItem?.baseUnit ?: BaseUnit.GRAM
+    val unitPkgPrice = groceryCoreSafePackagePriceUsd(catalogItem, category, tier)
     val boughtPackages = boughtPackagesByIngredientId[ingredientId] ?: 0
 
-    if (ingredientId !in includedGroceryIds) {
+    // Only credit items genuinely covered by Pantry stock (never items merely dismissed for this trip).
+    if (ingredientId !in includedGroceryIds && ingredientId !in dismissedGroceryItemIds) {
       skippedStockedStapleCount += 1
+      val requiredQty = totalPlannedUsage[ingredientId] ?: 0.0
+      val stockBadge = groceryCoreFormatSkippedStockLabel(pantryEntry, tier, initialStock[ingredientId] ?: 0.0, baseUnit)
+      skippedStockedItems.add(
+        SkippedPantryItemSummary(
+          ingredientId = ingredientId,
+          displayName = catalogItem?.displayName ?: ingredientId,
+          currentQuantityLabel = stockBadge,
+          requiredQuantity = requiredQty,
+          baseUnit = baseUnit,
+        ),
+      )
     }
 
     val unbufferedPackages = when (tier) {
       IngredientTier.TIER_2_STAPLE -> 1
       IngredientTier.TIER_1_QUANTITATIVE -> {
         val reservedQty = totalPlannedUsage[ingredientId] ?: 0.0
-        val pkgQty = safePackageQuantity(catalogItem)
+        val pkgQty = groceryCoreSafePackageQuantity(catalogItem)
         if (reservedQty > 0.0) ceil(reservedQty / pkgQty).toInt().coerceAtLeast(1) else 0
       }
     }
@@ -376,8 +389,8 @@ fun computeWeeklyGroceryDiff(
   }
 
   // Step 5: Order items per active GrocerySortMode while preserving AISLE_SORTED discovery order.
-  val groceryItems = sortGroceryItems(rawGroceryItems, grocerySortMode)
-  val remainingTotalUsd = roundGroceryUsd(
+  val groceryItems = groceryCoreSortItems(rawGroceryItems, grocerySortMode)
+  val remainingTotalUsd = groceryCoreRoundUsd(
     groceryItems.filterNot { it.isChecked }.sumOf { it.estimatedCostUsd },
   )
 
@@ -388,19 +401,54 @@ fun computeWeeklyGroceryDiff(
     groceryItemsByCategory = groceryItems.groupBy { it.category },
     restockDeltas = restockDeltas,
     skippedStockedStapleCount = skippedStockedStapleCount,
-    deduplicationSavingsUsd = roundGroceryUsd(deduplicationSavings),
+    deduplicationSavingsUsd = groceryCoreRoundUsd(deduplicationSavings),
     plannedMealCount = plannedMealCount,
     estimatedTotalCostUsd = remainingTotalUsd,
+    skippedStockedItems = skippedStockedItems,
   )
 }
 
+// Route catalog items to Palengke vs Supermarket, falling back by category for synthetic test IDs.
+private fun groceryCoreResolveVenue(
+  catalogItem: IngredientCatalogItem?,
+  fallbackCategory: IngredientCategory,
+): MarketVenue =
+  when {
+    catalogItem != null -> resolveMarketVenue(catalogItem)
+    fallbackCategory == IngredientCategory.PRODUCE -> MarketVenue.WET_MARKET
+    else -> MarketVenue.SUPERMARKET
+  }
+
+// Format humanized home-stock badges ("2 kg", "1.5 L", "Plenty") for expandable Pantry Adjusted rows.
+private fun groceryCoreFormatSkippedStockLabel(
+  pantryEntry: PantryLedgerEntry?,
+  tier: IngredientTier,
+  stockQty: Double,
+  baseUnit: BaseUnit,
+): String =
+  when (tier) {
+    IngredientTier.TIER_2_STAPLE -> when (pantryEntry?.stapleStatus) {
+      StapleStatus.LOW -> "Low"
+      StapleStatus.OUT -> "Out"
+      else -> "Plenty"
+    }
+    IngredientTier.TIER_1_QUANTITATIVE -> when {
+      baseUnit == BaseUnit.GRAM && stockQty >= 1000.0 ->
+        "${groceryCoreFormatNumber(stockQty / 1000.0)} kg"
+      baseUnit == BaseUnit.MILLILITER && stockQty >= 1000.0 ->
+        "${groceryCoreFormatNumber(stockQty / 1000.0)} L"
+      else -> "${groceryCoreFormatNumber(stockQty)} ${baseUnit.wireCode}"
+    }
+  }
+
 // Guard package denominator against zero/NaN so ceiling division never produces Infinity.
-private fun safePackageQuantity(catalogItem: IngredientCatalogItem?): Double {
+private fun groceryCoreSafePackageQuantity(catalogItem: IngredientCatalogItem?): Double {
   val candidate = catalogItem?.defaultPackageQuantity ?: 1.0
   return if (candidate > 0.0 && candidate.isFinite()) candidate else 1.0
 }
 
-private fun safePackagePriceUsd(
+// Fall back to category-level Bantay Presyo PHP defaults when an item omits package price.
+private fun groceryCoreSafePackagePriceUsd(
   catalogItem: IngredientCatalogItem?,
   category: IngredientCategory,
   tier: IngredientTier,
@@ -412,15 +460,17 @@ private fun safePackagePriceUsd(
   }
 }
 
-private fun roundGroceryUsd(amount: Double): Double =
+// Clamp non-finite or negative currency totals to 0.0 and round to two decimal places.
+private fun groceryCoreRoundUsd(amount: Double): Double =
   if (!amount.isFinite() || amount <= 0.0) 0.0 else (amount * 100.0).roundToInt() / 100.0
 
-private fun formatSlotAttributionLabel(
+// Build meal usage attributions such as "for Wednesday Dinner • One-Pan Lemon Salmon".
+private fun groceryCoreFormatSlotAttribution(
   dayIndex: Int,
   slotType: MealSlotType,
   recipeTitle: String,
 ): String {
-  val dayName = GROCERY_WEEKDAY_LABELS.getOrElse(dayIndex) { "Weekday" }
+  val dayName = GROCERY_CORE_WEEKDAY_LABELS.getOrElse(dayIndex) { "Weekday" }
   val slotName = when (slotType) {
     MealSlotType.BREAKFAST -> "Breakfast"
     MealSlotType.LUNCH -> "Lunch"
@@ -429,7 +479,7 @@ private fun formatSlotAttributionLabel(
   return "for $dayName $slotName • $recipeTitle"
 }
 
-private data class EffectiveGroceryBuyTerms(
+private data class GroceryCoreBuyTerms(
   val effectivePackages: Int,
   val effectiveRestockQty: Double,
   val plannedRestockQty: Double,
@@ -439,7 +489,7 @@ private data class EffectiveGroceryBuyTerms(
 )
 
 // Resolves custom buy-quantity overrides, prorated package cost, and whole-pack vs custom labels.
-private fun resolveEffectiveGroceryBuyTerms(
+private fun groceryCoreResolveBuyTerms(
   basePackagesToBuy: Int,
   pkgQty: Double,
   unitPkgPrice: Double,
@@ -447,17 +497,16 @@ private fun resolveEffectiveGroceryBuyTerms(
   category: IngredientCategory,
   tier: IngredientTier,
   rawOverrideQty: Double?,
-): EffectiveGroceryBuyTerms {
+): GroceryCoreBuyTerms {
   val plannedRestockQty = basePackagesToBuy.toDouble() * pkgQty
   val overrideQty = rawOverrideQty?.takeIf { it.isFinite() && it > 0.0 }
   if (overrideQty == null) {
-    // Preserve baseline ceiling-rounded packages, planned quantity, and un-overridden cost.
-    return EffectiveGroceryBuyTerms(
+    return GroceryCoreBuyTerms(
       effectivePackages = basePackagesToBuy,
       effectiveRestockQty = plannedRestockQty,
       plannedRestockQty = plannedRestockQty,
-      effectiveCostUsd = roundGroceryUsd(basePackagesToBuy * unitPkgPrice),
-      descriptor = formatPackageDescriptor(basePackagesToBuy, plannedRestockQty, baseUnit, category, tier),
+      effectiveCostUsd = groceryCoreRoundUsd(basePackagesToBuy * unitPkgPrice),
+      descriptor = groceryCoreFormatPackageDescriptor(basePackagesToBuy, plannedRestockQty, baseUnit, category, tier),
       isOverridden = false,
     )
   }
@@ -465,15 +514,14 @@ private fun resolveEffectiveGroceryBuyTerms(
   // Prorate price linearly by (overrideQty / pkgQty) so 2000g or 1500g reflects exact market cost.
   val effectiveRestockQty = overrideQty
   val effectivePackages = ceil(effectiveRestockQty / pkgQty).toInt().coerceAtLeast(1)
-  val effectiveCostUsd = roundGroceryUsd((effectiveRestockQty / pkgQty) * unitPkgPrice)
+  val effectiveCostUsd = groceryCoreRoundUsd((effectiveRestockQty / pkgQty) * unitPkgPrice)
   val isOverridden = abs(effectiveRestockQty - plannedRestockQty) >= 0.01
-  // Use standard pack noun when override lands on an exact pack multiple, otherwise Custom label.
   val descriptor = when {
     abs(effectiveRestockQty - effectivePackages.toDouble() * pkgQty) < 0.01 ->
-      formatPackageDescriptor(effectivePackages, effectiveRestockQty, baseUnit, category, tier)
-    else -> formatCustomQuantityDescriptor(effectiveRestockQty, baseUnit)
+      groceryCoreFormatPackageDescriptor(effectivePackages, effectiveRestockQty, baseUnit, category, tier)
+    else -> groceryCoreFormatCustomDescriptor(effectiveRestockQty, baseUnit)
   }
-  return EffectiveGroceryBuyTerms(
+  return GroceryCoreBuyTerms(
     effectivePackages = effectivePackages,
     effectiveRestockQty = effectiveRestockQty,
     plannedRestockQty = plannedRestockQty,
@@ -483,7 +531,7 @@ private fun resolveEffectiveGroceryBuyTerms(
   )
 }
 
-private fun formatPackageDescriptor(
+private fun groceryCoreFormatPackageDescriptor(
   packagesToBuy: Int,
   restockQuantity: Double,
   baseUnit: BaseUnit,
@@ -500,20 +548,20 @@ private fun formatPackageDescriptor(
     else -> "pack"
   }
   val pkgLabel = if (packagesToBuy == 1) singularNoun else "${singularNoun}s"
-  val qtyText = formatQuantityNumber(restockQuantity)
+  val qtyText = groceryCoreFormatNumber(restockQuantity)
   return "$packagesToBuy $pkgLabel ($qtyText ${baseUnit.wireCode})"
 }
 
 // Formats non-integer-multiple buy overrides such as "Custom (1500 g)" for clear shopper scanning.
-private fun formatCustomQuantityDescriptor(
+private fun groceryCoreFormatCustomDescriptor(
   restockQuantity: Double,
   baseUnit: BaseUnit,
 ): String {
-  val qtyText = formatQuantityNumber(restockQuantity)
+  val qtyText = groceryCoreFormatNumber(restockQuantity)
   return "Custom ($qtyText ${baseUnit.wireCode})"
 }
 
-private fun formatQuantityNumber(quantity: Double): String {
+private fun groceryCoreFormatNumber(quantity: Double): String {
   // Round to 2 decimal places and drop ".0" on exact integers (e.g. 1500.0 -> "1500").
   val qtyRounded = (quantity * 100.0).roundToInt() / 100.0
   return if (qtyRounded == qtyRounded.toLong().toDouble()) {
@@ -523,7 +571,8 @@ private fun formatQuantityNumber(quantity: Double): String {
   }
 }
 
-private fun sortGroceryItems(
+// Order grocery items by aisle discovery order, earliest planned meal, or shortage urgency.
+private fun groceryCoreSortItems(
   items: List<GroceryListItem>,
   sortMode: GrocerySortMode,
 ): List<GroceryListItem> =
@@ -545,10 +594,12 @@ private fun sortGroceryItems(
  * Object namespace exposing weekly grocery diff calculations for qualified `GroceryDiffEngine.*` calls.
  */
 object GroceryDiffEngine {
+  // Deterministic Monday..Sunday, BREAKFAST < LUNCH < DINNER slot comparator.
   /** Delegates to [com.familykitchen.board.domain.sortSlotsChronologically]. */
   fun sortSlotsChronologically(slots: List<MealSlot>): List<MealSlot> =
     com.familykitchen.board.domain.sortSlotsChronologically(slots)
 
+  // Chronological 21-slot Tier-1 reservation, whole-pack rounding, and venue/dedup diff entrypoint.
   /** Delegates to [com.familykitchen.board.domain.computeWeeklyGroceryDiff]. */
   fun computeWeeklyGroceryDiff(
     board: WeeklyBoard,
@@ -563,15 +614,7 @@ object GroceryDiffEngine {
     dismissedGroceryItemIds: Set<String> = emptySet(),
   ): WeeklyGroceryDiff =
     com.familykitchen.board.domain.computeWeeklyGroceryDiff(
-      board = board,
-      recipes = recipes,
-      catalog = catalog,
-      pantry = pantry,
-      householdAllergens = householdAllergens,
-      aiAddedGroceryIds = aiAddedGroceryIds,
-      checkedGroceryItemIds = checkedGroceryItemIds,
-      grocerySortMode = grocerySortMode,
-      groceryQuantityOverrides = groceryQuantityOverrides,
-      dismissedGroceryItemIds = dismissedGroceryItemIds,
+      board, recipes, catalog, pantry, householdAllergens, aiAddedGroceryIds,
+      checkedGroceryItemIds, grocerySortMode, groceryQuantityOverrides, dismissedGroceryItemIds,
     )
 }

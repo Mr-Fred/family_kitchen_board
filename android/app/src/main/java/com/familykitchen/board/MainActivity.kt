@@ -15,25 +15,27 @@ import com.familykitchen.board.data.AssetSeedCatalogLoader
 import com.familykitchen.board.data.KeystoreCloudCredentialVault
 import com.familykitchen.board.data.KitchenImagePreprocessor
 import com.familykitchen.board.data.LocalJsonKitchenStorage
+import com.familykitchen.board.ports.SystemKitchenClockAdapter
 import com.familykitchen.board.ui.KitchenBoardViewModel
 import com.familykitchen.board.ui.navigation.KitchenScaffold
 import com.familykitchen.board.ui.theme.FamilyKitchenBoardTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-// Thin (< 80 logical lines) 100% Native Jetpack Compose entrypoint for SavorAI / Family Kitchen Board.
-// Wires offline-first on-device LiteRT-LM + opt-in Keystore AES-256-GCM HTTPS Cloud LLM routing.
+// Thin (< 80 logical lines) 100% Native Jetpack Compose entrypoint for SavorAI v2.0.
+// Wires offline-first on-device LiteRT-LM, real wall-clock sync, and Keystore Cloud LLM routing.
 
 /**
- * Primary native Android [ComponentActivity] hosting the `SavorAI` (`Family Kitchen Board`)
- * Jetpack Compose Material 3 shell on Android 12+ phones and tablets (`minSdk = 31`).
+ * Primary native Android [ComponentActivity] hosting the 4-tab `SavorAI` (`Family Kitchen Board`)
+ * Jetpack Compose Material 3 shell (`Plan · Pantry · Recipes · Shop` + contextual `SousChefModalSheet`
+ * and `ActiveCookMiniBar`) on Android 12+ phones and tablets (`minSdk = 31`).
  *
  * Configures edge-to-edge system bars, prunes stale temporary camera captures in `cacheDir/captures/`,
- * and wires offline-first persistence (`LocalJsonKitchenStorage`), seed asset validation
- * (`AssetSeedCatalogLoader`), hardware Keystore AES-256-GCM credential protection
- * (`KeystoreCloudCredentialVault`), hybrid On-Device / Cloud multimodal routing
- * (`HybridAiInferenceRouter` wrapping `LiteRtMultimodalEngine`), and bilingual voice input
- * (`AndroidVoiceInputAdapter`) into [KitchenBoardViewModel].
+ * refreshes [SystemKitchenClockAdapter] on Activity resume, and wires offline-first persistence
+ * (`LocalJsonKitchenStorage`), seed asset validation (`AssetSeedCatalogLoader`), hardware Keystore
+ * AES-256-GCM credential protection (`KeystoreCloudCredentialVault`), hybrid On-Device and Cloud
+ * multimodal routing (`HybridAiInferenceRouter` wrapping `LiteRtMultimodalEngine`), and bilingual
+ * voice input (`AndroidVoiceInputAdapter`) into [KitchenBoardViewModel].
  */
 class MainActivity : ComponentActivity() {
 
@@ -53,16 +55,16 @@ class MainActivity : ComponentActivity() {
       cloudVaultPort = cloudVault,
       appContext = appContext,
       autoInitializeAiOnStart = true,
+      clockPort = SystemKitchenClockAdapter(),
     )
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    // Extend warm linen / counter-dark surfaces cleanly behind translucent status and nav bars.
+    // Extend warm linen and counter-dark surfaces cleanly behind translucent system bars.
     enableEdgeToEdge()
 
-    // Sweep orphaned camera/inference JPEGs (> 30 min old) off the UI thread on cold start.
-    // On-device AI runtime initialization runs once via hydrateInitialSnapshot(autoInitializeAiOnStart = true).
+    // Sweep orphaned camera and inference JPEGs (> 30 min old) off the UI thread on cold start.
     lifecycleScope.launch(Dispatchers.IO) {
       runCatching { KitchenImagePreprocessor.pruneStaleCaptures(applicationContext) }
     }
@@ -73,5 +75,11 @@ class MainActivity : ComponentActivity() {
         KitchenScaffold(viewModel = viewModel)
       }
     }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    // Refresh Today date, live pantry expiry aging, and 8:30 PM night-prep state after overnight idle.
+    viewModel.refreshWallClock()
   }
 }

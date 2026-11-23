@@ -1,29 +1,45 @@
 package com.familykitchen.board.ports
 
 import com.familykitchen.board.domain.AiChatTurn
+import com.familykitchen.board.domain.BaseUnit
 import com.familykitchen.board.domain.ConsumerHouseholdTemplate
 import com.familykitchen.board.domain.CookedDeductionResult
 import com.familykitchen.board.domain.CustomGroceryItem
+import com.familykitchen.board.domain.DEFAULT_STARTER_MENU_TEMPLATES
 import com.familykitchen.board.domain.DEFAULT_TIMESTAMP_ISO
 import com.familykitchen.board.domain.ExpiryStatus
 import com.familykitchen.board.domain.FirstRunOnboardingDraft
 import com.familykitchen.board.domain.GrocerySortMode
+import com.familykitchen.board.domain.HERITAGE_AND_WORLD_RECIPES
 import com.familykitchen.board.domain.HouseholdCurrency
 import com.familykitchen.board.domain.HouseholdElephantMemory
 import com.familykitchen.board.domain.HouseholdProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
+import com.familykitchen.board.domain.IngredientTier
 import com.familykitchen.board.domain.KitchenDomainToolState
+import com.familykitchen.board.domain.LOCAL_MARKET_PRESET_INGREDIENTS
 import com.familykitchen.board.domain.MealSlotStatus
+import com.familykitchen.board.domain.MenuTemplate
 import com.familykitchen.board.domain.PantryLedgerEntry
+import com.familykitchen.board.domain.PlanCadence
 import com.familykitchen.board.domain.Recipe
 import com.familykitchen.board.domain.RestockDelta
 import com.familykitchen.board.domain.SeedCatalogDataset
+import com.familykitchen.board.domain.StapleStatus
+import com.familykitchen.board.domain.StorageLocation
+import com.familykitchen.board.domain.UnpackItemDirective
 import com.familykitchen.board.domain.WeeklyBoard
+import com.familykitchen.board.domain.addDaysIso
 import com.familykitchen.board.domain.autoDraftWeeklyBoard
 import com.familykitchen.board.domain.batchRestockPantry
 import com.familykitchen.board.domain.computeFirstRunOnboardingOutcome
+import com.familykitchen.board.domain.defaultPackagePriceUsdFor
+import com.familykitchen.board.domain.defaultShelfLifeDaysFor
+import com.familykitchen.board.domain.defaultStorageLocationFor
 import com.familykitchen.board.domain.indexCatalogById
 import com.familykitchen.board.domain.indexPantryById
+import com.familykitchen.board.domain.mergeHeritageRecipesIntoLibrary
+import com.familykitchen.board.domain.synthesizeCatalogItemFromLabel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 
@@ -33,14 +49,14 @@ import kotlinx.serialization.Serializable
 /**
  * Complete offline-first persisted household state snapshot committed in `O(1)` atomic writes.
  *
- * All multi-ingredient cooked deductions, grocery restocks, weekly station-prep commits, recipe
- * bookmarks/notes, and AI Chef proposal updates serialize a single [KitchenSnapshot] per user
- * batch action so storage adapters never execute `N+1` write loops.
+ * All multi-ingredient cooked deductions, grocery restocks, unpack batches, weekly station-prep
+ * commits, recipe bookmarks/notes, and AI Chef proposal updates serialize a single [KitchenSnapshot]
+ * per user batch action so storage adapters never execute `N+1` write loops.
  *
  * @property ingredients Active household ingredient catalog list.
  * @property recipes Active household recipe library (including learned `householdBomOverrides`).
  * @property pantryEntries Current two-tier pantry stock records.
- * @property weeklyBoard Active 7-day (21-slot) household menu board.
+ * @property weeklyBoard Active 7-day household menu board for the current week.
  * @property householdProfile Editable 4-member growth-stage, goal, allergen, and life-event profile.
  * @property aiAddedGroceryIds Manually queued or AI-suggested grocery catalog IDs.
  * @property aiTurnHistory Rolling 6-turn AI Chef conversation history.
@@ -57,6 +73,9 @@ import kotlinx.serialization.Serializable
  * @property groceryQuantityOverrides Custom trip buy-quantity overrides in canonical `BaseUnit` keyed by `ingredientId`.
  * @property dismissedGroceryItemIds Catalog `ingredientId`s skipped by the shopper for the current shopping trip.
  * @property elephantMemory Bounded long-term semantic facts and episodic digests for SavorAI v2.0.
+ * @property nextWeekBoard Optional drafted 7-day board previewed via the `Next Week` horizon toggle.
+ * @property planCadence Active household planning density (`FULL_WEEK`, `BREAKFAST_AND_DINNER`, `DINNERS_ONLY`, `BLANK_WEEK`).
+ * @property savedMenus Reusable starter and household-saved multi-day [MenuTemplate] blueprints.
  */
 @Serializable
 data class KitchenSnapshot(
@@ -80,6 +99,9 @@ data class KitchenSnapshot(
   override val groceryQuantityOverrides: Map<String, Double> = emptyMap(),
   override val dismissedGroceryItemIds: Set<String> = emptySet(),
   override val elephantMemory: HouseholdElephantMemory = HouseholdElephantMemory(),
+  val nextWeekBoard: WeeklyBoard? = null,
+  val planCadence: PlanCadence = PlanCadence.FULL_WEEK,
+  val savedMenus: List<MenuTemplate> = DEFAULT_STARTER_MENU_TEMPLATES,
 ) : KitchenDomainToolState {
   // Computed lookup maps avoid duplicating normalized collections inside persisted JSON files.
   /** Derived `O(1)` catalog lookup map keyed by `ingredientId`. */
@@ -88,16 +110,27 @@ data class KitchenSnapshot(
 
   /** Derived `O(1)` recipe lookup map keyed by `recipeId`. */
   val recipesById: Map<String, Recipe>
-    get() = recipes.associateBy { it.recipeId }
+    get() = allHouseholdRecipes.associateBy { it.recipeId }
 
   /** Derived `O(1)` pantry lookup map keyed by `ingredientId`. */
   val pantryById: Map<String, PantryLedgerEntry>
     get() = indexPantryById(pantryEntries)
 
+  /**
+   * Full household recipe library combining [recipes] with [HERITAGE_AND_WORLD_RECIPES] whenever
+   * the catalog contains the canonical household ingredients required by those 12 heritage dishes.
+   */
+  val allHouseholdRecipes: List<Recipe>
+    get() = when {
+      storageV2SupportsHeritageLibrary(ingredients) -> mergeHeritageRecipesIntoLibrary(recipes)
+      else -> recipes
+    }
+
   companion object {
     /**
      * Initializes a clean [KitchenSnapshot] from a validated [SeedCatalogDataset], auto-drafting a
-     * 21-slot weekly board calibrated for the default Family-of-4 profile.
+     * 21-slot weekly board calibrated for the default Family-of-4 profile and merging the 12
+     * curated heritage recipes when operating on the canonical 44-item household catalog.
      *
      * @param seedCatalog Validated offline seed catalog dataset.
      * @param householdId Household identifier stamped onto the board and profile.
@@ -125,13 +158,19 @@ data class KitchenSnapshot(
         defaultServings = profile.effectiveTargetServings,
         pantry = seedCatalog.initialPantry,
       )
-      val initialSavedIds = seedCatalog.recipes
+      // Include all 12 heritage recipes on canonical catalogs while keeping small test fixtures pure.
+      val initialRecipes = when {
+        storageV2SupportsHeritageLibrary(seedCatalog.ingredients) ->
+          mergeHeritageRecipesIntoLibrary(seedCatalog.recipes)
+        else -> seedCatalog.recipes
+      }
+      val initialSavedIds = initialRecipes
         .filter { it.isSavedFavorite }
         .map { it.recipeId }
         .toSet()
       return KitchenSnapshot(
         ingredients = seedCatalog.ingredients,
-        recipes = seedCatalog.recipes,
+        recipes = initialRecipes,
         pantryEntries = seedCatalog.initialPantry,
         weeklyBoard = draftedBoard,
         householdProfile = profile,
@@ -199,7 +238,6 @@ interface KitchenStoragePort {
     nowIso: String = DEFAULT_TIMESTAMP_ISO,
   ): KitchenSnapshot {
     // Update the cooked recipe (for EC-05 household overrides) and slot status in one snapshot.
-    // Guarantees that pantry, learned recipe defaults, and board slot persist together atomically.
     val updatedRecipes = current.recipes.map { recipe ->
       when {
         recipe.recipeId == deductionResult.updatedRecipe.recipeId -> deductionResult.updatedRecipe
@@ -261,6 +299,113 @@ interface KitchenStoragePort {
       updatedAtIso = nowIso,
     )
     // Persist the entire grocery restock in one atomic write regardless of checked item count.
+    saveSnapshotBatch(nextSnapshot)
+    return nextSnapshot
+  }
+
+  /**
+   * Unpacks checked Smart Grocery catalog [directives] (with destination zone & optional shelf-life
+   * overrides) alongside promoted/cleared [CustomGroceryItem]s against the active [snapshotFlow]
+   * snapshot in **1 single `O(1)` [saveSnapshotBatch] write** (`batchWriteCallCount += 1`).
+   *
+   * @param directives Checked catalog items with chosen destination zones (`FRIDGE`, `PANTRY`, `FREEZER`).
+   * @param promotedCustomItemIds Checked `customId`s whose labels should be stocked into Smart Pantry.
+   * @param clearCustomItemIds Checked `customId`s to clear as completed shopping notes without stocking.
+   * @param todayIso Optional `"YYYY-MM-DD"` calendar date used to stamp live `expiryDateIso`.
+   * @param nowIso Deterministic ISO-8601 commit timestamp.
+   * @return Persisted [KitchenSnapshot].
+   */
+  suspend fun commitGroceryUnpackBatch(
+    directives: List<UnpackItemDirective>,
+    promotedCustomItemIds: Set<String> = emptySet(),
+    clearCustomItemIds: Set<String> = emptySet(),
+    todayIso: String? = null,
+    nowIso: String = DEFAULT_TIMESTAMP_ISO,
+  ): KitchenSnapshot {
+    val active = requireNotNull(snapshotFlow.value) {
+      "KitchenSnapshot must be initialized before commitGroceryUnpackBatch."
+    }
+    return commitGroceryUnpackBatch(
+      current = active,
+      directives = directives,
+      promotedCustomItemIds = promotedCustomItemIds,
+      clearCustomItemIds = clearCustomItemIds,
+      todayIso = todayIso,
+      nowIso = nowIso,
+    )
+  }
+
+  /**
+   * Explicit-snapshot overload of [commitGroceryUnpackBatch] executing zone-aware catalog restocks,
+   * custom-item promotion (`synthesizeCatalogItemFromLabel`), and grocery queue/override cleanup in
+   * **1 single `O(1)` [saveSnapshotBatch] write**.
+   *
+   * @param current Current household snapshot before unpacking.
+   * @param directives Checked catalog items with chosen destination zones.
+   * @param promotedCustomItemIds Checked `customId`s promoted into Smart Pantry stock.
+   * @param clearCustomItemIds Checked `customId`s cleared without pantry promotion.
+   * @param todayIso Optional `"YYYY-MM-DD"` calendar date used to stamp `expiryDateIso`.
+   * @param nowIso Deterministic ISO-8601 commit timestamp.
+   * @return Persisted [KitchenSnapshot].
+   */
+  suspend fun commitGroceryUnpackBatch(
+    current: KitchenSnapshot,
+    directives: List<UnpackItemDirective>,
+    promotedCustomItemIds: Set<String> = emptySet(),
+    clearCustomItemIds: Set<String> = emptySet(),
+    todayIso: String? = null,
+    nowIso: String = DEFAULT_TIMESTAMP_ISO,
+  ): KitchenSnapshot {
+    val nextSnapshot = storageV2ReduceGroceryUnpackBatch(
+      current = current,
+      directives = directives,
+      promotedCustomItemIds = promotedCustomItemIds,
+      clearCustomItemIds = clearCustomItemIds,
+      todayIso = todayIso,
+      nowIso = nowIso,
+    )
+    // Commit catalog promotions, pantry stock, and cleared grocery flags in 1 atomic write.
+    saveSnapshotBatch(nextSnapshot)
+    return nextSnapshot
+  }
+
+  /**
+   * Safely unchecks all checked catalog IDs and unchecks [CustomGroceryItem] rows on the active
+   * [snapshotFlow] snapshot without deleting custom notes or needed meal-plan deficits (`1` `O(1)` write).
+   *
+   * @param nowIso Deterministic ISO-8601 commit timestamp.
+   * @return Persisted [KitchenSnapshot].
+   */
+  suspend fun uncheckCheckedGroceryItems(
+    nowIso: String = DEFAULT_TIMESTAMP_ISO,
+  ): KitchenSnapshot {
+    val active = requireNotNull(snapshotFlow.value) {
+      "KitchenSnapshot must be initialized before uncheckCheckedGroceryItems."
+    }
+    return uncheckCheckedGroceryItems(current = active, nowIso = nowIso)
+  }
+
+  /**
+   * Explicit-snapshot overload of [uncheckCheckedGroceryItems] clearing `checkedGroceryItemIds` and
+   * resetting `isChecked = false` on all [CustomGroceryItem]s in 1 `O(1)` [saveSnapshotBatch] write.
+   *
+   * @param current Current household snapshot.
+   * @param nowIso Deterministic ISO-8601 commit timestamp.
+   * @return Persisted [KitchenSnapshot].
+   */
+  suspend fun uncheckCheckedGroceryItems(
+    current: KitchenSnapshot,
+    nowIso: String = DEFAULT_TIMESTAMP_ISO,
+  ): KitchenSnapshot {
+    // Preserve custom item rows intact while unchecking every checked box in one O(1) write.
+    val uncheckedCustoms = current.customGroceryItems.map { item ->
+      if (item.isChecked) item.copy(isChecked = false) else item
+    }
+    val nextSnapshot = current.copy(
+      checkedGroceryItemIds = emptySet(),
+      customGroceryItems = uncheckedCustoms,
+      updatedAtIso = nowIso,
+    )
     saveSnapshotBatch(nextSnapshot)
     return nextSnapshot
   }
@@ -476,7 +621,7 @@ interface KitchenStoragePort {
     eveningLeadName: String = current.householdProfile.eveningLeadName,
     nowIso: String = DEFAULT_TIMESTAMP_ISO,
   ): KitchenSnapshot {
-    // Preserve active allergens and life events while adapting member goals and serving baseline.
+    // Preserve active allergens, preferred cuisines, and life events while adapting servings.
     val templated = HouseholdProfile.fromConsumerTemplate(
       template = template,
       householdName = householdName,
@@ -484,6 +629,7 @@ interface KitchenStoragePort {
       eveningLeadName = eveningLeadName,
       currency = current.householdProfile.currency,
       marketRegionLabel = current.householdProfile.marketRegionLabel,
+      preferredCuisines = current.householdProfile.preferredCuisines,
     ).copy(
       householdAllergens = current.householdProfile.householdAllergens,
       activeLifeEvents = current.householdProfile.activeLifeEvents,
@@ -556,10 +702,16 @@ interface KitchenStoragePort {
       draft = draft,
       nowIso = nowIso,
     )
+    val nextCadence = when {
+      outcome.weeklyBoard.slots.isEmpty() -> PlanCadence.BLANK_WEEK
+      else -> PlanCadence.FULL_WEEK
+    }
     val updatedSnapshot = current.copy(
       householdProfile = outcome.householdProfile,
       pantryEntries = outcome.pantryEntries,
       weeklyBoard = outcome.weeklyBoard,
+      planCadence = nextCadence,
+      nextWeekBoard = null,
       rescuedExpiringMealsCount = outcome.rescuedExpiringMealsCount,
       aiAddedGroceryIds = emptySet(),
       aiTurnHistory = emptyList(),
@@ -600,4 +752,144 @@ interface KitchenStoragePort {
     saveSnapshotBatch(demoSnapshot)
     return demoSnapshot
   }
+}
+
+// Check that every canonical BOM ingredient required by HERITAGE_AND_WORLD_RECIPES exists in catalog.
+// Prevents injecting 44-item heritage recipes into small 4..13-item synthetic JUnit fixtures.
+internal fun storageV2SupportsHeritageLibrary(
+  ingredients: List<IngredientCatalogItem>,
+): Boolean {
+  // Empty synthetic catalogs cannot resolve canonical BOM references safely.
+  if (ingredients.isEmpty()) return false
+  // Index available ingredient IDs in O(N) so all 12 heritage/world recipes verify in O(B).
+  val catalogIds = ingredients.asSequence().map { it.ingredientId }.toSet()
+  // Require every heritage recipe BOM line to resolve before exposing the 42-dish library.
+  return HERITAGE_AND_WORLD_RECIPES.all { recipe ->
+    recipe.bomLines.all { line -> line.ingredientId in catalogIds }
+  }
+}
+
+// Pure O(M) unpack reducer combining catalog directives, promoted CustomGroceryItems, and cleanups.
+// Executes entirely in memory so KitchenStoragePort commits the entire unpack trip in 1 batch write.
+private fun storageV2ReduceGroceryUnpackBatch(
+  current: KitchenSnapshot,
+  directives: List<UnpackItemDirective>,
+  promotedCustomItemIds: Set<String>,
+  clearCustomItemIds: Set<String>,
+  todayIso: String?,
+  nowIso: String,
+): KitchenSnapshot {
+  // Preserve deterministic insertion order across existing and newly promoted catalog items.
+  val catalogMap = LinkedHashMap<String, IngredientCatalogItem>().apply {
+    current.ingredients.forEach { put(it.ingredientId, it) }
+  }
+  val pantryById = current.pantryById
+  // Track per-ingredient target zone and optional explicit shelf-life day overrides from the sheet.
+  val zoneOverrides = LinkedHashMap<String, StorageLocation>()
+  val shelfLifeOverrides = LinkedHashMap<String, Int>()
+  val deltas = mutableListOf<RestockDelta>()
+
+  // Step 1: Collect checked catalog directives along with chosen zones and explicit shelf-life days.
+  // Tier-2 staples reset to PLENTY automatically when unpacked into Pantry/Fridge/Freezer.
+  for (directive in directives) {
+    if (directive.ingredientId.isBlank()) continue
+    val item = catalogMap[directive.ingredientId]
+    val existing = pantryById[directive.ingredientId]
+    val tier = existing?.tier ?: item?.tier ?: IngredientTier.TIER_1_QUANTITATIVE
+    val statusReset = if (tier == IngredientTier.TIER_2_STAPLE) StapleStatus.PLENTY else null
+    deltas.add(RestockDelta(directive.ingredientId, directive.restockQuantity, statusReset))
+    zoneOverrides[directive.ingredientId] = directive.targetLocation
+    directive.overrideShelfLifeDays?.takeIf { it > 0 }?.let { days ->
+      shelfLifeOverrides[directive.ingredientId] = days
+    }
+  }
+
+  // Step 2: Promote selected CustomGroceryItems into catalog + 1 default package in Pantry.
+  // Unpromoted custom notes (such as non-food household supplies) are never polluted into Pantry.
+  for (customId in promotedCustomItemIds) {
+    val custom = current.customGroceryItems.firstOrNull { it.customId == customId } ?: continue
+    val resolvedItem = storageV2ResolveOrSynthesizePromotedItem(custom, catalogMap.values.toList())
+    catalogMap.putIfAbsent(resolvedItem.ingredientId, resolvedItem)
+    val chosenZone = zoneOverrides[resolvedItem.ingredientId]
+      ?: defaultStorageLocationFor(custom.category, resolvedItem.tier)
+    zoneOverrides.putIfAbsent(resolvedItem.ingredientId, chosenZone)
+    val statusReset = if (resolvedItem.tier == IngredientTier.TIER_2_STAPLE) StapleStatus.PLENTY else null
+    deltas.add(RestockDelta(resolvedItem.ingredientId, resolvedItem.defaultPackageQuantity, statusReset))
+  }
+
+  // Apply all restock deltas and storage zone placements in a single pure PantryLedgerEngine pass.
+  val mergedCatalog = catalogMap.values.toList()
+  val baseRestocked = batchRestockPantry(
+    pantry = current.pantryEntries,
+    catalog = mergedCatalog,
+    deltas = deltas,
+    nowIso = nowIso,
+    todayIso = todayIso,
+    zoneOverrides = zoneOverrides,
+  )
+
+  // Apply any explicit per-directive shelf-life overrides and calendar expiryDateIso stamps.
+  // Out-of-stock rows stay untouched so phantom expiry badges never appear on zero balances.
+  val finalPantry = when {
+    shelfLifeOverrides.isEmpty() -> baseRestocked
+    else -> baseRestocked.map { entry ->
+      val overrideDays = shelfLifeOverrides[entry.ingredientId]
+      when {
+        overrideDays == null || entry.isOutOfStock -> entry
+        else -> entry.copy(
+          expiresInDays = overrideDays,
+          expiryDateIso = todayIso?.let { addDaysIso(it, overrideDays) } ?: entry.expiryDateIso,
+        )
+      }
+    }
+  }
+
+  // Clear restocked catalog IDs, one-trip buy overrides, and promoted/cleared custom grocery rows.
+  // Needed meal-plan deficits remain dynamic via GroceryDiffEngine until actually stocked in Pantry.
+  val restockedCatalogIds = deltas.map { it.ingredientId }.toSet()
+  val removedCustomIds = promotedCustomItemIds + clearCustomItemIds
+  // Return a single immutable KitchenSnapshot ready for O(1) saveSnapshotBatch persistence.
+  return current.copy(
+    ingredients = mergedCatalog,
+    pantryEntries = finalPantry,
+    customGroceryItems = current.customGroceryItems.filterNot { it.customId in removedCustomIds },
+    aiAddedGroceryIds = current.aiAddedGroceryIds - restockedCatalogIds,
+    checkedGroceryItemIds = current.checkedGroceryItemIds - restockedCatalogIds - removedCustomIds,
+    groceryQuantityOverrides = current.groceryQuantityOverrides - restockedCatalogIds,
+    dismissedGroceryItemIds = current.dismissedGroceryItemIds - restockedCatalogIds,
+    updatedAtIso = nowIso,
+  )
+}
+
+// Match an existing household or preset item by label first, or synthesize a clean catalog item.
+// Prevents duplicate catalog entries when a user types a known food name as a quick custom note.
+// Defaults synthesized custom items to Tier-1 COUNT packages with category-aware storage zones.
+private fun storageV2ResolveOrSynthesizePromotedItem(
+  custom: CustomGroceryItem,
+  existingCatalog: List<IngredientCatalogItem>,
+): IngredientCatalogItem {
+  val cleanLabel = custom.displayName.trim()
+  // Reuse an existing household catalog item if its displayName matches case-insensitively.
+  existingCatalog.firstOrNull { it.displayName.equals(cleanLabel, ignoreCase = true) }?.let { return it }
+  // Otherwise check curated local market presets before synthesizing a brand-new item.
+  LOCAL_MARKET_PRESET_INGREDIENTS
+    .firstOrNull { it.displayName.equals(cleanLabel, ignoreCase = true) }
+    ?.let { return it }
+  synthesizeCatalogItemFromLabel(cleanLabel)?.let { return it }
+
+  // Fallback deterministic Tier-1 count item when label has no preset keyword match.
+  val safeTitle = cleanLabel.ifEmpty { "Custom Pantry Item" }
+  val slug = safeTitle.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').ifEmpty { "item" }
+  val tier = IngredientTier.TIER_1_QUANTITATIVE
+  return IngredientCatalogItem(
+    ingredientId = "ing_custom_$slug",
+    displayName = safeTitle,
+    category = custom.category,
+    tier = tier,
+    baseUnit = BaseUnit.COUNT,
+    defaultPackageQuantity = 1.0,
+    defaultStorageLocation = defaultStorageLocationFor(custom.category, tier),
+    defaultShelfLifeDays = defaultShelfLifeDaysFor(custom.category, tier),
+    estimatedPackagePriceUsd = defaultPackagePriceUsdFor(custom.category, tier),
+  )
 }

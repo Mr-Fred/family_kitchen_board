@@ -146,7 +146,7 @@ fun PantryAndGroceryScreen(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                  text = "${tab.displayLabel} ($count)",
+                  text = "${tab.displayLabel} · $count",
                   style = MaterialTheme.typography.labelMedium,
                   fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
                   color = if (selected) extendedColors.herbalSage else MaterialTheme.colorScheme.onSurfaceVariant,

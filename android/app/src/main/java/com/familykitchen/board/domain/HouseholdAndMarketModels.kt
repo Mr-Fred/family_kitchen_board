@@ -328,6 +328,155 @@ enum class ConsumerHouseholdTemplate(
 }
 
 /**
+ * Canonical culinary heritage and regional traditions selectable as household affinities in
+ * Family Profile and First-Run Onboarding.
+ *
+ * @property canonicalTag Stable persisted tag stored inside [HouseholdProfile.preferredCuisines].
+ * @property chipLabel Clean UI chip label free of slashes or parentheses for compact `360dp` chips.
+ */
+@Serializable
+enum class CuisineTradition(
+  val canonicalTag: String,
+  val chipLabel: String,
+) {
+  // Seven curated traditions spanning French bistro, Yoruba and West African, Filipino, and global tables.
+  /** Classic French boulangerie mornings and regional family bistro cooking. */
+  FRENCH("French", "French"),
+
+  /** Yoruba, Beninese, and broader West African one-pot stews, rice, beans, and plantains. */
+  YORUBA_WEST_AFRICAN("Yoruba and West African", "Yoruba and West African"),
+
+  /** Regional Philippine home cooking grounded in wet-market greens, ginger broths, and fish. */
+  FILIPINO("Filipino", "Filipino"),
+
+  /** Olive-oil forward Mediterranean skillet, pasta, seafood, and mezze family dishes. */
+  MEDITERRANEAN("Mediterranean", "Mediterranean"),
+
+  /** East Asian aromatic ginger-garlic stir-fries, steamed bowls, and broths. */
+  EAST_ASIAN("East Asian", "East Asian"),
+
+  /** Continental Pan-African heritage dishes celebrating grains, legumes, and leafy greens. */
+  PAN_AFRICAN("Pan African", "Pan African"),
+
+  /** Everyday crowd-pleasing family comfort meals, wraps, and sheet-pan roasts. */
+  GLOBAL_COMFORT("Global Family", "Global Family");
+
+  companion object {
+    /**
+     * Resolves a [CuisineTradition] from a persisted tag or UI chip label, or `null` if custom.
+     *
+     * @param rawTag Persisted or user-entered cuisine string.
+     * @return Matching [CuisineTradition], or `null` when unrecognized.
+     */
+    fun fromTagOrNull(rawTag: String): CuisineTradition? {
+      val norm = rawTag.trim().lowercase()
+      if (norm.isEmpty()) return null
+      return entries.firstOrNull { entry ->
+        entry.canonicalTag.lowercase() == norm ||
+          entry.chipLabel.lowercase() == norm ||
+          entry.name.lowercase() == norm
+      }
+    }
+  }
+}
+
+/** Default household preferred cuisines honoring French and Yoruba/West African culinary roots. */
+val DEFAULT_PREFERRED_CUISINES: List<String> = listOf(
+  CuisineTradition.FRENCH.canonicalTag,
+  CuisineTradition.YORUBA_WEST_AFRICAN.canonicalTag,
+)
+
+/**
+ * Evaluates whether [recipe] aligns with any of the household's [preferredCuisines] by inspecting
+ * [Recipe.cuisineTags], [Recipe.cuisineTag], [Recipe.sourceAttribution], and [Recipe.title].
+ *
+ * Recognizes canonical [CuisineTradition] tags as well as regional culinary markers across both
+ * the 30 canonical seed recipes (`"French"`, `"Bistro"`, `"Proven"`, `"Benin"`, `"West African"`,
+ * `"Mediterranean"`, etc.) and the 12 heritage catalog recipes (`"Yoruba"`, `"Filipino"`).
+ *
+ * @param recipe Candidate recipe to inspect.
+ * @param preferredCuisines Active household preferred cuisine strings.
+ * @return `true` when [recipe] matches at least one non-blank preferred cuisine entry.
+ */
+fun doesRecipeMatchPreferredCuisines(
+  recipe: Recipe,
+  preferredCuisines: List<String>,
+): Boolean {
+  val cleanedPrefs = preferredCuisines.map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+  if (cleanedPrefs.isEmpty()) return false
+
+  // Merge explicit v2 cuisineTags, legacy cuisineTag, attribution, and title for resilient matching.
+  val explicitTagsLower = recipe.cuisineTags.map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+  val haystack = cuisineCoreBuildRecipeHaystack(recipe, explicitTagsLower)
+
+  return cleanedPrefs.any { pref ->
+    val directTagMatch = explicitTagsLower.any { tag ->
+      tag == pref || tag.contains(pref) || pref.contains(tag)
+    }
+    when {
+      directTagMatch || haystack.contains(pref) -> true
+      pref.contains("french") || pref.contains("bistro") || pref.contains("proven") ->
+        cuisineCoreMatchesFrenchTradition(haystack)
+      else -> cuisineCoreKeywordsForPreference(pref).any { keyword -> haystack.contains(keyword) }
+    }
+  }
+}
+
+// Concatenate searchable recipe metadata fields into a single normalized lowercase string.
+private fun cuisineCoreBuildRecipeHaystack(
+  recipe: Recipe,
+  explicitTagsLower: List<String>,
+): String = buildString {
+  append(explicitTagsLower.joinToString(" "))
+  append(' ')
+  append(recipe.cuisineTag.lowercase())
+  append(' ')
+  append(recipe.sourceAttribution.lowercase())
+  append(' ')
+  append(recipe.title.lowercase())
+}
+
+// Match French boulangerie/bistro/Provençal markers without conflating Mediterranean or Beninese bistros.
+private fun cuisineCoreMatchesFrenchTradition(haystack: String): Boolean {
+  val frenchMarkers = listOf(
+    "french", "boulangerie", "proven", "provenc", "basquaise",
+    "ratatouille", "parmentier", "fines herbes", "tartine",
+  )
+  if (frenchMarkers.any { haystack.contains(it) }) return true
+  return haystack.contains("bistro") &&
+    !haystack.contains("mediterranean") &&
+    !haystack.contains("beninese")
+}
+
+// Expand canonical and regional preference labels into culinary heritage keyword stems.
+private fun cuisineCoreKeywordsForPreference(prefLower: String): List<String> =
+  when {
+    prefLower.contains("yoruba") || prefLower.contains("west african") || prefLower.contains("benin") ->
+      listOf(
+        "yoruba", "west african", "benin", "beninese", "cotonou", "ouidah", "abomey",
+        "efo", "ata din", "jollof", "moin", "dodo", "gbegiri", "mafe", "mafé",
+        "alloco", "egusi", "goussi", "atassi", "watche", "watché", "amiwo", "gari", "red-red", "moyo",
+      )
+    prefLower.contains("filipino") || prefLower.contains("antipolo") || prefLower.contains("marikina") ->
+      listOf(
+        "filipino", "pinoy", "tagalog", "tinola", "sinigang", "adobo", "ginisang",
+        "monggo", "palengke", "marikina", "antipolo", "bangus", "malunggay", "kangkong",
+      )
+    prefLower.contains("mediterranean") ->
+      listOf("mediterranean", "tapenade", "greek", "levant", "lemon herb")
+    prefLower.contains("east asian") || prefLower.contains("asian") ->
+      listOf("east asian", "japanese", "korean", "chinese", "teriyaki", "miso", "stir-fry", "sesame", "ramen", "udon")
+    prefLower.contains("pan african") || prefLower.contains("african") ->
+      listOf(
+        "pan african", "african", "yoruba", "benin", "beninese", "jollof", "efo",
+        "mafe", "mafé", "egusi", "alloco", "atassi", "amiwo", "gbegiri", "moin", "dodo",
+      )
+    prefLower.contains("global") || prefLower.contains("comfort") || prefLower.contains("family") ->
+      listOf("global", "morning kitchen", "family sheet-pan", "family skillet", "plant-rich skillet", "sunshine bowl", "comfort")
+    else -> listOf(prefLower)
+  }
+
+/**
  * Complete persisted household dietary, allergen, growth-stage, life-event, currency, and
  * market-region configuration.
  *
@@ -369,12 +518,7 @@ data class HouseholdProfile(
   val morningLeadName: String = "Fred",
   val eveningLeadName: String = "Wife",
   val activeTemplate: ConsumerHouseholdTemplate = ConsumerHouseholdTemplate.FAMILY_TWO_KIDS,
-  val preferredCuisines: List<String> = listOf(
-    "Beninese & West African",
-    "Filipino & Antipolo-Marikina Local",
-    "French Bistro",
-    "Mediterranean Express",
-  ),
+  val preferredCuisines: List<String> = DEFAULT_PREFERRED_CUISINES,
   val currency: HouseholdCurrency = HouseholdCurrency.PHP,
   val marketRegionLabel: String = "Antipolo & Marikina, PH",
 ) {
@@ -419,6 +563,7 @@ data class HouseholdProfile(
      * @param eveningLeadName Display name for the lunch/dinner lead.
      * @param currency Selected household currency (`PHP` default).
      * @param marketRegionLabel Local market region label.
+     * @param preferredCuisines Preferred household cuisine traditions (`French` & `Yoruba and West African` default).
      * @return Initialized [HouseholdProfile].
      */
     fun fromConsumerTemplate(
@@ -428,6 +573,7 @@ data class HouseholdProfile(
       eveningLeadName: String = "Evening Lead",
       currency: HouseholdCurrency = HouseholdCurrency.PHP,
       marketRegionLabel: String = "Antipolo & Marikina, PH",
+      preferredCuisines: List<String> = DEFAULT_PREFERRED_CUISINES,
     ): HouseholdProfile {
       val members = when (template) {
         ConsumerHouseholdTemplate.SOLO_COOK -> listOf(
@@ -465,6 +611,7 @@ data class HouseholdProfile(
         morningLeadName = morningLeadName,
         eveningLeadName = eveningLeadName,
         activeTemplate = template,
+        preferredCuisines = preferredCuisines,
         currency = currency,
         marketRegionLabel = marketRegionLabel,
       )
@@ -510,8 +657,8 @@ val LOCAL_MARKET_PRESET_INGREDIENTS: List<IngredientCatalogItem> = listOf(
   IngredientCatalogItem("ing_cassava", "Fresh Cassava (Kamoteng Kahoy)", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1000.0, estimatedPackagePriceUsd = 65.0),
   // 15. Orange Kamote (Sweet Potatoes) in 1500g cool-pantry packs.
   IngredientCatalogItem("ing_sweet_potato", "Orange Kamote (Sweet Potatoes)", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.GRAM, 1500.0, defaultStorageLocation = StorageLocation.PANTRY, estimatedPackagePriceUsd = 120.0),
-  // 16. Ripe Saba cooking bananas in 6-count bunches at Antipolo Palengke.
-  IngredientCatalogItem("ing_saba_banana", "Ripe Saba Bananas", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 6.0, defaultStorageLocation = StorageLocation.PANTRY, defaultShelfLifeDays = 6, estimatedPackagePriceUsd = 75.0),
+  // 16. Ripe Saba cooking bananas in 6-count bunches enrolled in FRUIT_TOPPING for plantain Dodo swaps.
+  IngredientCatalogItem("ing_saba_banana", "Ripe Saba Bananas", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 6.0, substituteGroupIds = listOf("FRUIT_TOPPING"), defaultStorageLocation = StorageLocation.PANTRY, defaultShelfLifeDays = 6, estimatedPackagePriceUsd = 75.0),
   // 17. Fresh Calamansi citrus in 12-count net bags for marinades and iron absorption.
   IngredientCatalogItem("ing_calamansi", "Fresh Calamansi Citrus", IngredientCategory.PRODUCE, IngredientTier.TIER_1_QUANTITATIVE, BaseUnit.COUNT, 12.0, estimatedPackagePriceUsd = 35.0),
   // 18. Fresh Gata (Pure Pressed Coconut Milk) in 400ml packs for stews and rice bowls.

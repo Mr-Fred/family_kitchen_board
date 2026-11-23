@@ -26,6 +26,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.GroupAdd
@@ -43,6 +46,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -65,7 +69,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.familykitchen.board.domain.HouseholdProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
-import com.familykitchen.board.domain.MAX_WEEKDAY_BREAKFAST_MINUTES
 import com.familykitchen.board.domain.MealSlotType
 import com.familykitchen.board.domain.Recipe
 import com.familykitchen.board.domain.RecipePantryMatchSummary
@@ -75,25 +78,30 @@ import com.familykitchen.board.domain.isWeekdayBreakfastEligible
 import com.familykitchen.board.ui.board.ChildSafetyCalloutBox
 import com.familykitchen.board.ui.theme.KitchenTheme
 
-// Pantry Match card, IntrinsicSize.Max 3-stat grid + muted macro bars, non-clipping 52.dp Cook Mode
-// + Mic CTA, EC-08/EC-07 Family Goal Plating accordion, and 48.dp Yield Scale card.
+// Pantry Match card, IntrinsicSize.Max 3-stat grid + muted macro bars, 52.dp Cook Mode + Mic CTA,
+// ownership pills (`Make Our Version`, `Edit Recipe`, `Delete Recipe`), and 48.dp Yield Scale card.
 
-// Short 3-letter weekday pills used inside the inline Plan scheduler.
+// Short Monday..Sunday chip labels used inside the inline Plan day/slot scheduler.
 private val PLAN_WEEKDAY_LABELS: List<String> = listOf(
   "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun",
 )
 
-// Yield multiplier presets bound to PantryExpiryEngine.scaleRecipeForYield.
+// Serving scale presets rendered inside YieldScaleCard.
 internal enum class YieldPreset {
+  // Base 1x recipe servings.
   SCALE_1X,
+  // Double batch 2x servings.
   SCALE_2X,
+  // Freezer / feast 4x servings.
   SCALE_4X,
+  // Arbitrary integer serving stepper (`1..20`).
   CUSTOM,
 }
 
 /**
- * Renders the Pantry Inventory Status card, equal-height 3-column `Prep | Cook | Energy` grid with
- * muted macro micro-bars, and Primary Quick Actions (`Start Cook Mode` + `52.dp` `Mic`, `Plan`, `Share`).
+ * Renders the Pantry Inventory Status card, equal-height 3-column `Prep · Cook · Energy` grid,
+ * Primary Quick Actions (`Start Cook Mode` + `52.dp` `Mic`, `Plan`, `Share`), and ownership pills
+ * (`Make Our Version` on seed recipes vs `Edit Recipe` and `Delete Recipe` on household creations).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -102,25 +110,29 @@ internal fun PantryMatchAndQuickActionsSection(
   matchSummary: RecipePantryMatchSummary,
   householdProfile: HouseholdProfile,
   defaultDayIndex: Int,
+  isUserCreated: Boolean = recipe.isUserCreated,
   onQueueAllMissingIngredients: () -> Unit,
   onStartCookMode: () -> Unit,
   onStartHandsFreeCookMode: () -> Unit = {},
   onScheduleToMealPlan: (dayIndex: Int, slotType: MealSlotType) -> Unit,
   onShareWithKitchen: () -> Unit,
+  onForkRecipe: () -> Unit = {},
+  onEditRecipe: () -> Unit = {},
+  onDeleteRecipe: () -> Unit = {},
 ) {
   val extendedColors = KitchenTheme.extendedColors
-  // Scope match-detail and inline-plan-picker state to `recipe.recipeId` so switching recipes resets.
+  // Persist accordion toggles across scroll and configuration changes per recipeId.
   val showMatchDetailsState = rememberSaveable(recipe.recipeId) { mutableStateOf(false) }
   val showPlanPickerState = rememberSaveable(recipe.recipeId) { mutableStateOf(false) }
   val chosenDayState = rememberSaveable(recipe.recipeId) { mutableIntStateOf(defaultDayIndex.coerceIn(0, 6)) }
-  // Default target slot to Dinner -> Lunch -> Breakfast depending on recipe eligibility.
+  // Prefer Dinner -> Lunch -> Breakfast as initial target slot for inline scheduling.
   val defaultSlot = when {
     MealSlotType.DINNER in recipe.allowedSlots -> MealSlotType.DINNER
     MealSlotType.LUNCH in recipe.allowedSlots -> MealSlotType.LUNCH
     else -> MealSlotType.BREAKFAST
   }
   val chosenSlotNameState = rememberSaveable(recipe.recipeId) { mutableStateOf(defaultSlot.name) }
-  // True when 100% of required BOM lines are covered by current Fridge/Pantry/Freezer stock.
+  // True when 0 required BOM items are missing from Pantry.
   val allAvailable = matchSummary.missingStaples.isEmpty()
 
   Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -143,17 +155,26 @@ internal fun PantryMatchAndQuickActionsSection(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
           ) {
             Box(
-              modifier = Modifier.size(30.dp).clip(CircleShape).background(if (allAvailable) extendedColors.sageContainer else extendedColors.tertiaryFixed),
+              modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(if (allAvailable) extendedColors.sageContainer else extendedColors.tertiaryFixed),
               contentAlignment = Alignment.Center,
             ) {
-              Icon(Icons.Default.Check, contentDescription = null, tint = if (allAvailable) extendedColors.onSageContainer else extendedColors.onTertiaryFixed, modifier = Modifier.size(16.dp))
+              Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = if (allAvailable) extendedColors.onSageContainer else extendedColors.onTertiaryFixed,
+                modifier = Modifier.size(16.dp),
+              )
             }
             Column(modifier = Modifier.weight(1f)) {
-              // Summarize matched vs missing BOM lines and expiring-stock value rescued.
+              // Summarize exact in-stock BOM coverage without slashes or parentheses.
               val headline = when {
                 allAvailable -> "All ${matchSummary.totalRequiredCount} ingredients in stock"
-                else -> "${matchSummary.matchedCount}/${matchSummary.totalRequiredCount} in stock · ${matchSummary.missingStaples.size} missing"
+                else -> "${matchSummary.matchedCount} of ${matchSummary.totalRequiredCount} in stock · ${matchSummary.missingStaples.size} missing"
               }
+              // Highlight rescued expiring stock value when the dish prevents food waste.
               val subline = when {
                 matchSummary.isZeroFoodWasteMatch -> "Saves ${householdProfile.formatMoney(matchSummary.rescuedValueUsd)} expiring stock"
                 else -> householdProfile.marketRegionLabel
@@ -163,6 +184,7 @@ internal fun PantryMatchAndQuickActionsSection(
             }
           }
           Spacer(modifier = Modifier.width(8.dp))
+          // 48.dp Details toggle expanding stocked vs missing ingredient breakdowns.
           Surface(
             onClick = { showMatchDetailsState.value = !showMatchDetailsState.value },
             shape = CircleShape,
@@ -176,7 +198,7 @@ internal fun PantryMatchAndQuickActionsSection(
           }
         }
 
-        // Expandable match drawer allowing 1-tap queueing of missing whole packages.
+        // Expandable stocked/missing breakdown with 1-tap Queue All restock button.
         AnimatedVisibility(visible = showMatchDetailsState.value) {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (matchSummary.matchedIngredients.isNotEmpty()) {
@@ -194,13 +216,14 @@ internal fun PantryMatchAndQuickActionsSection(
                   color = extendedColors.terracotta,
                   modifier = Modifier.weight(1f).padding(end = 8.dp),
                 )
+                // Queues all missing items onto Smart Grocery List in 1 atomic batch write.
                 Button(
                   onClick = onQueueAllMissingIngredients,
                   contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                   shape = CircleShape,
                   modifier = Modifier.defaultMinSize(minHeight = 48.dp),
                 ) {
-                  Text("+ Queue All", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+                  Text("Queue All", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
                 }
               }
             }
@@ -217,20 +240,20 @@ internal fun PantryMatchAndQuickActionsSection(
       shadowElevation = 0.dp,
     ) {
       Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // IntrinsicSize.Max keeps all 3 tiles uniform on elevated 1.35x font scaling.
+        // IntrinsicSize.Max keeps Prep, Cook, and Energy tiles aligned across font scales.
         Row(
           modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
           horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          MetadataStatTile(Icons.Default.Timer, extendedColors.herbalSage, "Prep", "${recipe.rawPrepMinutes}m", Modifier.weight(1f).fillMaxHeight())
-          MetadataStatTile(Icons.Default.Restaurant, extendedColors.terracotta, "Cook", "${recipe.cookMinutes}m", Modifier.weight(1f).fillMaxHeight())
-          MetadataStatTile(Icons.Default.LocalFireDepartment, extendedColors.expiringSoonIndicator, "Energy", "${recipe.caloriesPerServing} kcal", Modifier.weight(1f).fillMaxHeight())
+          readerActionStatTile(Icons.Default.Timer, extendedColors.herbalSage, "Prep", "${recipe.rawPrepMinutes}m", Modifier.weight(1f).fillMaxHeight())
+          readerActionStatTile(Icons.Default.Restaurant, extendedColors.terracotta, "Cook", "${recipe.cookMinutes}m", Modifier.weight(1f).fillMaxHeight())
+          readerActionStatTile(Icons.Default.LocalFireDepartment, extendedColors.expiringSoonIndicator, "Energy", "${recipe.caloriesPerServing} kcal", Modifier.weight(1f).fillMaxHeight())
         }
 
-        // Per-serving macro summary + 3 understated 3.dp warm micro-bars.
+        // Tabular per-serving macro line paired with 3 understated 3.dp proportion bars.
         Column(modifier = Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           Text(
-            text = "${recipe.proteinGrams}g P • ${recipe.carbsGrams}g C • ${recipe.fatGrams}g F per serving",
+            text = "${recipe.proteinGrams}g P · ${recipe.carbsGrams}g C · ${recipe.fatGrams}g F per serving",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -238,16 +261,17 @@ internal fun PantryMatchAndQuickActionsSection(
           )
           val macroSum = (recipe.proteinGrams + recipe.carbsGrams + recipe.fatGrams).coerceAtLeast(1).toFloat()
           Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ReaderMacroMicroBar((recipe.proteinGrams / macroSum).coerceIn(0.12f, 1.0f), extendedColors.herbalSage, Modifier.weight(1f))
-            ReaderMacroMicroBar((recipe.carbsGrams / macroSum).coerceIn(0.12f, 1.0f), extendedColors.expiringSoonIndicator, Modifier.weight(1f))
-            ReaderMacroMicroBar((recipe.fatGrams / macroSum).coerceIn(0.12f, 1.0f), extendedColors.terracotta, Modifier.weight(1f))
+            readerActionMacroMicroBar((recipe.proteinGrams / macroSum).coerceIn(0.12f, 1.0f), extendedColors.herbalSage, Modifier.weight(1f))
+            readerActionMacroMicroBar((recipe.carbsGrams / macroSum).coerceIn(0.12f, 1.0f), extendedColors.expiringSoonIndicator, Modifier.weight(1f))
+            readerActionMacroMicroBar((recipe.fatGrams / macroSum).coerceIn(0.12f, 1.0f), extendedColors.terracotta, Modifier.weight(1f))
           }
         }
       }
     }
 
-    // 3. Primary Quick Actions: defaultMinSize(minHeight = 52.dp) prevents horizontal word slicing.
+    // 3. Primary Quick Actions + Ownership Remix / Edit / Delete Pills.
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      // Primary 52.dp Start Cook Mode button paired with 52.dp Hands-Free Voice Mic button.
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -264,7 +288,7 @@ internal fun PantryMatchAndQuickActionsSection(
           Text("Start Cook Mode", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
         }
 
-        // 52.dp Mic button launches Hands-Free Cook Mode directly, replacing FloatingHandsFreeVoiceBar.
+        // Dedicated 52.dp Terracotta voice launch button entering Cook Mode with mic active.
         FilledTonalIconButton(
           onClick = onStartHandsFreeCookMode,
           colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -277,9 +301,8 @@ internal fun PantryMatchAndQuickActionsSection(
         }
       }
 
-      // Secondary 2-column action row using defaultMinSize(minHeight = 48.dp) so text never chops.
+      // Secondary 48.dp pair: Plan · <Day> inline scheduler + offline Share pill.
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Short 3-letter weekday pill ("Plan (Mon)") keeps secondary button on 1 clean line at 1.35x scale.
         val dayShort = PLAN_WEEKDAY_LABELS.getOrElse(chosenDayState.intValue) { "Mon" }
         Surface(
           onClick = { showPlanPickerState.value = !showPlanPickerState.value },
@@ -295,11 +318,11 @@ internal fun PantryMatchAndQuickActionsSection(
           ) {
             Icon(Icons.Default.CalendarToday, contentDescription = null, tint = extendedColors.herbalSage, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Plan ($dayShort)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            Text("Plan · $dayShort", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
           }
         }
 
-        // Offline plain-text ACTION_SEND share pill ("Share" replaces truncated "Share with").
+        // Offline ACTION_SEND share trigger requiring zero cloud accounts or network sockets.
         Surface(
           onClick = onShareWithKitchen,
           modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp),
@@ -319,7 +342,50 @@ internal fun PantryMatchAndQuickActionsSection(
         }
       }
 
-      // Inline EC-01-validated Day & Slot scheduler revealed when tapping "Plan (Day)".
+      // Ownership action pills: Make Our Version on seed recipes; Edit Recipe + Delete Recipe on custom/forked.
+      when {
+        !isUserCreated -> {
+          // Non-destructive fork pill keeping built-in canonical & heritage seed recipes intact.
+          OutlinedButton(
+            onClick = onForkRecipe,
+            shape = CircleShape,
+            border = BorderStroke(1.dp, extendedColors.borderSubtle),
+            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
+          ) {
+            Icon(Icons.Default.ContentCopy, contentDescription = null, tint = extendedColors.herbalSage, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Make Our Version", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+          }
+        }
+
+        else -> {
+          // User-created or forked household recipes expose full Edit Recipe + Delete Recipe controls.
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+              onClick = onEditRecipe,
+              shape = CircleShape,
+              border = BorderStroke(1.dp, extendedColors.borderSubtle),
+              modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp),
+            ) {
+              Icon(Icons.Default.Edit, contentDescription = null, tint = extendedColors.herbalSage, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Edit Recipe", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+            }
+            OutlinedButton(
+              onClick = onDeleteRecipe,
+              shape = CircleShape,
+              border = BorderStroke(1.dp, extendedColors.borderSubtle),
+              modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp),
+            ) {
+              Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = extendedColors.terracotta, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Delete Recipe", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+            }
+          }
+        }
+      }
+
+      // Inline EC-01-validated Day & Slot scheduler revealed when tapping Plan.
       AnimatedVisibility(visible = showPlanPickerState.value) {
         Surface(
           shape = KitchenTheme.shapes.inputDefault,
@@ -327,8 +393,7 @@ internal fun PantryMatchAndQuickActionsSection(
           border = BorderStroke(1.dp, extendedColors.borderSubtle),
         ) {
           Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Schedule '${recipe.title}' onto Plan:", style = MaterialTheme.typography.labelMedium)
-            // 48.dp weekday FilterChips (`Mon`..`Sun`).
+            Text("Schedule ${recipe.title} onto Plan", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
               PLAN_WEEKDAY_LABELS.forEachIndexed { idx, label ->
                 FilterChip(
@@ -339,11 +404,9 @@ internal fun PantryMatchAndQuickActionsSection(
                 )
               }
             }
-            // Enforce EC-01: only allow BREAKFAST selection if calibratedActiveMinutes <= 25m.
             val eligibleSlots = MealSlotType.entries.filter { slot ->
               slot != MealSlotType.BREAKFAST || isWeekdayBreakfastEligible(recipe)
             }
-            // FlowRow prevents horizontal button clipping when Confirm sits next to slot chips.
             FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
               eligibleSlots.forEach { slot ->
                 FilterChip(
@@ -355,7 +418,6 @@ internal fun PantryMatchAndQuickActionsSection(
               }
               Button(
                 onClick = {
-                  // Resolve chosen slot safely against EC-01 eligible slots before committing.
                   val targetSlot = eligibleSlots.find { it.name == chosenSlotNameState.value } ?: eligibleSlots.firstOrNull() ?: MealSlotType.DINNER
                   onScheduleToMealPlan(chosenDayState.intValue, targetSlot)
                   showPlanPickerState.value = false
@@ -367,10 +429,9 @@ internal fun PantryMatchAndQuickActionsSection(
                 Text("Confirm", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
               }
             }
-            // Explain clearly why >25m dishes omit weekday Breakfast scheduling (`EC-01`).
             if (!isWeekdayBreakfastEligible(recipe)) {
               Text(
-                text = "Takes ${recipe.calibratedActiveMinutes}m (> ${MAX_WEEKDAY_BREAKFAST_MINUTES}m weekday breakfast cap); Lunch & Dinner enabled.",
+                text = "Takes ${recipe.calibratedActiveMinutes}m above the ${MAX_WEEKDAY_BREAKFAST_MINUTES}m weekday breakfast cap · Lunch and Dinner enabled.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -382,17 +443,15 @@ internal fun PantryMatchAndQuickActionsSection(
   }
 }
 
-// Understated 3.dp rounded macro bar segment inside the 3-stat reader card.
 @Composable
-private fun ReaderMacroMicroBar(fraction: Float, color: Color, modifier: Modifier = Modifier) {
+private fun readerActionMacroMicroBar(fraction: Float, color: Color, modifier: Modifier = Modifier) {
   Box(modifier = modifier.height(3.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainer)) {
     Box(modifier = Modifier.fillMaxWidth(fraction).fillMaxHeight().clip(CircleShape).background(color))
   }
 }
 
-// Equal-height ceramic stat tile used for Prep, Cook, and Energy metrics.
 @Composable
-private fun MetadataStatTile(
+private fun readerActionStatTile(
   icon: ImageVector,
   iconTint: Color,
   label: String,
@@ -419,7 +478,6 @@ private fun MetadataStatTile(
   }
 }
 
-// Renders EC-08 Honey-Amber child safety callout + collapsible 4-member 1-pot plating & EC-07 boost.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FamilySafetyAndPlatingAccordion(
@@ -429,13 +487,14 @@ internal fun FamilySafetyAndPlatingAccordion(
   onEditFamilyGoals: () -> Unit,
 ) {
   val extendedColors = KitchenTheme.extendedColors
-  // Scope accordion and workout preview state to `recipe.recipeId`.
+  // Collapse plating details by default so mobile readers scan ingredients without scroll fatigue.
   val expandedState = rememberSaveable(recipe.recipeId) { mutableStateOf(false) }
   val workoutNameState = rememberSaveable(recipe.recipeId) { mutableStateOf(WorkoutTiming.NONE.name) }
   val selectedWorkout = WorkoutTiming.entries.find { it.name == workoutNameState.value } ?: WorkoutTiming.NONE
 
-  // Synthesize stage-adapted safety guidance and 4-member plating instructions deterministically.
+  // Format EC-08 stage-adapted infant/toddler choking-safety callout.
   val safetyTip = householdProfile.youngestStage.formatPrepTip(recipe.toddlerPrepTip)
+  // Synthesize 1-pot 4-member plating instructions dynamically for Fred, Wife, 8yo, and 2yo.
   val platingGuide = remember(recipe, catalog, householdProfile) {
     buildFamilyGoalPlatingGuide(
       recipe = recipe,
@@ -447,11 +506,12 @@ internal fun FamilySafetyAndPlatingAccordion(
   }
 
   Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    // ChildSafetyCalloutBox automatically deduplicates trailing "for 2yo." age repetitions.
+    // Always surface active EC-08 child safety prep guidance above the fold.
     if (!safetyTip.isNullOrBlank()) {
       ChildSafetyCalloutBox(safetyText = safetyTip)
     }
 
+    // Progressive-disclosure accordion housing 1-pot family plating and flat 1x workout boosts.
     Surface(
       shape = KitchenTheme.shapes.card2xl,
       color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -464,7 +524,7 @@ internal fun FamilySafetyAndPlatingAccordion(
           verticalAlignment = Alignment.CenterVertically,
         ) {
           Text(
-            text = "1-Pot Family Plating & 1x Workout Boost",
+            text = "1-Pot Family Plating and 1x Workout Boost",
             style = MaterialTheme.typography.titleSmall,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -473,13 +533,13 @@ internal fun FamilySafetyAndPlatingAccordion(
           Icon(if (expandedState.value) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = "Toggle family plating")
         }
 
-        // EC-07 invariant: workout extraBomLines apply flat (1x), unscaled by Yield Scale.
         AnimatedVisibility(visible = expandedState.value) {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // EC-07: Flat 1x Pre-Workout Carb or Post-Workout Protein preview toggle.
             val workoutChoices = listOf(
               WorkoutTiming.NONE to "Standard",
-              WorkoutTiming.PRE_WORKOUT_CARB to "Carb (1x)",
-              WorkoutTiming.POST_WORKOUT_HIGH_PROTEIN to "Protein (1x)",
+              WorkoutTiming.PRE_WORKOUT_CARB to "Carb · 1x",
+              WorkoutTiming.POST_WORKOUT_HIGH_PROTEIN to "Protein · 1x",
             )
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
               workoutChoices.forEachIndexed { idx, (timing, label) ->
@@ -493,15 +553,18 @@ internal fun FamilySafetyAndPlatingAccordion(
               }
             }
 
+            // Display flat 1x add-on instructions when Carb or Protein boost is active.
             val activeBoost = recipe.workoutModifiers.find { it.profile == selectedWorkout }
             if (activeBoost != null && selectedWorkout != WorkoutTiming.NONE) {
               Text(activeBoost.instructionAddOn, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = extendedColors.terracotta)
             }
 
+            // Render per-member plating guidance bullets.
             platingGuide.values.forEach { line ->
               Text("• $line", style = MaterialTheme.typography.bodySmall)
             }
 
+            // 48.dp link opening FamilyProfileSheet for dietary & life-event adjustments.
             TextButton(onClick = onEditFamilyGoals, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
               Text("Customize Household Goals", style = MaterialTheme.typography.labelMedium)
             }
@@ -512,7 +575,6 @@ internal fun FamilySafetyAndPlatingAccordion(
   }
 }
 
-// Yield Scale card (1x | 2x | 4x | Custom) with 44.dp+ preset pills and 48.dp custom steppers.
 @Composable
 internal fun YieldScaleCard(
   servings: Int,
@@ -522,6 +584,7 @@ internal fun YieldScaleCard(
   onIncrementCustomServings: () -> Unit,
 ) {
   val extendedColors = KitchenTheme.extendedColors
+  // Four compact yield pills scaling Tier-1 ingredients proportionally while protecting Tier-2 staples.
   val presets = listOf(
     YieldPreset.SCALE_1X to "1x",
     YieldPreset.SCALE_2X to "2x",
@@ -529,6 +592,7 @@ internal fun YieldScaleCard(
     YieldPreset.CUSTOM to "Custom",
   )
 
+  // Flat 1.dp stone-bordered yield scaling card with 48.dp pill buttons.
   Surface(
     shape = KitchenTheme.shapes.card2xl,
     color = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -544,9 +608,10 @@ internal fun YieldScaleCard(
         Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
           Icon(Icons.Default.Restaurant, contentDescription = null, tint = extendedColors.herbalSage, modifier = Modifier.size(18.dp))
           Spacer(modifier = Modifier.width(6.dp))
-          Text("Yield ($servings srv)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+          Text("Yield · $servings srv", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
 
+        // Segmented capsule hosting 1x / 2x / 4x / Custom preset buttons.
         Surface(shape = CircleShape, color = extendedColors.parchment, border = BorderStroke(1.dp, extendedColors.borderSubtle)) {
           Row(modifier = Modifier.padding(2.dp)) {
             presets.forEach { (preset, label) ->
@@ -555,9 +620,9 @@ internal fun YieldScaleCard(
                 onClick = { onSelectPreset(preset) },
                 shape = CircleShape,
                 color = if (isSelected) extendedColors.herbalSage else Color.Transparent,
-                modifier = Modifier.defaultMinSize(minHeight = 44.dp),
+                modifier = Modifier.defaultMinSize(minHeight = 48.dp),
               ) {
-                Box(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
                   Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
@@ -573,7 +638,7 @@ internal fun YieldScaleCard(
         }
       }
 
-      // Custom serving stepper shown with 48.dp OutlinedIconButtons when "Custom" is selected.
+      // Reveal +/- 1 serving steppers when Custom yield mode is active.
       if (selectedPreset == YieldPreset.CUSTOM) {
         Row(
           modifier = Modifier.fillMaxWidth(),
