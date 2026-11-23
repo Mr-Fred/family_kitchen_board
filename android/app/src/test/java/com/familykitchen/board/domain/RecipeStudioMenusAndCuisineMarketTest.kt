@@ -77,10 +77,10 @@ class RecipeStudioMenusAndCuisineMarketTest {
       ),
     )
     override val runtimeState: StateFlow<AiRuntimeState> = mutableState.asStateFlow()
-    override suspend fun autoDiscoverAndInitialize(): Boolean = true
-    override suspend fun importModelFromUri(sourceUriString: String, displayFileName: String): String = displayFileName
-    override suspend fun generateText(prompt: String, systemInstruction: String): String = "{}"
-    override suspend fun analyzeImageWithPrompt(preprocessedJpegPath: String, prompt: String): String {
+    override suspend fun autoDiscoverAndInitialize(): AiRuntimeState = mutableState.value
+    override suspend fun importAndLoadModel(sourceUriString: String, displayName: String?): AiRuntimeState = mutableState.value
+    override suspend fun generateText(prompt: String): String = "{}"
+    override suspend fun analyzeImageWithPrompt(preprocessedImagePath: String, prompt: String): String {
       if (!supportsVision) {
         throw VisionNotSupportedException(modelName = "gemma-text-only")
       }

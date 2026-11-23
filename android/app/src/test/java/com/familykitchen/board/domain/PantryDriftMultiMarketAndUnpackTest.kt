@@ -55,10 +55,10 @@ class PantryDriftMultiMarketAndUnpackTest {
   private class OfflinePantryTestEdgePort : AiEdgePort {
     private val mutableState = MutableStateFlow<AiRuntimeState>(AiRuntimeState.Uninitialized)
     override val runtimeState: StateFlow<AiRuntimeState> = mutableState.asStateFlow()
-    override suspend fun autoDiscoverAndInitialize(): Boolean = false
-    override suspend fun importModelFromUri(sourceUriString: String, displayFileName: String): String = displayFileName
-    override suspend fun generateText(prompt: String, systemInstruction: String): String = "{}"
-    override suspend fun analyzeImageWithPrompt(preprocessedJpegPath: String, prompt: String): String = "{}"
+    override suspend fun autoDiscoverAndInitialize(): AiRuntimeState = mutableState.value
+    override suspend fun importAndLoadModel(sourceUriString: String, displayName: String?): AiRuntimeState = mutableState.value
+    override suspend fun generateText(prompt: String): String = "{}"
+    override suspend fun analyzeImageWithPrompt(preprocessedImagePath: String, prompt: String): String = "{}"
     override fun close() = Unit
   }
 

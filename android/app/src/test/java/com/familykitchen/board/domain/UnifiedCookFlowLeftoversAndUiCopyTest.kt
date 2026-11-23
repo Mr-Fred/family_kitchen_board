@@ -58,10 +58,10 @@ class UnifiedCookFlowLeftoversAndUiCopyTest {
   private class OfflineCookFlowEdgePort : AiEdgePort {
     private val mutableState = MutableStateFlow<AiRuntimeState>(AiRuntimeState.Uninitialized)
     override val runtimeState: StateFlow<AiRuntimeState> = mutableState.asStateFlow()
-    override suspend fun autoDiscoverAndInitialize(): Boolean = false
-    override suspend fun importModelFromUri(sourceUriString: String, displayFileName: String): String = displayFileName
-    override suspend fun generateText(prompt: String, systemInstruction: String): String = "{}"
-    override suspend fun analyzeImageWithPrompt(preprocessedJpegPath: String, prompt: String): String = "{}"
+    override suspend fun autoDiscoverAndInitialize(): AiRuntimeState = mutableState.value
+    override suspend fun importAndLoadModel(sourceUriString: String, displayName: String?): AiRuntimeState = mutableState.value
+    override suspend fun generateText(prompt: String): String = "{}"
+    override suspend fun analyzeImageWithPrompt(preprocessedImagePath: String, prompt: String): String = "{}"
     override fun close() = Unit
   }
 
@@ -128,7 +128,7 @@ class UnifiedCookFlowLeftoversAndUiCopyTest {
       viewModel.startCookMode(efoRiro, slotId = null, handsFreeVoiceActive = false)
       val started = viewModel.uiState.value.activeCookModeSession ?: error("Expected active CookModeSessionState")
       val withRunningTimer = CookModeEngine.toggleStepTimer(CookModeEngine.advanceStep(started))
-      val initialRemaining = withRunningTimer.currentStepTimer?.remainingSeconds ?: 0
+      val initialRemaining = withRunningTimer.activeStepTimer?.remainingSeconds ?: 0
       viewModel.updateCookModeSession(withRunningTimer)
 
       viewModel.minimizeCookMode()
@@ -145,7 +145,7 @@ class UnifiedCookFlowLeftoversAndUiCopyTest {
       viewModel.resumeMinimizedCookMode()
       assertFalse(viewModel.uiState.value.isCookModeMinimized)
       assertEquals(1, viewModel.uiState.value.activeCookModeSession?.currentStepIndex)
-      assertEquals(initialRemaining - 5, viewModel.uiState.value.activeCookModeSession?.currentStepTimer?.remainingSeconds)
+      assertEquals(initialRemaining - 5, viewModel.uiState.value.activeCookModeSession?.activeStepTimer?.remainingSeconds)
 
       viewModel.endCookModeSession()
       assertNull(viewModel.uiState.value.activeCookModeSession)
@@ -309,10 +309,10 @@ class UnifiedCookFlowLeftoversAndUiCopyTest {
       )
 
       val facts = viewModel.uiState.value.snapshot.elephantMemory.semanticFacts
-      assertTrue(facts.any { it.factText.contains("French", ignoreCase = true) && it.factText.contains("Filipino", ignoreCase = true) })
+      assertTrue(facts.any { it.summary.contains("French", ignoreCase = true) && it.summary.contains("Filipino", ignoreCase = true) })
       assertTrue(facts.any { it.category == ElephantFactCategory.TASTE_AND_TEXTURE })
       assertTrue(facts.any { it.category == ElephantFactCategory.COOKING_CADENCE })
-      assertTrue(facts.any { it.category == ElephantFactCategory.INGREDIENT_ALIAS && it.factText.contains("Fresh Kulitis", ignoreCase = true) })
+      assertTrue(facts.any { it.category == ElephantFactCategory.INGREDIENT_ALIAS && it.summary.contains("Fresh Kulitis", ignoreCase = true) })
     } finally {
       Dispatchers.resetMain()
     }

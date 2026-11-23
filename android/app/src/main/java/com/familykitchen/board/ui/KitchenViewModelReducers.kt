@@ -14,6 +14,7 @@ import com.familykitchen.board.domain.HouseholdProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
 import com.familykitchen.board.domain.IngredientCategory
 import com.familykitchen.board.domain.IngredientTier
+import com.familykitchen.board.domain.MAX_WEEKDAY_BREAKFAST_MINUTES
 import com.familykitchen.board.domain.MealSlot
 import com.familykitchen.board.domain.MealSlotStatus
 import com.familykitchen.board.domain.MealSlotType

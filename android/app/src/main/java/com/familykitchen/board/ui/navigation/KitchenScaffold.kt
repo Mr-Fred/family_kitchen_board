@@ -461,25 +461,45 @@ fun KitchenScaffoldContent(
               )
               // Keep live Gemma download, SAF copy, or GPU load visible whenever Sous-Chef sheet is closed.
               if (!uiState.isSousChefSheetOpen && (uiState.aiRuntimeState is AiRuntimeState.Importing || uiState.aiRuntimeState is AiRuntimeState.Loading)) {
-                SavorGlobalModelProgressStrip(uiState.aiRuntimeState) { onOpenSousChefSheet(null) }
+                SavorGlobalModelProgressStrip(
+                  runtimeState = uiState.aiRuntimeState,
+                  onOpenSousChefSheet = { onOpenSousChefSheet(null) },
+                )
               }
               // Optional global search bar filtering Pantry items and Cookbook dishes.
               if (uiState.isSearchBarExpanded) {
-                SavorExpandableSearchBar(uiState.searchQuery, onSearchQueryChange, onToggleSearch)
+                SavorExpandableSearchBar(
+                  query = uiState.searchQuery,
+                  onQueryChange = onSearchQueryChange,
+                  onClearAndClose = onToggleSearch,
+                )
               }
               // Smoothly animated, auto-dismissing toast confirming O(1) commits and EC-01..EC-13 gates.
-              SavorDismissibleToastBanner(uiState.toastMessage, uiState.toastEventId, onDismissToast)
+              SavorDismissibleToastBanner(
+                message = uiState.toastMessage,
+                onDismiss = onDismissToast,
+                toastEventId = uiState.toastEventId,
+              )
             }
           },
           bottomBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
               // Dock ActiveCookMiniBar cleanly above the 4-tab bottom NavigationBar when minimized.
               if (minimizedCookSession != null && !isWideScreen) {
-                ActiveCookMiniBar(minimizedCookSession, onResumeCookMode, onEndCookMode)
+                ActiveCookMiniBar(
+                  sessionState = minimizedCookSession,
+                  onResumeCookMode = onResumeCookMode,
+                  onEndCookMode = onEndCookMode,
+                )
               }
               // Render flat warm-linen 4-tab NavigationBar on portrait phones when keyboard is closed.
               if (!isWideScreen && !isImeVisible) {
-                SavorBottomNavigationBar(uiState.activeDestination, uiState.groceryBadgeCount, expiringCount, onSelectDestination)
+                SavorBottomNavigationBar(
+                  activeDestination = uiState.activeDestination,
+                  groceryBadgeCount = uiState.groceryBadgeCount,
+                  expiringSoonCount = expiringCount,
+                  onSelectDestination = onSelectDestination,
+                )
               }
             }
           },
@@ -488,7 +508,12 @@ fun KitchenScaffoldContent(
           Row(modifier = Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding).imePadding()) {
             // Render leading 4-tab NavigationRail in landscape or wide kitchen-counter mode.
             if (isWideScreen) {
-              SavorWideNavigationRail(uiState.activeDestination, uiState.groceryBadgeCount, expiringCount, onSelectDestination)
+              SavorWideNavigationRail(
+                activeDestination = uiState.activeDestination,
+                groceryBadgeCount = uiState.groceryBadgeCount,
+                expiringSoonCount = expiringCount,
+                onSelectDestination = onSelectDestination,
+              )
             }
 
             // Route all 4 first-class SavorAI destinations inside the main workspace pane.
@@ -500,7 +525,11 @@ fun KitchenScaffoldContent(
                     TopLevelDestination.PLAN -> {
                       // Tab 1: Real-date Meal Plan workspace switching between Meal Plan & Batch Prep.
                       Column(modifier = Modifier.fillMaxSize()) {
-                        PlanModeSwitcherBar(uiState.activePacerMode, uiState.weeklyPrepSessionPlan.tasks.size, onSetPacerMode)
+                        PlanModeSwitcherBar(
+                          activeMode = uiState.activePacerMode,
+                          batchTaskCount = uiState.weeklyPrepSessionPlan.tasks.size,
+                          onSelectMode = onSetPacerMode,
+                        )
                         Box(modifier = Modifier.weight(1f).fillMaxSize()) {
                           when (uiState.activePacerMode) {
                             PacerMode.DAILY_PACER -> TodayAndWeekScreen(
@@ -622,7 +651,11 @@ fun KitchenScaffoldContent(
 
               // Keep ActiveCookMiniBar docked at the bottom of wide-screen counter layouts as well.
               if (minimizedCookSession != null && isWideScreen) {
-                ActiveCookMiniBar(minimizedCookSession, onResumeCookMode, onEndCookMode)
+                ActiveCookMiniBar(
+                  sessionState = minimizedCookSession,
+                  onResumeCookMode = onResumeCookMode,
+                  onEndCookMode = onEndCookMode,
+                )
               }
             }
           }

@@ -6,6 +6,7 @@ import com.familykitchen.board.ports.AiRuntimeState
 import com.familykitchen.board.ports.FixedKitchenClock
 import com.familykitchen.board.ports.KitchenClockPort
 import com.familykitchen.board.ports.KitchenClockSnapshot
+import com.familykitchen.board.ports.KitchenSnapshot
 import com.familykitchen.board.ports.SeedCatalogPort
 import com.familykitchen.board.ports.VoiceInputPort
 import com.familykitchen.board.ports.VoiceInputState
@@ -64,10 +65,10 @@ class CalendarRolloverAndExpiryAgingTest {
   private class IdleEdgePort : AiEdgePort {
     private val mutableState = MutableStateFlow<AiRuntimeState>(AiRuntimeState.Uninitialized)
     override val runtimeState: StateFlow<AiRuntimeState> = mutableState.asStateFlow()
-    override suspend fun autoDiscoverAndInitialize(): Boolean = false
-    override suspend fun importModelFromUri(sourceUriString: String, displayFileName: String): String = displayFileName
-    override suspend fun generateText(prompt: String, systemInstruction: String): String = "{}"
-    override suspend fun analyzeImageWithPrompt(preprocessedJpegPath: String, prompt: String): String = "{}"
+    override suspend fun autoDiscoverAndInitialize(): AiRuntimeState = mutableState.value
+    override suspend fun importAndLoadModel(sourceUriString: String, displayName: String?): AiRuntimeState = mutableState.value
+    override suspend fun generateText(prompt: String): String = "{}"
+    override suspend fun analyzeImageWithPrompt(preprocessedImagePath: String, prompt: String): String = "{}"
     override fun close() = Unit
   }
 
@@ -270,14 +271,14 @@ class CalendarRolloverAndExpiryAgingTest {
       assertTrue(rollover.nextBoard.slots.any { it.recipeId == "rec_37_poulet_basquaise" })
 
       // Verify WeeklyEpisodicRollup recorded 1 cooked meal and 1 skipped slot into ElephantMemory.
-      val digest = rollover.updatedElephantMemory.weeklyDigests.single()
+      val digest = rollover.updatedElephantMemory.episodicDigests.single()
       assertEquals("2026-11-16", digest.weekStartDateIso)
       assertEquals(1, digest.cookedMealsCount)
       assertEquals(1, digest.skippedSlotsCount)
 
       // Verify DINNERS_ONLY (7 slots) and BLANK_WEEK (0 slots) cadences via ViewModel in 1 O(1) write.
       val storage = FakeKitchenStorage(
-        initialSnapshot = com.familykitchen.board.ports.KitchenSnapshot.fromSeedCatalog(seed).copy(weeklyBoard = outgoingBoard),
+        initialSnapshot = KitchenSnapshot.fromSeedCatalog(seed).copy(weeklyBoard = outgoingBoard),
       )
       val viewModel = KitchenBoardViewModel(
         seedCatalogPort = SeedCatalogPort { seed },
@@ -290,7 +291,7 @@ class CalendarRolloverAndExpiryAgingTest {
       viewModel.confirmStartNewWeek(cadence = PlanCadence.DINNERS_ONLY, carryOverUncooked = true)
       assertEquals(1, storage.batchWriteCallCount)
       assertEquals(7, viewModel.uiState.value.snapshot.weeklyBoard.slots.size)
-      assertTrue(viewModel.uiState.value.snapshot.elephantMemory.weeklyDigests.isNotEmpty())
+      assertTrue(viewModel.uiState.value.snapshot.elephantMemory.episodicDigests.isNotEmpty())
 
       // Verify moveOrSwapMealSlot EC-01 guard: moving > 25m Party Jollof onto Monday BREAKFAST throws ValidationException.
       val recipesById = allRecipes.associateBy { it.recipeId }

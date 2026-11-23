@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.familykitchen.board.domain.HouseholdProfile
 import com.familykitchen.board.domain.IngredientCatalogItem
+import com.familykitchen.board.domain.MAX_WEEKDAY_BREAKFAST_MINUTES
 import com.familykitchen.board.domain.MealSlotType
 import com.familykitchen.board.domain.Recipe
 import com.familykitchen.board.domain.RecipePantryMatchSummary
