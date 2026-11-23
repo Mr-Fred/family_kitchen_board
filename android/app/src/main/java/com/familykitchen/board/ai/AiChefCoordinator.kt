@@ -1,5 +1,6 @@
 package com.familykitchen.board.ai
 
+import com.familykitchen.board.domain.AdkKitchenToolsEngine
 import com.familykitchen.board.domain.AiChatRole
 import com.familykitchen.board.domain.AiChatTurn
 import com.familykitchen.board.domain.AiChefAction
@@ -27,6 +28,7 @@ import com.familykitchen.board.domain.buildCookbookPhotoOcrPrompt
 import com.familykitchen.board.domain.formatAiFallbackToastMessage
 import com.familykitchen.board.domain.formatAiResponseSourceLabel
 import com.familykitchen.board.domain.isMealOrRecipeProposalRequest
+import com.familykitchen.board.domain.parseAllModelToolCalls
 import com.familykitchen.board.domain.parseCookbookVisionJsonToDraft
 import com.familykitchen.board.domain.requireDomainValid
 import com.familykitchen.board.domain.synthesizeCatalogItemFromLabel
@@ -129,6 +131,7 @@ class AiChefCoordinator(
    * @param deviceProfile Active universal Android RAM-tier / Gemma hardware profile.
    * @param nowIso Deterministic ISO-8601 timestamp stamped onto generated chat turns.
    * @param activeDayIndex Active weekday index (`0..6`) anchoring `"tonight"` / `"today"` proposals.
+   * @param currentHour24 Optional 24-hour local clock (`0..23`, parsed from [nowIso] when omitted).
    * @return Complete [AiChefTurnOutcome] ready for state emission and `O(1)` persistence.
    */
   suspend fun handleSubmitAction(
@@ -138,6 +141,7 @@ class AiChefCoordinator(
     deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
     nowIso: String = DEFAULT_TIMESTAMP_ISO,
     activeDayIndex: Int = 0,
+    currentHour24: Int? = null,
   ): AiChefTurnOutcome =
     submitTurn(
       snapshot = snapshot,
@@ -147,6 +151,7 @@ class AiChefCoordinator(
       deviceProfile = deviceProfile,
       nowIso = nowIso,
       activeDayIndex = activeDayIndex,
+      currentHour24 = currentHour24,
     )
 
   /**
@@ -168,6 +173,7 @@ class AiChefCoordinator(
    * @param deviceProfile Active hardware profile guiding token/delegate system prompt hints.
    * @param nowIso Deterministic ISO-8601 timestamp.
    * @param activeDayIndex Current real weekday (`0..6`) for `"tonight"` / `"today"` swap commands.
+   * @param currentHour24 Optional 24-hour local clock (`0..23`, parsed from [nowIso] when omitted).
    * @return Immutable [AiChefTurnOutcome].
    */
   suspend fun submitTurn(
@@ -178,13 +184,14 @@ class AiChefCoordinator(
     deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
     nowIso: String = DEFAULT_TIMESTAMP_ISO,
     activeDayIndex: Int = 0,
+    currentHour24: Int? = null,
   ): AiChefTurnOutcome {
     // Route strictly by presence of an explicit per-turn image path (zero @Volatile side-channels).
     val cleanImagePath = attachedImagePath?.trim()?.takeIf { it.isNotEmpty() }
     return when {
       cleanImagePath != null ->
         coordV2ExecuteImageAttachedTurn(snapshot, promptText, cleanImagePath, attachedImageLabel, nowIso)
-      else -> coordV2ExecuteTextOnlyTurn(snapshot, promptText, deviceProfile, nowIso, activeDayIndex)
+      else -> coordV2ExecuteTextOnlyTurn(snapshot, promptText, deviceProfile, nowIso, activeDayIndex, currentHour24)
     }
   }
 
@@ -578,6 +585,7 @@ class AiChefCoordinator(
     deviceProfile: EdgeDeviceProfile,
     nowIso: String,
     activeDayIndex: Int = 0,
+    currentHour24: Int? = null,
   ): AiChefTurnOutcome {
     // Reject blank text-only submissions early with a typed domain ValidationException.
     val cleanPrompt = promptText.trim()
@@ -637,20 +645,39 @@ class AiChefCoordinator(
         }
         fallbackDiagnosticToast = egmOutcome.fallbackToastMessage
       } else {
-        // Conversational greeting / technique Q&A path preserves RECENT_CONVERSATION multi-turn window.
+        // Conversational greeting / technique Q&A path preserves RECENT_CONVERSATION + time context.
+        val resolvedHour24 = currentHour24 ?: coordV2ParseIsoHour24OrNull(nowIso)
         val systemPrompt = AiMenuAdvisorEngine.buildPantryAwareSystemPrompt(
           userPrompt = cleanPrompt, board = snapshot.weeklyBoard, recipes = effectiveRecipes,
           catalog = snapshot.ingredients, pantry = snapshot.pantryEntries,
           householdAllergens = snapshot.householdProfile.householdAllergens,
           householdProfile = snapshot.householdProfile, deviceProfile = deviceProfile,
           recentTurns = snapshot.aiTurnHistory.takeLast(RECENT_PROMPT_TURNS_LIMIT),
+          todayDayIndex = activeDayIndex, currentHour24 = resolvedHour24,
         )
         val llmGroundedProposal = try {
-          val rawReply = aiEdgePort.generateText(systemPrompt)
+          var rawReply = aiEdgePort.generateText(systemPrompt)
+          // Execute up to 2 read-only ADK tools if Gemma 4 emits <|tool_call> on a conversational turn.
+          val convTools = parseAllModelToolCalls(rawReply).filter { call ->
+            call.toolName != "propose_meal_board_swaps" &&
+              call.toolName != "audit_candidate_meal_swaps" &&
+              call.toolName != "web_culinary_search"
+          }.take(MAX_CONVERSATIONAL_READ_TOOLS)
+          if (convTools.isNotEmpty()) {
+            val toolState = if (effectiveRecipes.size != snapshot.recipes.size) snapshot.copy(recipes = effectiveRecipes) else snapshot
+            val obsText = convTools.joinToString("\n") { call ->
+              val res = AdkKitchenToolsEngine.executeKitchenDomainTool(toolState, snapshot.elephantMemory, call)
+              "TOOL_RESULT[${res.toolName}]: ${res.payloadJson}"
+            }
+            val synthPrompt =
+              "$systemPrompt\n$obsText\nFINAL_SYNTHESIS_RULE: Answer USER_REQUEST warmly in 1-2 sentences using TOOL_RESULT above without emitting any <|tool_call> tags or raw IDs."
+            rawReply = aiEdgePort.generateText(synthPrompt)
+          }
           AiMenuAdvisorEngine.groundFlexibleLlmTextReply(
             rawModelOutput = rawReply, userPrompt = cleanPrompt, board = snapshot.weeklyBoard,
             recipes = effectiveRecipes, catalog = snapshot.ingredients,
             pantry = snapshot.pantryEntries, householdProfile = snapshot.householdProfile,
+            todayDayIndex = activeDayIndex,
           )
         } catch (cancel: CancellationException) {
           throw cancel
@@ -687,27 +714,18 @@ class AiChefCoordinator(
 
   // Apply explicit text-only tool results in one pure pass so persistence stays O(1).
   private fun coordV2ApplyToolResultToSnapshot(
-    current: KitchenSnapshot,
-    toolResult: AiToolCallResult,
-    updatedHistory: List<AiChatTurn>,
-    nowIso: String,
+    current: KitchenSnapshot, toolResult: AiToolCallResult,
+    updatedHistory: List<AiChatTurn>, nowIso: String,
   ): KitchenSnapshot =
     when (toolResult.toolName) {
       "restock_pantry_batch" -> {
         val mergedCatalog = coordV2UpsertCatalogItems(current.ingredients, toolResult.synthesizedCatalogItems)
-        val restocked = batchRestockPantry(
-          pantry = current.pantryEntries,
-          catalog = mergedCatalog,
-          deltas = toolResult.restockDeltas,
-          nowIso = nowIso,
-        )
+        val restocked = batchRestockPantry(current.pantryEntries, mergedCatalog, toolResult.restockDeltas, nowIso)
         val restockedIds = toolResult.restockDeltas.map { it.ingredientId }.toSet()
         current.copy(
-          ingredients = mergedCatalog,
-          pantryEntries = restocked,
+          ingredients = mergedCatalog, pantryEntries = restocked,
           aiAddedGroceryIds = current.aiAddedGroceryIds - restockedIds,
-          aiTurnHistory = updatedHistory,
-          updatedAtIso = nowIso,
+          aiTurnHistory = updatedHistory, updatedAtIso = nowIso,
         )
       }
       "deplete_pantry_items" -> {
@@ -726,54 +744,37 @@ class AiChefCoordinator(
         }
         val missingEntries = outIds.filter { it !in seenIds }.map { missingId ->
           val item = catalogById[missingId]
-          val tier = item?.tier ?: IngredientTier.TIER_1_QUANTITATIVE
           PantryLedgerEntry(
-            ingredientId = missingId,
-            tier = tier,
-            currentQuantity = 0.0,
-            stapleStatus = StapleStatus.OUT,
-            isOutOfStock = true,
-            updatedAtIso = nowIso,
-            storageLocation = item?.defaultStorageLocation ?: StorageLocation.PANTRY,
+            ingredientId = missingId, tier = item?.tier ?: IngredientTier.TIER_1_QUANTITATIVE,
+            currentQuantity = 0.0, stapleStatus = StapleStatus.OUT, isOutOfStock = true,
+            updatedAtIso = nowIso, storageLocation = item?.defaultStorageLocation ?: StorageLocation.PANTRY,
           )
         }
-        current.copy(
-          pantryEntries = updatedEntries + missingEntries,
-          aiTurnHistory = updatedHistory,
-          updatedAtIso = nowIso,
-        )
+        current.copy(pantryEntries = updatedEntries + missingEntries, aiTurnHistory = updatedHistory, updatedAtIso = nowIso)
       }
       "queue_grocery_items" -> {
         val mergedCatalog = coordV2UpsertCatalogItems(current.ingredients, toolResult.synthesizedCatalogItems)
         current.copy(
           ingredients = mergedCatalog,
           aiAddedGroceryIds = current.aiAddedGroceryIds + toolResult.queuedGroceryIngredientIds,
-          aiTurnHistory = updatedHistory,
-          updatedAtIso = nowIso,
+          aiTurnHistory = updatedHistory, updatedAtIso = nowIso,
         )
       }
       "activate_life_event" -> {
         val event = toolResult.activatedLifeEvent
         val updatedProfile = when (event) {
           null -> current.householdProfile
-          else -> {
-            val mergedEvents = current.householdProfile.activeLifeEvents
-              .filterNot { it.eventId == event.eventId } + event
-            current.householdProfile.copy(activeLifeEvents = mergedEvents)
-          }
+          else -> current.householdProfile.copy(
+            activeLifeEvents = current.householdProfile.activeLifeEvents.filterNot { it.eventId == event.eventId } + event,
+          )
         }
         val scaledSlots = current.weeklyBoard.slots.map { slot ->
-          when (slot.status) {
-            MealSlotStatus.PLANNED -> slot.copy(targetServings = updatedProfile.effectiveTargetServings)
-            else -> slot
-          }
+          if (slot.status == MealSlotStatus.PLANNED) slot.copy(targetServings = updatedProfile.effectiveTargetServings) else slot
         }
         current.copy(
-          householdProfile = updatedProfile,
-          weeklyBoard = current.weeklyBoard.copy(slots = scaledSlots),
+          householdProfile = updatedProfile, weeklyBoard = current.weeklyBoard.copy(slots = scaledSlots),
           aiAddedGroceryIds = current.aiAddedGroceryIds + toolResult.queuedGroceryIngredientIds,
-          aiTurnHistory = updatedHistory,
-          updatedAtIso = nowIso,
+          aiTurnHistory = updatedHistory, updatedAtIso = nowIso,
         )
       }
       "schedule_family_meal" -> {
@@ -784,25 +785,18 @@ class AiChefCoordinator(
           targetDay != null && targetSlot != null && !targetRecipeId.isNullOrBlank() ->
             current.weeklyBoard.copy(
               slots = current.weeklyBoard.slots.map { slot ->
-                when {
-                  slot.dayIndex == targetDay && slot.slotType == targetSlot ->
-                    slot.copy(
-                      recipeId = targetRecipeId,
-                      status = MealSlotStatus.PLANNED,
-                      isPreppedAhead = false,
-                      preppedTimeSavedMinutes = 0,
-                    )
-                  else -> slot
+                if (slot.dayIndex == targetDay && slot.slotType == targetSlot) {
+                  slot.copy(recipeId = targetRecipeId, status = MealSlotStatus.PLANNED, isPreppedAhead = false, preppedTimeSavedMinutes = 0)
+                } else {
+                  slot
                 }
               },
             )
           else -> current.weeklyBoard
         }
         current.copy(
-          weeklyBoard = updatedBoard,
-          recipes = current.allHouseholdRecipes,
-          aiTurnHistory = updatedHistory,
-          updatedAtIso = nowIso,
+          weeklyBoard = updatedBoard, recipes = current.allHouseholdRecipes,
+          aiTurnHistory = updatedHistory, updatedAtIso = nowIso,
         )
       }
       else -> current.copy(aiTurnHistory = updatedHistory, updatedAtIso = nowIso)
@@ -874,9 +868,14 @@ class AiChefCoordinator(
     const val DEFAULT_MAX_TURN_HISTORY: Int = 12
 
     private const val RECENT_PROMPT_TURNS_LIMIT: Int = 4
+    private const val MAX_CONVERSATIONAL_READ_TOOLS: Int = 2
     private const val SOURCE_LABEL_KITCHEN_TOOL: String = "Kitchen Tool"
     private const val SOURCE_LABEL_OFFLINE_ADVISOR: String = "Offline Advisor"
     private const val DEFAULT_IMAGE_LABEL: String = "Attached Photo"
+    private val ISO_HOUR_REGEX: Regex = Regex("T(\\d{2}):")
+
+    private fun coordV2ParseIsoHour24OrNull(nowIso: String): Int? =
+      ISO_HOUR_REGEX.find(nowIso)?.groupValues?.getOrNull(1)?.toIntOrNull()?.takeIf { it in 0..23 }
 
     // Default pure-JVM file deletion callback removing temporary preprocessed captures safely.
     private fun coordV2DefaultDeleteTempFile(filePath: String) {

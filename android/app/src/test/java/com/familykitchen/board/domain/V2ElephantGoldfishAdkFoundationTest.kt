@@ -1,5 +1,7 @@
 package com.familykitchen.board.domain
 
+import com.familykitchen.board.ai.AiChefCoordinator
+import com.familykitchen.board.ai.AiTurnResolutionStatus
 import com.familykitchen.board.ai.CloudHttpResponse
 import com.familykitchen.board.ai.EgmGraphStageOutcome
 import com.familykitchen.board.ai.KeystoreCloudWebSearchAdapter
@@ -396,6 +398,116 @@ class V2ElephantGoldfishAdkFoundationTest {
     assertTrue(capturedHeaders["Authorization"].orEmpty().startsWith("Bearer AIza"))
     assertEquals(1, executedResult.hits.size)
     assertEquals("panlasangpinoy.com", executedResult.hits.single().sourceDomain)
+  }
+
+  /**
+   * Regression test for on-device `gemma-4-E4B-it` single-pipe `<|tool_call>...<tool_call|>`
+   * parsing, comma-bearing `call:propose_meal_board_swaps{...}` arguments, `"Hi what's for dinner??"`
+   * scheduled `DINNER` lookup, and `0` `<|tool_call` leak even when tool budget is exhausted.
+   */
+  @Test
+  fun gemma4SinglePipeToolCallAndWhatsForDinnerLookup_executesToolSurfacesTonightDinnerAndNeverLeaksTags() = runTest {
+    // 1. Verify sanitizeLlmRawOutput strips single-pipe <|thought>...<thought|> while preserving <|tool_call>...<tool_call|>.
+    val rawSinglePipeTurn =
+      "<|turn>model\n<|thought>\nCheck household goals first.\n<thought|><|tool_call>call:get_family_goals_and_events{}<tool_call|><turn|>"
+    val afterSanitize = sanitizeLlmRawOutput(rawSinglePipeTurn)
+    assertEquals("<|tool_call>call:get_family_goals_and_events{}<tool_call|>", afterSanitize)
+
+    val singleCall = parseModelToolCallOrNull("<|tool_call>call:get_family_goals_and_events{}<tool_call|>")
+    assertNotNull(singleCall)
+    assertEquals("get_family_goals_and_events", requireNotNull(singleCall).toolName)
+    assertTrue(singleCall.arguments.isEmpty())
+    assertEquals(1, parseAllModelToolCalls(afterSanitize).size)
+
+    // 2. Verify quote- and bracket/brace-depth-aware splitting on comma-bearing summary + swaps JSON array.
+    val complexProposeTag =
+      """<|tool_call>call:propose_meal_board_swaps{summary:"Warm, rich French stew for tonight",swaps:[{"slotId":"slot_wed_dinner","recipeId":"rec_37_poulet_basquaise","rationale":"Uses peppers, tomatoes, and herbs"}]}<tool_call|>"""
+    val parsedCalls = AdkKitchenToolsEngine.parseAllModelToolCalls(complexProposeTag)
+    assertEquals(1, parsedCalls.size)
+    val parsedPropose = parsedCalls.single()
+    assertEquals("propose_meal_board_swaps", parsedPropose.toolName)
+    assertEquals("Warm, rich French stew for tonight", parsedPropose.arguments["summary"])
+    val parsedSwapSpecs = parseCandidateSwapList(parsedPropose.arguments["swaps"].orEmpty())
+    assertEquals(1, parsedSwapSpecs.size)
+    assertEquals("rec_37_poulet_basquaise", parsedSwapSpecs.single().recipeId)
+    assertEquals("Uses peppers, tomatoes, and herbs", parsedSwapSpecs.single().rationale)
+
+    // 3. Verify SingleGemmaEgmGraphRunner + AiChefCoordinator on "Hi what's for dinner??" (Wednesday = dayIndex 2).
+    val baseSnapshot = KitchenSnapshot.fromSeedCatalog(canonicalSeed)
+    val hydratedSnapshot = baseSnapshot.copy(recipes = baseSnapshot.allHouseholdRecipes)
+    val activeDay = 2
+    val tonightDinnerSlot = hydratedSnapshot.weeklyBoard.slots.first {
+      it.dayIndex == activeDay && it.slotType == MealSlotType.DINNER
+    }
+    val expectedTonightDinner = requireNotNull(hydratedSnapshot.recipesById[tonightDinnerSlot.recipeId])
+    assertTrue(MealSlotType.DINNER in expectedTonightDinner.allowedSlots)
+    assertFalse(expectedTonightDinner.recipeId.startsWith("rec_01"))
+
+    val dinnerLookupPort = ScriptedSingleGemmaPort(
+      replies = listOf(
+        sanitizeLlmRawOutput(rawSinglePipeTurn),
+        sanitizeLlmRawOutput(
+          "<|turn>model\n<|thought>Report tonight's scheduled dinner.<thought|>" +
+            "Tonight for dinner you have '${expectedTonightDinner.title}' ready on your meal plan!<turn|>",
+        ),
+      ),
+    )
+    val graphOutcome = SingleGemmaEgmGraphRunner(aiEdgePort = dinnerLookupPort).executeTurn(
+      snapshot = hydratedSnapshot,
+      promptText = "Hi what's for dinner??",
+      activeDayIndex = activeDay,
+    )
+    assertEquals(EgmGraphStageOutcome.GOLDFISH_APPROVED_ITERATION_1, graphOutcome.outcome)
+    assertEquals(1, graphOutcome.executedTools.size)
+    assertEquals("get_family_goals_and_events", graphOutcome.executedTools.single().toolName)
+    assertTrue(graphOutcome.nodeTraces.first().promptSentToModel.contains("KITCHEN_SNAPSHOT_BRIEF:"))
+    assertTrue(graphOutcome.nodeTraces.first().promptSentToModel.contains(expectedTonightDinner.title))
+    assertFalse(graphOutcome.nodeTraces.first().promptSentToModel.contains("RECENT_CONVERSATION"))
+
+    val coordPort = ScriptedSingleGemmaPort(
+      replies = listOf(
+        sanitizeLlmRawOutput(rawSinglePipeTurn),
+        sanitizeLlmRawOutput(
+          "<|turn>model\n<|thought>Report dinner.<thought|>" +
+            "Tonight for dinner we have '${expectedTonightDinner.title}' (${expectedTonightDinner.recipeId})!<turn|>",
+        ),
+      ),
+    )
+    val coordOutcome = AiChefCoordinator(aiEdgePort = coordPort).submitTurn(
+      snapshot = hydratedSnapshot,
+      promptText = "Hi what's for dinner??",
+      activeDayIndex = activeDay,
+    )
+    assertEquals(AiTurnResolutionStatus.ON_DEVICE_TEXT_GROUNDED, coordOutcome.status)
+    assertFalse(coordOutcome.assistantTurn.messageText.contains("<|tool_call"))
+    assertFalse(coordOutcome.assistantTurn.messageText.contains("<tool_call|>"))
+    assertFalse(coordOutcome.assistantTurn.messageText.contains(expectedTonightDinner.recipeId))
+    val featuredDinner = requireNotNull(coordOutcome.assistantTurn.proposal?.featuredRecipeCard)
+    assertEquals(expectedTonightDinner.recipeId, featuredDinner.recipe.recipeId)
+    assertTrue(MealSlotType.DINNER in featuredDinner.recipe.allowedSlots)
+    assertEquals(MealSlotType.DINNER, featuredDinner.preferredSlotType)
+    assertFalse(featuredDinner.recipe.recipeId.startsWith("rec_01"))
+
+    // 4. Model emitting <|tool_call>call:get_family_goals_and_events{}<tool_call|> on EVERY pass -> 0 tag leak!
+    val loopingToolPort = ScriptedSingleGemmaPort(
+      replies = listOf(
+        "<|tool_call>call:get_family_goals_and_events{}<tool_call|>",
+        "<|tool_call>call:get_family_goals_and_events{}<tool_call|>",
+        "<|tool_call>call:get_family_goals_and_events{}<tool_call|>",
+        "<|tool_call>call:get_family_goals_and_events{}<tool_call|>",
+      ),
+    )
+    val loopingCoordOutcome = AiChefCoordinator(aiEdgePort = loopingToolPort).submitTurn(
+      snapshot = hydratedSnapshot,
+      promptText = "Hi what's for dinner??",
+      activeDayIndex = activeDay,
+    )
+    assertFalse(loopingCoordOutcome.assistantTurn.messageText.contains("<|tool_call"))
+    assertFalse(loopingCoordOutcome.assistantTurn.messageText.contains("<tool_call|>"))
+    assertFalse(loopingCoordOutcome.assistantTurn.messageText.contains("call:get_family_goals_and_events"))
+    val fallbackFeatured = requireNotNull(loopingCoordOutcome.assistantTurn.proposal?.featuredRecipeCard)
+    assertEquals(expectedTonightDinner.recipeId, fallbackFeatured.recipe.recipeId)
+    assertEquals(MealSlotType.DINNER, fallbackFeatured.preferredSlotType)
   }
 
   private fun readCanonicalSeedCatalogJson(): String {

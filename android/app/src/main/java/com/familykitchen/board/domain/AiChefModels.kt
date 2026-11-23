@@ -187,12 +187,14 @@ data class AiNewIngredientSuggestion(
  * @property recipe Catalog-grounded [Recipe] ready for 1-tap Cook Mode, Meal Plan, or Save.
  * @property matchSummary Live pantry readiness, missing staples, and rescued expiring value.
  * @property substitutionTip Optional Sous-Chef culinary substitution rule with calorie/macro delta.
+ * @property preferredSlotType Optional target [MealSlotType] preselected in the card's slot picker.
  */
 @Serializable
 data class AiRichRecipeCard(
   val recipe: Recipe,
   val matchSummary: RecipePantryMatchSummary,
   val substitutionTip: String? = null,
+  val preferredSlotType: MealSlotType? = null,
 )
 
 /**

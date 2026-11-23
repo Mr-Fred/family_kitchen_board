@@ -232,11 +232,30 @@ fun generatePantryGroundedMenuProposal(
     pantry = pantry,
     effectiveAllergens = effectiveAllergens,
     targetServings = targetServings,
+    board = board,
+    preferredCuisines = preferredCuisines,
+    todayDayIndex = safeToday,
   )
   val rescueSavingsSuffix = featuredCard?.matchSummary
     ?.takeIf { it.isZeroFoodWasteMatch && it.rescuedValueUsd > 0.0 }
     ?.let { " (rescuing ${activeCurrency.formatAmount(it.rescuedValueUsd)} in expiring stock)" }
     .orEmpty()
+
+  // Direct read-only board lookup ("Hi what's for dinner??") surfaces the scheduled dish without swap noise.
+  if (isCurrentMealPlanLookup(userPrompt) && featuredCard != null) {
+    val slotWord = (featuredCard.preferredSlotType ?: MealSlotType.DINNER).name.lowercase()
+    return AiMenuOptimizationProposal(
+      proposalId = "ai_lookup_${focusTag.name.lowercase()}_${board.boardId}",
+      focusTag = focusTag,
+      assistantSummary = "Scheduled for $slotWord today: ${featuredCard.recipe.title} " +
+        "(${featuredCard.recipe.calibratedActiveMinutes} min active, ${featuredCard.matchSummary.matchPercentage}% pantry match)$rescueSavingsSuffix.",
+      slotSwaps = emptyList(),
+      newIngredientSuggestions = emptyList(),
+      isConversationalOnly = false,
+      followUpPrompts = listOf("Swap tonight's dinner", "Rescue expiring items", "Check Smart Grocery List"),
+      featuredRecipeCard = featuredCard,
+    )
+  }
 
   return AiMenuOptimizationProposal(
     proposalId = "ai_prop_${focusTag.name.lowercase()}_${board.boardId}",
@@ -604,7 +623,7 @@ private fun isPurelyConversationalPrompt(promptLower: String): Boolean {
   return greeting || audit
 }
 
-// Synthesize an interactive AiRichRecipeCard grounded in pantry match %, rescued $, and swap deltas.
+// Synthesize an interactive AiRichRecipeCard grounded in scheduled meals, slot type, cuisines, & rescues.
 internal fun synthesizeFeaturedAiRecipeCard(
   userPrompt: String,
   focusTag: NutritionFocusTag,
@@ -614,29 +633,74 @@ internal fun synthesizeFeaturedAiRecipeCard(
   pantry: List<PantryLedgerEntry>,
   effectiveAllergens: List<String>,
   targetServings: Int = 4,
+  board: WeeklyBoard? = null,
+  preferredCuisines: List<String> = emptyList(),
+  todayDayIndex: Int = 0,
 ): AiRichRecipeCard? {
   val lowerPrompt = userPrompt.trim().lowercase()
-  val prefersExpiryRescue = focusTag == NutritionFocusTag.PANTRY_ZERO_WASTE ||
-    Regex("expir|waste|2\\s*days|tomorrow|tonight|perishable").containsMatchIn(lowerPrompt)
-
+  val requestedSlot = inferRequestedMealSlotType(userPrompt)
+  val safeToday = ((todayDayIndex % 7) + 7) % 7
   val pool = (slotSwaps.map { it.suggestedRecipe } + candidateRecipes).distinctBy { it.recipeId }
   if (pool.isEmpty()) return null
+
+  // 1. Read-only meal plan lookup ("Hi what's for dinner??") features the exact scheduled slot dish!
+  if (isCurrentMealPlanLookup(userPrompt) && board != null) {
+    val targetSlot = requestedSlot ?: MealSlotType.DINNER
+    val scheduledSlot = board.slots.firstOrNull {
+      it.dayIndex == safeToday && it.slotType == targetSlot && it.status != MealSlotStatus.COMPLETED_SKIPPED
+    }
+    val scheduledRecipe = scheduledSlot?.let { slot -> pool.firstOrNull { it.recipeId == slot.recipeId } }
+    if (scheduledRecipe != null) {
+      val matchSummary = evaluateRecipePantryMatch(scheduledRecipe, pantry, catalog, targetServings, effectiveAllergens)
+      val tip = buildCulinarySubstitutionTip(scheduledRecipe, lowerPrompt, catalog)
+      return AiRichRecipeCard(
+        recipe = scheduledRecipe,
+        matchSummary = matchSummary,
+        substitutionTip = tip,
+        preferredSlotType = targetSlot.takeIf { it in scheduledRecipe.allowedSlots },
+      )
+    }
+  }
+
+  // 2. Trigger expiry-rescue sorting strictly on explicit zero-waste / spoilage terms (never bare "tonight").
+  val prefersExpiryRescue = focusTag == NutritionFocusTag.PANTRY_ZERO_WASTE ||
+    Regex("expir|waste|2\\s*days|perishable|rescue|use\\s+up|spoil").containsMatchIn(lowerPrompt)
 
   val evaluatedPool = pool.map { recipe ->
     recipe to evaluateRecipePantryMatch(recipe, pantry, catalog, targetServings, effectiveAllergens)
   }
+  // 3. Constrain candidates to requestedSlot (and <=25m EC-01 cap when BREAKFAST), falling back only if empty.
+  val slotFilteredPool = when (requestedSlot) {
+    null -> evaluatedPool
+    else -> evaluatedPool.filter { (recipe, _) ->
+      requestedSlot in recipe.allowedSlots &&
+        (requestedSlot != MealSlotType.BREAKFAST || computeCalibratedMorningMinutes(recipe) <= MAX_WEEKDAY_BREAKFAST_MINUTES)
+    }.ifEmpty { evaluatedPool }
+  }
+
+  val cuisineAndMatchComparator =
+    compareByDescending<Pair<Recipe, RecipePantryMatchSummary>> {
+      preferredCuisines.isNotEmpty() && doesRecipeMatchPreferredCuisines(it.first, preferredCuisines)
+    }
+      .thenByDescending { it.second.matchPercentage }
+      .thenByDescending { it.second.rescuedExpiringIngredientIds.size }
 
   val selectedPair = when {
     prefersExpiryRescue ->
-      evaluatedPool.sortedWith(
+      slotFilteredPool.sortedWith(
         compareByDescending<Pair<Recipe, RecipePantryMatchSummary>> { it.second.rescuedExpiringIngredientIds.size }
           .thenByDescending { it.second.rescuedValueUsd }
+          .thenByDescending { preferredCuisines.isNotEmpty() && doesRecipeMatchPreferredCuisines(it.first, preferredCuisines) }
           .thenByDescending { it.second.matchPercentage },
       ).firstOrNull()
+    requestedSlot != null ->
+      slotSwaps.firstOrNull { it.slotType == requestedSlot }?.let { matchingSwap ->
+        slotFilteredPool.find { it.first.recipeId == matchingSwap.suggestedRecipe.recipeId }
+      } ?: slotFilteredPool.sortedWith(cuisineAndMatchComparator).firstOrNull()
     else ->
       slotSwaps.firstOrNull()?.let { topSwap ->
-        evaluatedPool.find { it.first.recipeId == topSwap.suggestedRecipe.recipeId }
-      } ?: evaluatedPool.maxByOrNull { it.second.matchPercentage }
+        slotFilteredPool.find { it.first.recipeId == topSwap.suggestedRecipe.recipeId }
+      } ?: slotFilteredPool.sortedWith(cuisineAndMatchComparator).firstOrNull()
   } ?: return null
 
   val (featuredRecipe, matchSummary) = selectedPair
@@ -645,6 +709,7 @@ internal fun synthesizeFeaturedAiRecipeCard(
     recipe = featuredRecipe,
     matchSummary = matchSummary,
     substitutionTip = tip,
+    preferredSlotType = requestedSlot?.takeIf { it in featuredRecipe.allowedSlots },
   )
 }
 
@@ -691,24 +756,20 @@ object AiMenuAdvisorEngine {
   // Builds single-pass pantry-aware system prompt for LiteRT-LM / Gemma / Cloud LLM text turns.
   /** Delegates to [com.familykitchen.board.domain.buildPantryAwareSystemPrompt]. */
   fun buildPantryAwareSystemPrompt(
-    userPrompt: String,
-    board: WeeklyBoard,
-    recipes: List<Recipe>,
-    catalog: List<IngredientCatalogItem>,
-    pantry: List<PantryLedgerEntry>,
-    householdAllergens: List<String> = emptyList(),
-    householdProfile: HouseholdProfile? = null,
+    userPrompt: String, board: WeeklyBoard, recipes: List<Recipe>,
+    catalog: List<IngredientCatalogItem>, pantry: List<PantryLedgerEntry>,
+    householdAllergens: List<String> = emptyList(), householdProfile: HouseholdProfile? = null,
     deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
-    recentTurns: List<AiChatTurn> = emptyList(),
+    recentTurns: List<AiChatTurn> = emptyList(), todayDayIndex: Int = 0, currentHour24: Int? = null,
   ): String = com.familykitchen.board.domain.buildPantryAwareSystemPrompt(
-    userPrompt, board, recipes, catalog, pantry, householdAllergens, householdProfile, deviceProfile, recentTurns,
+    userPrompt, board, recipes, catalog, pantry, householdAllergens,
+    householdProfile, deviceProfile, recentTurns, todayDayIndex, currentHour24,
   )
 
   // Builds authentic neutral multimodal vision prompt (zero hardcoded fake grocery items).
   /** Delegates to [com.familykitchen.board.domain.buildVisualIntakePrompt]. */
   fun buildVisualIntakePrompt(
-    userNote: String = "",
-    catalog: List<IngredientCatalogItem> = emptyList(),
+    userNote: String = "", catalog: List<IngredientCatalogItem> = emptyList(),
     youngestStage: ChildGrowthStage = ChildGrowthStage.TODDLER_1_2Y,
   ): String = com.familykitchen.board.domain.buildVisualIntakePrompt(userNote, catalog, youngestStage)
 
@@ -720,29 +781,21 @@ object AiMenuAdvisorEngine {
   // Grounds untrusted LLM JSON against real board slotIds, recipeIds, and <= 25m morning cap.
   /** Delegates to [com.familykitchen.board.domain.parseAndGroundAiResponse]. */
   fun parseAndGroundAiResponse(
-    rawModelOutput: String,
-    userPrompt: String = "",
-    board: WeeklyBoard,
-    recipes: List<Recipe>,
-    catalog: List<IngredientCatalogItem>,
-    pantry: List<PantryLedgerEntry>,
-    householdProfile: HouseholdProfile = HouseholdProfile(),
+    rawModelOutput: String, userPrompt: String = "", board: WeeklyBoard, recipes: List<Recipe>,
+    catalog: List<IngredientCatalogItem>, pantry: List<PantryLedgerEntry>,
+    householdProfile: HouseholdProfile = HouseholdProfile(), todayDayIndex: Int = 0,
   ): AiMenuOptimizationProposal = com.familykitchen.board.domain.parseAndGroundAiResponse(
-    rawModelOutput, userPrompt, board, recipes, catalog, pantry, householdProfile,
+    rawModelOutput, userPrompt, board, recipes, catalog, pantry, householdProfile, todayDayIndex,
   )
 
   // Grounds strict JSON, lenient JSON summaries, and natural plain-text LLM replies seamlessly.
   /** Delegates to [com.familykitchen.board.domain.groundFlexibleLlmTextReply]. */
   fun groundFlexibleLlmTextReply(
-    rawModelOutput: String,
-    userPrompt: String,
-    board: WeeklyBoard,
-    recipes: List<Recipe>,
-    catalog: List<IngredientCatalogItem>,
-    pantry: List<PantryLedgerEntry>,
-    householdProfile: HouseholdProfile = HouseholdProfile(),
+    rawModelOutput: String, userPrompt: String, board: WeeklyBoard, recipes: List<Recipe>,
+    catalog: List<IngredientCatalogItem>, pantry: List<PantryLedgerEntry>,
+    householdProfile: HouseholdProfile = HouseholdProfile(), todayDayIndex: Int = 0,
   ): AiMenuOptimizationProposal = com.familykitchen.board.domain.groundFlexibleLlmTextReply(
-    rawModelOutput, userPrompt, board, recipes, catalog, pantry, householdProfile,
+    rawModelOutput, userPrompt, board, recipes, catalog, pantry, householdProfile, todayDayIndex,
   )
 
   // Parses multimodal vision JSON and grounds detected items to verified catalog RestockDeltas.
@@ -753,13 +806,9 @@ object AiMenuAdvisorEngine {
   // Routes explicit text-only commands to deterministic tools (never runs when hasAttachedImage).
   /** Delegates to [com.familykitchen.board.domain.tryExecuteDeterministicToolIntent]. */
   fun tryExecuteDeterministicToolIntent(
-    userPrompt: String,
-    hasAttachedImage: Boolean = false,
-    catalog: List<IngredientCatalogItem>,
-    recipes: List<Recipe> = emptyList(),
-    board: WeeklyBoard? = null,
-    pantry: List<PantryLedgerEntry> = emptyList(),
-    householdAllergens: List<String> = emptyList(),
+    userPrompt: String, hasAttachedImage: Boolean = false, catalog: List<IngredientCatalogItem>,
+    recipes: List<Recipe> = emptyList(), board: WeeklyBoard? = null,
+    pantry: List<PantryLedgerEntry> = emptyList(), householdAllergens: List<String> = emptyList(),
     activeDayIndex: Int = 0,
   ): AiToolCallResult? = com.familykitchen.board.domain.tryExecuteDeterministicToolIntent(
     userPrompt, hasAttachedImage, catalog, recipes, board, pantry, householdAllergens, activeDayIndex,
@@ -768,13 +817,9 @@ object AiMenuAdvisorEngine {
   // Generates 100% offline pantry-grounded menu swaps targeting todayDayIndex and preferred cuisines.
   /** Delegates to [com.familykitchen.board.domain.generatePantryGroundedMenuProposal]. */
   fun generatePantryGroundedMenuProposal(
-    userPrompt: String,
-    board: WeeklyBoard,
-    recipes: List<Recipe>,
-    catalog: List<IngredientCatalogItem>,
-    pantry: List<PantryLedgerEntry>,
-    householdAllergens: List<String> = emptyList(),
-    householdProfile: HouseholdProfile? = null,
+    userPrompt: String, board: WeeklyBoard, recipes: List<Recipe>,
+    catalog: List<IngredientCatalogItem>, pantry: List<PantryLedgerEntry>,
+    householdAllergens: List<String> = emptyList(), householdProfile: HouseholdProfile? = null,
     todayDayIndex: Int = 0,
   ): AiMenuOptimizationProposal = com.familykitchen.board.domain.generatePantryGroundedMenuProposal(
     userPrompt, board, recipes, catalog, pantry, householdAllergens, householdProfile, todayDayIndex,
@@ -783,8 +828,7 @@ object AiMenuAdvisorEngine {
   // Synthesizes 4-member 1-pot plating guide with pregnancy/guest life-event safety guardrails.
   /** Delegates to [com.familykitchen.board.domain.buildFamilyGoalPlatingGuide]. */
   fun buildFamilyGoalPlatingGuide(
-    recipe: Recipe,
-    catalog: List<IngredientCatalogItem> = emptyList(),
+    recipe: Recipe, catalog: List<IngredientCatalogItem> = emptyList(),
     memberGoals: List<FamilyMemberGoalSpec> = emptyList(),
     activeLifeEvents: List<HouseholdLifeEvent> = emptyList(),
     youngestStage: ChildGrowthStage = ChildGrowthStage.TODDLER_1_2Y,
@@ -795,16 +839,10 @@ object AiMenuAdvisorEngine {
   // Builds a custom recipe from locally available catalog items enforcing <= 25m Breakfast cap.
   /** Delegates to [com.familykitchen.board.domain.createCustomFamilyRecipe]. */
   fun createCustomFamilyRecipe(
-    recipeId: String,
-    title: String,
-    allowedSlots: List<MealSlotType>,
-    rawPrepMinutes: Int,
-    cookMinutes: Int,
-    bomLines: List<BomLine>,
-    catalog: List<IngredientCatalogItem>,
-    nightBeforePrepMinutes: Int = 0,
-    toddlerPrepTip: String? = null,
-    householdProfile: HouseholdProfile? = null,
+    recipeId: String, title: String, allowedSlots: List<MealSlotType>,
+    rawPrepMinutes: Int, cookMinutes: Int, bomLines: List<BomLine>,
+    catalog: List<IngredientCatalogItem>, nightBeforePrepMinutes: Int = 0,
+    toddlerPrepTip: String? = null, householdProfile: HouseholdProfile? = null,
   ): Recipe = com.familykitchen.board.domain.createCustomFamilyRecipe(
     recipeId, title, allowedSlots, rawPrepMinutes, cookMinutes, bomLines, catalog,
     nightBeforePrepMinutes, toddlerPrepTip, householdProfile,
@@ -813,19 +851,11 @@ object AiMenuAdvisorEngine {
   // Schedules a custom household meal onto a single day or all Mon-Fri (0..4) slots atomically.
   /** Delegates to [com.familykitchen.board.domain.createAndScheduleCustomFamilyMealBatch]. */
   fun createAndScheduleCustomFamilyMealBatch(
-    board: WeeklyBoard,
-    existingRecipes: List<Recipe>,
-    catalog: List<IngredientCatalogItem>,
-    recipeId: String,
-    title: String,
-    targetSlotType: MealSlotType,
-    targetDayIndex: Int = 0,
-    applyMondayThroughFriday: Boolean = false,
-    rawPrepMinutes: Int,
-    cookMinutes: Int,
-    bomLines: List<BomLine>,
-    queueIngredientsToGrocery: Boolean = false,
-    existingQueuedGroceryIds: Set<String> = emptySet(),
+    board: WeeklyBoard, existingRecipes: List<Recipe>, catalog: List<IngredientCatalogItem>,
+    recipeId: String, title: String, targetSlotType: MealSlotType,
+    targetDayIndex: Int = 0, applyMondayThroughFriday: Boolean = false,
+    rawPrepMinutes: Int, cookMinutes: Int, bomLines: List<BomLine>,
+    queueIngredientsToGrocery: Boolean = false, existingQueuedGroceryIds: Set<String> = emptySet(),
     householdProfile: HouseholdProfile? = null,
   ): CustomFamilyMealBatchResult = com.familykitchen.board.domain.createAndScheduleCustomFamilyMealBatch(
     board, existingRecipes, catalog, recipeId, title, targetSlotType, targetDayIndex,
@@ -836,11 +866,8 @@ object AiMenuAdvisorEngine {
   // Applies AI meal swaps and suggested catalog ingredients in 1 O(N) pass for O(1) persistence.
   /** Delegates to [com.familykitchen.board.domain.applyAiMenuProposalBatch]. */
   fun applyAiMenuProposalBatch(
-    board: WeeklyBoard,
-    recipes: List<Recipe>,
-    catalog: List<IngredientCatalogItem>,
-    proposal: AiMenuOptimizationProposal,
-    applySlotSwaps: Boolean = true,
+    board: WeeklyBoard, recipes: List<Recipe>, catalog: List<IngredientCatalogItem>,
+    proposal: AiMenuOptimizationProposal, applySlotSwaps: Boolean = true,
     includeNewIngredients: Boolean = true,
   ): AppliedAiMenuProposalBatch = com.familykitchen.board.domain.applyAiMenuProposalBatch(
     board, recipes, catalog, proposal, applySlotSwaps, includeNewIngredients,

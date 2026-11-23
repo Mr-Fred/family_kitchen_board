@@ -10,6 +10,7 @@ import com.familykitchen.board.domain.CandidateMealSwapSpec
 import com.familykitchen.board.domain.GoldfishAgentRole
 import com.familykitchen.board.domain.GoldfishTaskBrief
 import com.familykitchen.board.domain.HouseholdElephantMemory
+import com.familykitchen.board.domain.IngredientTier
 import com.familykitchen.board.domain.SafetyAuditStatus
 import com.familykitchen.board.domain.SafetyAuditVerdict
 import com.familykitchen.board.domain.SafetyConstraintViolation
@@ -20,8 +21,10 @@ import com.familykitchen.board.domain.WebSearchToolOutcome
 import com.familykitchen.board.domain.WebSearchToolResult
 import com.familykitchen.board.domain.auditCandidateMealSwaps
 import com.familykitchen.board.domain.buildGoldfishTaskBrief
+import com.familykitchen.board.domain.buildTodayMealPlanSummary
 import com.familykitchen.board.domain.formatAiFallbackToastMessage
 import com.familykitchen.board.domain.formatAiResponseSourceLabel
+import com.familykitchen.board.domain.parseAllModelToolCalls
 import com.familykitchen.board.domain.parseCandidateSwapList
 import com.familykitchen.board.domain.parseModelToolCallOrNull
 import com.familykitchen.board.domain.requireDomainValid
@@ -152,9 +155,15 @@ class SingleGemmaEgmGraphRunner(
     val cleanPrompt = promptText.trim()
     requireDomainValid(cleanPrompt.isNotEmpty(), "EgmGraphPrompt") { "promptText must be non-blank" }
 
-    // Step 1: Select specialist Goldfish role & <=5 Elephant semantic facts (0 chat history).
+    // Step 1: Select specialist Goldfish role, <=5 Elephant facts, & compact kitchen brief (0 chat turns).
     val targetRole = routePromptToGoldfishRole(cleanPrompt, hasImageAttachment = false)
-    val initialBrief = buildGoldfishTaskBrief(targetRole, cleanPrompt, elephantMemory)
+    val kitchenContextLine = buildKitchenSnapshotContextLine(snapshot, activeDayIndex)
+    val initialBrief = buildGoldfishTaskBrief(
+      role = targetRole,
+      userIntent = cleanPrompt,
+      elephantMemory = elephantMemory,
+      kitchenContextLine = kitchenContextLine,
+    )
 
     // Step 0: < 5ms deterministic reflex fast-path for explicit batch commands (0 LLM invocations).
     val reflexHit = tryExecuteDeterministicToolIntent(
@@ -175,7 +184,9 @@ class SingleGemmaEgmGraphRunner(
     // Route directly to deterministic offline advisor when local Gemma runtime is not Ready yet.
     val runtime = aiEdgePort.runtimeState.value
     if (runtime !is AiRuntimeState.Ready) {
-      return buildSafeDeterministicFallbackOutcome(snapshot, cleanPrompt, targetRole, initialBrief, emptyList(), emptyList(), 0, 0, emptyList(), null)
+      return buildSafeDeterministicFallbackOutcome(
+        snapshot, cleanPrompt, targetRole, initialBrief, emptyList(), emptyList(), 0, 0, emptyList(), null, activeDayIndex,
+      )
     }
 
     val sourceLabel = formatAiResponseSourceLabel(runtime.capabilities.backendLabel, runtime.capabilities.modelName)
@@ -190,16 +201,25 @@ class SingleGemmaEgmGraphRunner(
       var currentRawReply = invokeStatelessGoldfishPass(targetRole, initialBrief, activePrompt, traces)
       llmCalls += 1
 
-      // Execute up to 2 read-only ADK / WebSearch tool calls and feed compact JSON observations back.
+      // Execute all requested read-only ADK / WebSearch tools up to safeToolBudget and synthesize.
       val safeToolBudget = maxReadOnlyToolsPerTurn.coerceIn(0, MAX_HARD_TOOL_CAP)
       var toolRound = 0
       while (toolRound < safeToolBudget) {
-        val requestedTool = parseModelToolCallOrNull(currentRawReply) ?: break
+        val requestedCalls = parseAllModelToolCalls(currentRawReply)
+        if (requestedCalls.isEmpty()) break
         // Proposal or audit tool calls exit the read-only loop directly into Step 3 Critic!
-        if (requestedTool.toolName == "propose_meal_board_swaps" || requestedTool.toolName == "audit_candidate_meal_swaps") break
-        val toolResult = dispatchReadOnlyOrWebTool(snapshot, elephantMemory, requestedTool)
-        executedTools.add(toolResult)
-        toolRound += 1
+        if (requestedCalls.any { it.toolName == "propose_meal_board_swaps" || it.toolName == "audit_candidate_meal_swaps" }) {
+          break
+        }
+        var executedAnyInPass = false
+        for (requestedTool in requestedCalls) {
+          if (toolRound >= safeToolBudget) break
+          val toolResult = dispatchReadOnlyOrWebTool(snapshot, elephantMemory, requestedTool)
+          executedTools.add(toolResult)
+          toolRound += 1
+          executedAnyInPass = true
+        }
+        if (!executedAnyInPass) break
 
         // Re-prompt on a fresh stateless Conversation carrying ONLY brief + compact tool outputs.
         activePrompt = buildObservationSynthesisEnvelope(initialBrief, executedTools)
@@ -215,7 +235,7 @@ class SingleGemmaEgmGraphRunner(
 
       if (iter1Verdict.isApproved) {
         // Iteration 1 passed all EC-01, EC-02, EC-08, and life-event gates: emit HITL proposal.
-        val approvedProposal = groundApprovedReplyOrProposalTool(currentRawReply, cleanPrompt, snapshot)
+        val approvedProposal = groundApprovedReplyOrProposalTool(currentRawReply, cleanPrompt, snapshot, activeDayIndex)
         return EgmGraphTurnOutcome(
           EgmGraphStageOutcome.GOLDFISH_APPROVED_ITERATION_1, targetRole, initialBrief, null,
           approvedProposal, executedTools, criticVerdicts, 1, llmCalls, true, traces, sourceLabel,
@@ -224,7 +244,13 @@ class SingleGemmaEgmGraphRunner(
 
       // Iteration 1 was REJECTED_NEEDS_REPAIR: feed ONLY SafetyConstraintViolations into Iteration 2.
       if (safeMaxLoops >= 2) {
-        val repairBrief = buildGoldfishTaskBrief(targetRole, cleanPrompt, elephantMemory, repairViolations = iter1Verdict.violations)
+        val repairBrief = buildGoldfishTaskBrief(
+          role = targetRole,
+          userIntent = cleanPrompt,
+          elephantMemory = elephantMemory,
+          repairViolations = iter1Verdict.violations,
+          kitchenContextLine = kitchenContextLine,
+        )
         val repairEnvelope = repairBrief.renderIsolatedPromptEnvelope(REPAIR_PASS_OUTPUT_HINT)
         val repairedRawReply = invokeStatelessGoldfishPass(targetRole, repairBrief, repairEnvelope, traces)
         llmCalls += 1
@@ -235,7 +261,7 @@ class SingleGemmaEgmGraphRunner(
 
         if (iter2Verdict.isApproved) {
           // Iteration 2 repaired all flagged violations cleanly without mutating snapshot state!
-          val repairedProposal = groundApprovedReplyOrProposalTool(repairedRawReply, cleanPrompt, snapshot)
+          val repairedProposal = groundApprovedReplyOrProposalTool(repairedRawReply, cleanPrompt, snapshot, activeDayIndex)
           return EgmGraphTurnOutcome(
             EgmGraphStageOutcome.GOLDFISH_REPAIRED_ITERATION_2, targetRole, initialBrief, null,
             repairedProposal, executedTools, criticVerdicts, 2, llmCalls, true, traces, sourceLabel,
@@ -246,7 +272,8 @@ class SingleGemmaEgmGraphRunner(
       // Exhausted LoopAgent repair budget: guarantee safety via deterministic audited fallback.
       return buildSafeDeterministicFallbackOutcome(
         snapshot, cleanPrompt, targetRole, initialBrief, executedTools, criticVerdicts,
-        criticVerdicts.size, llmCalls, traces, "Repaired unsafe AI swap draft using offline safety-audited pantry advisor.",
+        criticVerdicts.size, llmCalls, traces,
+        "Repaired unsafe AI swap draft using offline safety-audited pantry advisor.", activeDayIndex,
       )
     } catch (cancel: CancellationException) {
       // Preserve coroutine cancellation without degrading into fallback output.
@@ -254,7 +281,7 @@ class SingleGemmaEgmGraphRunner(
     } catch (err: Throwable) {
       return buildSafeDeterministicFallbackOutcome(
         snapshot, cleanPrompt, targetRole, initialBrief, executedTools, criticVerdicts,
-        criticVerdicts.size, llmCalls, traces, formatAiFallbackToastMessage(err),
+        criticVerdicts.size, llmCalls, traces, formatAiFallbackToastMessage(err), activeDayIndex,
       )
     }
   }
@@ -368,7 +395,36 @@ class SingleGemmaEgmGraphRunner(
     }
   }
 
-  private fun groundApprovedReplyOrProposalTool(rawOutput: String, userPrompt: String, snapshot: KitchenSnapshot): AiMenuOptimizationProposal {
+  // Summarize today's scheduled slots, preferred cuisines, market region, and <=2d expiring stock (0 chat history).
+  private fun buildKitchenSnapshotContextLine(snapshot: KitchenSnapshot, activeDayIndex: Int): String {
+    val profile = snapshot.householdProfile
+    val todaySlots = buildTodayMealPlanSummary(
+      board = snapshot.weeklyBoard,
+      recipes = snapshot.allHouseholdRecipes,
+      todayDayIndex = activeDayIndex,
+      includeSlotIds = true,
+    )
+    val cuisines = profile.preferredCuisines.joinToString(", ").ifEmpty { "French, Yoruba and West African" }
+    val catalogById = snapshot.catalogById
+    val expiringUrgent = snapshot.pantryEntries
+      .filter { entry ->
+        val days = entry.expiresInDays
+        days != null && days <= 2 && !entry.isOutOfStock &&
+          (entry.tier == IngredientTier.TIER_2_STAPLE || entry.currentQuantity > 0.0)
+      }
+      .sortedBy { it.expiresInDays ?: Int.MAX_VALUE }
+      .take(4)
+      .joinToString(", ") { "${catalogById[it.ingredientId]?.displayName ?: it.ingredientId} (${it.expiresInDays}d)" }
+      .ifEmpty { "None" }
+    return "Today ($todaySlots) | PreferredCuisines=$cuisines | Market=${profile.marketRegionLabel} | Expiring<=2d=$expiringUrgent"
+  }
+
+  private fun groundApprovedReplyOrProposalTool(
+    rawOutput: String,
+    userPrompt: String,
+    snapshot: KitchenSnapshot,
+    activeDayIndex: Int,
+  ): AiMenuOptimizationProposal {
     val toolCall = parseModelToolCallOrNull(rawOutput)
     if (toolCall != null && toolCall.toolName == "propose_meal_board_swaps") {
       val result = AdkKitchenToolsEngine.executeKitchenDomainTool(snapshot, snapshot.elephantMemory, toolCall)
@@ -377,7 +433,7 @@ class SingleGemmaEgmGraphRunner(
     }
     return AiMenuAdvisorEngine.groundFlexibleLlmTextReply(
       rawOutput, userPrompt, snapshot.weeklyBoard, snapshot.recipes,
-      snapshot.ingredients, snapshot.pantryEntries, snapshot.householdProfile,
+      snapshot.ingredients, snapshot.pantryEntries, snapshot.householdProfile, activeDayIndex,
     )
   }
 
@@ -392,11 +448,13 @@ class SingleGemmaEgmGraphRunner(
     llmCalls: Int,
     nodeTraces: List<GoldfishNodeTrace>,
     diagnosticToast: String?,
+    activeDayIndex: Int = 0,
   ): EgmGraphTurnOutcome {
     // Offline advisor strictly enforces EC-01 <=25m breakfast caps and EC-02 allergen exclusions.
     val safeProposal = AiMenuAdvisorEngine.generatePantryGroundedMenuProposal(
       cleanPrompt, snapshot.weeklyBoard, snapshot.recipes, snapshot.ingredients,
-      snapshot.pantryEntries, snapshot.householdProfile.householdAllergens, snapshot.householdProfile,
+      snapshot.pantryEntries, snapshot.householdProfile.householdAllergens,
+      snapshot.householdProfile, activeDayIndex,
     )
     return EgmGraphTurnOutcome(
       EgmGraphStageOutcome.OFFLINE_SAFE_ADVISOR_FALLBACK, selectedRole, initialBrief, null,
@@ -417,9 +475,10 @@ class SingleGemmaEgmGraphRunner(
     private const val SOURCE_LABEL_OFFLINE_EGM_ADVISOR: String = "Offline Advisor"
 
     private const val SYNTHESIS_AFTER_TOOLS_HINT: String =
-      "Using the TOOL_RESULT observations below, return final grounded JSON " +
-        "{\"focusTag\":\"KIDS_BRAIN_BOOSTER\",\"assistantSummary\":\"...\",\"isConversationalOnly\":false," +
-        "\"suggestedSwaps\":[{\"slotId\":\"...\",\"recipeId\":\"...\",\"rationale\":\"...\"}]}."
+      "Using the TOOL_RESULT observations below, DO NOT emit another <|tool_call> or tool invocation. " +
+        "Return ONLY final grounded JSON {\"focusTag\":\"KIDS_BRAIN_BOOSTER\",\"assistantSummary\":\"...\"," +
+        "\"isConversationalOnly\":false,\"suggestedSwaps\":[]} (use \"suggestedSwaps\":[] when answering read-only " +
+        "meal plan questions like what's for dinner, and NEVER include raw IDs like rec_06 in assistantSummary)."
 
     private const val REPAIR_PASS_OUTPUT_HINT: String =
       "Repair EVERY violation in CRITIC_VIOLATIONS_TO_REPAIR and return ONLY valid grounded JSON " +

@@ -524,7 +524,7 @@ internal class KitchenAiAndCookDelegate(
       try {
         val currentState = mutableUiState.value
         val preTurnSnapshot = currentState.snapshot
-        // Pass real todayDayIndex so "tonight" and "today" commands target the real household day.
+        // Pass real todayDayIndex and currentSimulatedHour24 so time-of-day and "tonight" stay synced.
         val outcome = aiChefCoordinator.submitTurn(
           snapshot = preTurnSnapshot,
           promptText = promptText,
@@ -533,6 +533,7 @@ internal class KitchenAiAndCookDelegate(
           deviceProfile = currentState.activeDeviceProfile,
           nowIso = nowIso(),
           activeDayIndex = currentState.todayDayIndex,
+          currentHour24 = currentState.currentSimulatedHour24,
         )
         storagePort.saveSnapshotBatch(outcome.updatedSnapshot)
         if (outcome.status == AiTurnResolutionStatus.DETERMINISTIC_TOOL_EXECUTED) {

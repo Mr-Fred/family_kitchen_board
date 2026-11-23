@@ -357,6 +357,11 @@ object SchemaValidator {
       if (recipeIds != null && featured.recipe.recipeId !in recipeIds) {
         issues.add("featuredRecipeCard.recipe.recipeId: ungrounded recipe '${featured.recipe.recipeId}'")
       }
+      if (featured.preferredSlotType != null && featured.preferredSlotType !in featured.recipe.allowedSlots) {
+        issues.add(
+          "featuredRecipeCard.preferredSlotType: ${featured.preferredSlotType} not in allowedSlots ${featured.recipe.allowedSlots}",
+        )
+      }
       if (featured.matchSummary.matchPercentage !in 0..100) {
         issues.add("featuredRecipeCard.matchSummary.matchPercentage: must be in 0..100")
       }

@@ -8,102 +8,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-// Pure prompt synthesis, Gemma control-token sanitization, untrusted LLM JSON grounding,
-// authentic multimodal visual intake parsing, and text-only deterministic tool routing.
-// Zero Android, JNI, LiteRT, MediaPipe, or java.io imports are permitted inside domain/.
-
-/**
- * Builds a single compact pantry-grounded system prompt for on-device LiteRT-LM / Gemma or Cloud LLM inference.
- *
- * @param userPrompt Natural-language request from the parent.
- * @param board Active 7-day [WeeklyBoard].
- * @param recipes Household recipe library.
- * @param catalog Household ingredient catalog.
- * @param pantry Current pantry ledger entries.
- * @param householdAllergens Active allergen exclusions.
- * @param householdProfile Optional full household profile (goals, growth stage, life events).
- * @param deviceProfile Active universal Android RAM-tier / Gemma hardware profile.
- * @param recentTurns Optional recent conversation turns (`<= 4`) providing multi-turn continuity.
- * @return Grounded single-pass prompt string.
- */
-fun buildPantryAwareSystemPrompt(
-  userPrompt: String,
-  board: WeeklyBoard,
-  recipes: List<Recipe>,
-  catalog: List<IngredientCatalogItem>,
-  pantry: List<PantryLedgerEntry>,
-  householdAllergens: List<String> = emptyList(),
-  householdProfile: HouseholdProfile? = null,
-  deviceProfile: EdgeDeviceProfile = EdgeDeviceProfile.BALANCED_GEMMA_2B_INT4,
-  recentTurns: List<AiChatTurn> = emptyList(),
-): String {
-  val focusTag = inferNutritionFocusFromPrompt(userPrompt)
-  val catalogById = indexCatalogById(catalog)
-  val effectiveAllergens = householdAllergens.ifEmpty { householdProfile?.householdAllergens.orEmpty() }
-
-  // Serialize Tier-1 stock and Tier-2 statuses in one pass to eliminate N+1 chat roundtrips.
-  val inStockTier1 = mutableListOf<String>()
-  val tier2Statuses = mutableListOf<String>()
-  for (entry in pantry) {
-    val item = catalogById[entry.ingredientId]
-    val label = item?.displayName ?: entry.ingredientId
-    when {
-      entry.tier == IngredientTier.TIER_2_STAPLE -> tier2Statuses.add("$label:${entry.stapleStatus.name}")
-      !entry.isOutOfStock && entry.currentQuantity > 0.0 ->
-        inStockTier1.add("$label (${entry.currentQuantity.toInt()} ${item?.baseUnit?.wireCode ?: "unit"})")
-    }
-  }
-
-  // Embed active child growth stage, life-event safety temperatures, currency, and valid IDs.
-  val youngestStage = householdProfile?.youngestStage ?: ChildGrowthStage.TODDLER_1_2Y
-  val activeCurrency = householdProfile?.currency ?: HouseholdCurrency.PHP
-  val marketRegion = householdProfile?.marketRegionLabel ?: "Antipolo & Marikina, PH"
-  val lifeEventSummary = householdProfile?.activeLifeEvents?.takeIf { it.isNotEmpty() }
-    ?.joinToString(" | ") { "${it.title} [Safety: ${it.safetyPrepRules.joinToString("; ")}]" } ?: "NONE"
-  val validRecipeIds = recipes.take(30).joinToString(",") { it.recipeId }
-  val plannedSlotIds = board.slots.filter { it.status == MealSlotStatus.PLANNED }
-    .take(9).joinToString(",") { "${it.slotId}:${it.slotType.name}" }
-  val defaultConv = !isMealOrRecipeProposalRequest(userPrompt)
-  val recentContext = formatRecentTurnsContext(recentTurns)
-  val responseRule = when {
-    defaultConv ->
-      "RESPONSE_RULE: Write a warm, specific, culinary-intelligent reply directly answering USER_REQUEST in " +
-        "\"assistantSummary\" (referencing real household pantry items or culinary technique when helpful — never " +
-        "generic canned filler). For greetings, chat, or cooking Q&A, set \"isConversationalOnly\": true and \"suggestedSwaps\": []."
-    else ->
-      "RESPONSE_RULE: Write a warm, specific, culinary-intelligent reply directly answering USER_REQUEST in " +
-        "\"assistantSummary\" (referencing real stocked items, cook times, and child-safe prep — never generic filler). " +
-        "Set \"isConversationalOnly\": false and include 0-3 \"suggestedSwaps\" using ONLY exact IDs from PLANNED_SLOTS and VALID_RECIPE_IDS (never \"...\")."
-  }
-  val outputFormat = when {
-    defaultConv ->
-      "OUTPUT_FORMAT: Return ONLY strict JSON {\"focusTag\":\"${focusTag.name}\",\"assistantSummary\":\"<your helpful response>\"," +
-        "\"isConversationalOnly\":true,\"suggestedSwaps\":[]}"
-    else ->
-      "OUTPUT_FORMAT: Return ONLY strict JSON {\"focusTag\":\"${focusTag.name}\",\"assistantSummary\":\"<your culinary response>\"," +
-        "\"isConversationalOnly\":false,\"suggestedSwaps\":[{\"slotId\":\"<exact PLANNED_SLOTS id>\",\"recipeId\":\"<exact VALID_RECIPE_IDS id>\",\"rationale\":\"<why>\"}]}"
-  }
-
-  return buildList {
-    add("ROLE: SavorAI Kitchen & Nutrition Sous-Chef (Household: ${householdProfile?.householdName ?: "Family of 4"}, youngest: ${youngestStage.shortLabel}).")
-    add("MARKET_AND_CURRENCY: $marketRegion (${activeCurrency.isoCode} ${activeCurrency.symbol}).")
-    add("DEVICE_PROFILE: ${deviceProfile.displayName} (${deviceProfile.preferredDelegate}, ${deviceProfile.quantization}).")
-    add("FOCUS_TAG: ${focusTag.name}")
-    add(
-      "CONSTRAINTS: Weekday BREAKFAST calibratedActiveMinutes <= ${MAX_WEEKDAY_BREAKFAST_MINUTES}m (1.4x buffer); " +
-        "non-empty child safety tip for ${youngestStage.shortLabel}; allergens=(${effectiveAllergens.joinToString(",").ifEmpty { "NONE" }}).",
-    )
-    add("ACTIVE_LIFE_EVENTS: $lifeEventSummary")
-    add("IN_STOCK_TIER1_PANTRY (${inStockTier1.size}): ${inStockTier1.joinToString("; ").ifEmpty { "None" }}")
-    add("TIER2_STAPLES (${tier2Statuses.size}): ${tier2Statuses.joinToString(", ").ifEmpty { "None" }}")
-    add("PLANNED_SLOTS: $plannedSlotIds")
-    add("VALID_RECIPE_IDS: $validRecipeIds")
-    if (recentContext != null) add("RECENT_CONVERSATION: $recentContext")
-    add(responseRule)
-    add(outputFormat)
-    add("USER_REQUEST: ${userPrompt.trim()}")
-  }.joinToString("\n")
-}
+// Pure Gemma control-token sanitization, untrusted LLM JSON grounding, authentic multimodal visual
+// intake parsing, and text-only deterministic tool routing (100% pure domain/, zero Android/I/O).
 
 /**
  * Builds an authentic, neutral multimodal visual inspection prompt for Gemma Vision (`.litertlm`).
@@ -163,6 +69,7 @@ fun stripGemmaControlTokens(rawModelOutput: String): String =
  * @param catalog Household ingredient catalog.
  * @param pantry Current household pantry ledger.
  * @param householdProfile Household profile supplying allergens, member goals, and life events.
+ * @param todayDayIndex Active weekday index (`0 = Monday`..`6 = Sunday`) for meal-plan lookups.
  * @return Grounded, validated [AiMenuOptimizationProposal].
  */
 fun parseAndGroundAiResponse(
@@ -173,8 +80,10 @@ fun parseAndGroundAiResponse(
   catalog: List<IngredientCatalogItem>,
   pantry: List<PantryLedgerEntry>,
   householdProfile: HouseholdProfile = HouseholdProfile(),
+  todayDayIndex: Int = 0,
 ): AiMenuOptimizationProposal {
-  val sanitized = stripGemmaControlTokens(rawModelOutput)
+  // Strip any residual unexecuted <|tool_call>...<tool_call|> markup so raw tags never surface.
+  val sanitized = stripResidualToolCallMarkup(stripGemmaControlTokens(rawModelOutput)).trim()
   requireDomainValid(sanitized.isNotBlank(), "AiResponse") { "empty model output after stripping tokens" }
 
   val jsonSlice = extractJsonObjectSlice(sanitized)
@@ -182,7 +91,10 @@ fun parseAndGroundAiResponse(
 
   // Full AiMenuOptimizationProposal payload branch (enforces SchemaValidator.strictJson).
   if ("slotSwaps" in rootObj && "proposalId" in rootObj) {
-    return SchemaValidator.decodeAiProposalJson(jsonSlice, catalog, recipes, board)
+    val decoded = SchemaValidator.decodeAiProposalJson(jsonSlice, catalog, recipes, board)
+    val cleanedSummary = cleanHumanAssistantSummary(decoded.assistantSummary)
+    requireDomainValid(cleanedSummary.isNotEmpty(), "AiResponse") { "assistantSummary must be non-blank" }
+    return decoded.copy(assistantSummary = cleanedSummary)
   }
 
   // Compact on-device Gemma schema branch: reject any unexpected injected keys strictly.
@@ -195,7 +107,9 @@ fun parseAndGroundAiResponse(
     throw ValidationException("Invalid compact AI response: unknown keys $unknownKeys", unknownKeys.map { "unknown '$it'" })
   }
 
-  val summary = rootObj["assistantSummary"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+  val summary = cleanHumanAssistantSummary(
+    rootObj["assistantSummary"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty(),
+  )
   requireDomainValid(summary.isNotEmpty(), "AiResponse") { "assistantSummary must be non-blank" }
 
   val focusTag = rootObj["focusTag"]?.jsonPrimitive?.contentOrNull
@@ -263,9 +177,17 @@ fun parseAndGroundAiResponse(
   val featuredCard = when {
     effectiveConversationalOnly -> null
     else -> synthesizeFeaturedAiRecipeCard(
-      userPrompt, focusTag, groundedSwaps,
-      filterSchedulableRecipes(recipes, catalogById, allergens, pantryById),
-      catalog, pantry, allergens, householdProfile.effectiveTargetServings,
+      userPrompt = userPrompt,
+      focusTag = focusTag,
+      slotSwaps = groundedSwaps,
+      candidateRecipes = filterSchedulableRecipes(recipes, catalogById, allergens, pantryById),
+      catalog = catalog,
+      pantry = pantry,
+      effectiveAllergens = allergens,
+      targetServings = householdProfile.effectiveTargetServings,
+      board = board,
+      preferredCuisines = householdProfile.preferredCuisines,
+      todayDayIndex = todayDayIndex,
     )
   }
 

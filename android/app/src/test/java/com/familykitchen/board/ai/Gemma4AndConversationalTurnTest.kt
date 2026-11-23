@@ -25,6 +25,7 @@ import com.familykitchen.board.ports.AiEdgePort
 import com.familykitchen.board.ports.AiRuntimeState
 import com.familykitchen.board.ports.KitchenSnapshot
 import com.familykitchen.board.ports.RuntimeCapabilities
+import com.familykitchen.board.ui.aichef.resolveChefSubstitutionPair
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -394,6 +395,70 @@ class Gemma4AndConversationalTurnTest {
     } finally {
       router.close()
     }
+  }
+
+  /**
+   * Regression test verifying afternoon (`15:47`) `"Hi"` greeting alignment (`LOCAL_TIME_CONTEXT`,
+   * `TODAY_MEAL_PLAN`, `PREFERRED_CUISINES` without `VALID_RECIPE_IDS`), stripping leaked
+   * `(rec_37_poulet_basquaise)` and `(rec_06)` IDs from `messageText`, and suppressing dead
+   * substitution swap pairs on pure culinary technique notes.
+   */
+  @Test
+  fun afternoonGreetingAndPureTechniqueTip_injectsEveningContextStripsInternalIdsAndSuppressesDeadSwapPair() = runTest {
+    val fakePort = CapturingRecoverableOnDevicePort(
+      initialState = AiRuntimeState.Ready(
+        gemma4ReadyCapabilities.copy(modelName = "gemma-4-E4B-it.litertlm"),
+      ),
+      textResponder = {
+        "<|turn>model\n<|thought>Warm afternoon greeting.<thought|>" +
+          "Hello! Tonight we have 'Poulet Basquaise' (rec_37_poulet_basquaise) or 'Greek Yogurt Granola Parfait' (rec_06)!<turn|>"
+      },
+    )
+    val coordinator = AiChefCoordinator(aiEdgePort = fakePort)
+
+    val outcome = coordinator.submitTurn(
+      snapshot = baselineSnapshot,
+      promptText = "Hi",
+      nowIso = "2026-11-23T15:47:00Z",
+      activeDayIndex = 0,
+      currentHour24 = 15,
+    )
+
+    assertEquals(AiTurnResolutionStatus.ON_DEVICE_TEXT_GROUNDED, outcome.status)
+    assertEquals(1, fakePort.capturedTextPrompts.size)
+    val capturedPrompt = fakePort.capturedTextPrompts.single()
+    assertTrue(capturedPrompt.contains("LOCAL_TIME_CONTEXT: Afternoon/Evening"))
+    assertTrue(capturedPrompt.contains("TODAY_MEAL_PLAN:"))
+    assertTrue(capturedPrompt.contains("PREFERRED_CUISINES: French, Yoruba and West African"))
+    assertFalse(capturedPrompt.contains("VALID_RECIPE_IDS:"))
+    assertFalse(capturedPrompt.contains("PLANNED_SLOTS:"))
+
+    // Leaked parenthesized internal IDs must be completely scrubbed from user-visible prose.
+    val cleanMessage = outcome.assistantTurn.messageText
+    assertFalse(cleanMessage.contains("rec_37_poulet_basquaise"))
+    assertFalse(cleanMessage.contains("rec_06"))
+    assertEquals(
+      "Hello! Tonight we have 'Poulet Basquaise' or 'Greek Yogurt Granola Parfait'!",
+      cleanMessage,
+    )
+    assertNull(outcome.assistantTurn.proposal?.featuredRecipeCard)
+
+    // Verify pure chef technique tips return null swapPair while real 1:1 swaps resolve cleanly.
+    assertNull(
+      resolveChefSubstitutionPair(
+        recipe = panSearedSalmonDinner,
+        tipText = "Sous-Chef Rule: Remove skillet from heat before whisking in Greek yogurt.",
+        catalog = testCatalog,
+      ),
+    )
+    assertEquals(
+      "ing_spinach" to "ing_kangkong",
+      resolveChefSubstitutionPair(
+        recipe = panSearedSalmonDinner,
+        tipText = "Sous-Chef Rule: Swap Baby Spinach 1:1 with Fresh Kangkong for local crunch.",
+        catalog = testCatalog,
+      ),
+    )
   }
 
   // Stateful on-device AiEdgePort test double recording system prompts, imports, and discoveries.

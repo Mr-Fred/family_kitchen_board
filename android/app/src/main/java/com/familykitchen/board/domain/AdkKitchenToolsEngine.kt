@@ -1,8 +1,8 @@
 package com.familykitchen.board.domain
 
 import kotlin.math.min
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -16,9 +16,19 @@ import kotlinx.serialization.json.putJsonArray
 // SafetyConstraintAuditor gate, Gemma 4 / Cloud tool-call JSON parser, and Goldfish role router.
 // Zero Android, java.io, java.net, or external SDK imports permitted inside domain/.
 
-// Matches Gemma 4 native <|tool_call|>...<|/tool_call|> or <|tool_call|>...<|tool_call|> envelopes.
+// Lenient JSON parser accepting unquoted Gemma 4 keys inside call:propose_meal_board_swaps arrays.
+private val LENIENT_TOOL_ARG_JSON: Json = Json {
+  ignoreUnknownKeys = true
+  isLenient = true
+  allowSpecialFloatingPointValues = false
+}
+
+// Matches all Gemma 4 and Gemma 3 tool-call envelopes, including single-pipe <|tool_call>...<tool_call|>.
 private val GEMMA_TOOL_CALL_TAG_REGEX: Regex =
-  Regex("<\\|tool_call\\|>\\s*([\\s\\S]*?)(?:<\\|/tool_call\\|>|<\\|tool_call\\|>|$)", RegexOption.IGNORE_CASE)
+  Regex(
+    "(?:<\\|tool_call\\|>|<\\|tool_call>|<tool_call>)\\s*([\\s\\S]*?)(?:<\\|/tool_call\\|>|<tool_call\\|>|</tool_call>|<\\|tool_call\\|>|$)",
+    RegexOption.IGNORE_CASE,
+  )
 
 // Matches Gemma 4 compact function-call syntax `call:tool_name{key:"val",num:2}`.
 private val GEMMA_CALL_COLON_REGEX: Regex =
@@ -31,98 +41,6 @@ private val FENCED_TOOL_JSON_REGEX: Regex =
 // Pregnancy food-safety hazard phrases rejected by audit_candidate_meal_swaps when active.
 private val PREGNANCY_UNSAFE_PREP_REGEX: Regex =
   Regex("\\b(runny\\s+yolks?|raw\\s+eggs?|unpasteurized|swordfish|king\\s+mackerel|shark|cold\\s+deli)\\b", RegexOption.IGNORE_CASE)
-
-/**
- * Typed parameter schema for a single argument on an [AdkToolDeclaration].
- *
- * @property name Canonical JSON argument key.
- * @property type JSON Schema primitive/container type (`"string"`, `"integer"`, `"array"`).
- * @property description Concise explanation of how the Goldfish agent should populate [name].
- * @property required `true` when callers must supply [name].
- * @property enumValues Optional closed set of allowed string constants.
- */
-@Serializable
-data class AdkToolParameterSpec(
-  val name: String,
-  val type: String,
-  val description: String,
-  val required: Boolean = false,
-  val enumValues: List<String> = emptyList(),
-)
-
-/**
- * Typed ADK-style `BaseTool` / `FunctionDeclaration` contract exposing a bounded SavorAI capability.
- *
- * @property name Stable snake_case tool identifier (`"get_expiring_pantry_slice"`, etc.).
- * @property description Single-sentence summary injected into allowed [GoldfishTaskBrief]s.
- * @property parameters Ordered typed parameter specifications.
- * @property isReadOnly `true` when executing the tool never mutates household state.
- * @property requiresUserConfirmation `true` when the tool's output must be confirmed by a human (`HITL`).
- */
-@Serializable
-data class AdkToolDeclaration(
-  val name: String,
-  val description: String,
-  val parameters: List<AdkToolParameterSpec> = emptyList(),
-  val isReadOnly: Boolean = true,
-  val requiresUserConfirmation: Boolean = false,
-) {
-  /** Renders a token-thrifty `name(param: type): description` signature for Goldfish prompts. */
-  fun toCompactSignature(): String {
-    // Keep tool descriptions under ~18 tokens each so <=6 tools fit in <120 prompt tokens.
-    val params = parameters.joinToString(", ") { "${it.name}${if (it.required) "" else "?"}:${it.type}" }
-    return "$name($params) - $description"
-  }
-}
-
-/**
- * Validated tool invocation parsed from Gemma 4 `<|tool_call|>`, fenced JSON, or test callers.
- *
- * @property toolName Target [AdkToolDeclaration.name] to invoke.
- * @property arguments String-encoded argument map (JSON arrays/objects serialized verbatim).
- */
-@Serializable
-data class AdkToolCall(
-  val toolName: String,
-  val arguments: Map<String, String> = emptyMap(),
-)
-
-/**
- * Candidate board swap pair (`slotId -> recipeId`) inspected by `audit_candidate_meal_swaps` and
- * packaged by `propose_meal_board_swaps`.
- *
- * @property slotId Target [MealSlot.slotId] on the active `WeeklyBoard`.
- * @property recipeId Candidate replacement [Recipe.recipeId].
- * @property rationale Optional culinary/nutritional explanation surfaced on proposal cards.
- */
-@Serializable
-data class CandidateMealSwapSpec(
-  val slotId: String,
-  val recipeId: String,
-  val rationale: String = "",
-)
-
-/**
- * Immutable output returned by [executeKitchenDomainTool].
- *
- * @property toolName Invoked [AdkToolDeclaration.name].
- * @property isSuccess `true` when the tool executed cleanly without hard constraint rejection.
- * @property requiresUserConfirmation `true` when a human must confirm before mutating storage (`HITL`).
- * @property summaryText Concise human-readable summary of the returned slice or audit verdict.
- * @property payloadJson Compact JSON observation fed back into the stateless Goldfish synthesis pass.
- * @property safetyVerdict Populated on `audit_candidate_meal_swaps` and `propose_meal_board_swaps`.
- * @property proposedMenuOptimization Confirmation-gated proposal built by `propose_meal_board_swaps`.
- */
-@Serializable
-data class AdkToolResult(
-  val toolName: String,
-  val isSuccess: Boolean = true,
-  val requiresUserConfirmation: Boolean = false,
-  val summaryText: String,
-  val payloadJson: String,
-  val safetyVerdict: SafetyAuditVerdict? = null,
-  val proposedMenuOptimization: AiMenuOptimizationProposal? = null,
-)
 
 // 8 bounded SavorAI v2.0 ADK tools replacing v1's monolithic full-snapshot system prompt dumps.
 /** Canonical registry of the 8 bounded SavorAI v2.0 ADK tools. */
@@ -222,34 +140,45 @@ fun routePromptToGoldfishRole(
 }
 
 /**
- * Parses an ADK tool call emitted by Gemma 4 (`<|tool_call|>...<|/tool_call|>` or
- * `call:tool_name{...}`) or Cloud LLMs (fenced or bare `{"tool":"...","args":{...}}`), returning
- * `null` when [rawOutput] is a final prose or proposal response.
+ * Parses all ADK tool calls emitted by Gemma 4 (`<|tool_call>call:name{...}<tool_call|>`,
+ * `<|tool_call|>...<|/tool_call|>`, `<tool_call>...</tool_call>`, or bare `call:name{...}`) or
+ * Cloud LLMs (fenced or balanced `{"tool":"...","args":{...}}`), returning an empty list when
+ * [rawOutput] is final conversational prose or a grounded proposal JSON object.
  *
- * @param rawOutput Raw text returned by `AiEdgePort.generateText`.
- * @return Parsed [AdkToolCall] if [rawOutput] invokes a registered tool, or `null` otherwise.
+ * @param rawOutput Raw or control-token-sanitized text returned by `AiEdgePort.generateText`.
+ * @return Ordered list of validated [AdkToolCall] invocations targeting registered kitchen tools.
  */
-fun parseModelToolCallOrNull(rawOutput: String): AdkToolCall? {
-  if (rawOutput.isBlank()) return null
+fun parseAllModelToolCalls(rawOutput: String): List<AdkToolCall> {
+  if (rawOutput.isBlank()) return emptyList()
   val knownNames = ALL_KITCHEN_ADK_TOOL_DECLARATIONS.map { it.name }.toSet()
 
-  // Branch 1: Explicit Gemma 4 <|tool_call|> tag wrapper (supports JSON or call:name{...}).
-  val tagMatch = GEMMA_TOOL_CALL_TAG_REGEX.find(rawOutput)
-  if (tagMatch != null) {
+  // Branch 1: Explicit Gemma 4 / Gemma 3 tool-call tag envelopes (supports parallel tool calls).
+  val taggedCalls = GEMMA_TOOL_CALL_TAG_REGEX.findAll(rawOutput).mapNotNull { tagMatch ->
     val inner = tagMatch.groupValues[1].trim()
-    parseCallColonSyntax(inner, knownNames)?.let { return it }
-    parseToolJsonObject(inner, knownNames)?.let { return it }
-  }
+    parseCallColonSyntax(inner, knownNames) ?: parseToolJsonObject(inner, knownNames)
+  }.toList()
+  if (taggedCalls.isNotEmpty()) return taggedCalls
 
-  // Branch 2: Sanitize reasoning blocks and check fenced or balanced JSON tool-call envelopes.
+  // Branch 2: Sanitize reasoning blocks and check bare call:..., fenced JSON, or balanced JSON.
   val sanitized = sanitizeLlmRawOutput(rawOutput).trim()
-  parseCallColonSyntax(sanitized, knownNames)?.let { return it }
-  val fencedCandidate = FENCED_TOOL_JSON_REGEX.find(rawOutput)?.groupValues?.get(1)?.trim()
-  if (fencedCandidate != null) {
-    parseToolJsonObject(fencedCandidate, knownNames)?.let { return it }
-  }
-  return parseToolJsonObject(sanitized, knownNames)
+  parseCallColonSyntax(sanitized, knownNames)?.let { return listOf(it) }
+  val fencedCalls = FENCED_TOOL_JSON_REGEX.findAll(rawOutput).mapNotNull { match ->
+    parseToolJsonObject(match.groupValues[1].trim(), knownNames)
+  }.toList()
+  if (fencedCalls.isNotEmpty()) return fencedCalls
+  return listOfNotNull(parseToolJsonObject(sanitized, knownNames))
 }
+
+/**
+ * Parses the first ADK tool call emitted by Gemma 4 (`<|tool_call>call:name{...}<tool_call|>`,
+ * `<|tool_call|>...<|/tool_call|>`, or `call:tool_name{...}`) or Cloud LLMs, returning `null` when
+ * [rawOutput] is a final prose or proposal response.
+ *
+ * @param rawOutput Raw text returned by `AiEdgePort.generateText`.
+ * @return First parsed [AdkToolCall] if [rawOutput] invokes a registered tool, or `null` otherwise.
+ */
+fun parseModelToolCallOrNull(rawOutput: String): AdkToolCall? =
+  parseAllModelToolCalls(rawOutput).firstOrNull()
 
 /**
  * Deterministic + Critic safety auditor checking candidate `slotId -> recipeId` swaps against
@@ -715,7 +644,7 @@ private fun executePureDomainWebSearchPlaceholder(call: AdkToolCall): AdkToolRes
   )
 }
 
-// Parse JSON array `[{"slotId":"...","recipeId":"..."}]` or compact `"slotId=recipeId,..."` pairs.
+// Parse JSON array `[{"slotId":"...","recipeId":"..."}]` (strict or Gemma-lenient) or `"slotId=recipeId,..."`.
 internal fun parseCandidateSwapList(rawSwapsArg: String): List<CandidateMealSwapSpec> {
   val trimmed = rawSwapsArg.trim()
   if (trimmed.isEmpty()) return emptyList()
@@ -723,7 +652,11 @@ internal fun parseCandidateSwapList(rawSwapsArg: String): List<CandidateMealSwap
     val parsedArray = try {
       SchemaValidator.strictJson.parseToJsonElement(trimmed) as? JsonArray
     } catch (_: SerializationException) {
-      null
+      try {
+        LENIENT_TOOL_ARG_JSON.parseToJsonElement(trimmed) as? JsonArray
+      } catch (_: SerializationException) {
+        null
+      }
     }
     if (parsedArray != null) {
       return parsedArray.mapNotNull { el ->
@@ -763,7 +696,7 @@ private fun parseToolJsonObject(candidateText: String, knownNames: Set<String>):
   return AdkToolCall(toolName = rawName, arguments = argsMap)
 }
 
-// Parse Gemma 4 native `call:tool_name{withinDays:2}` compact function syntax.
+// Parse Gemma 4 native `call:tool_name{summary:"Warm, rich stew",swaps:[...]}` compact function syntax.
 private fun parseCallColonSyntax(rawInner: String, knownNames: Set<String>): AdkToolCall? {
   val match = GEMMA_CALL_COLON_REGEX.matchEntire(rawInner.trim()) ?: return null
   val toolName = match.groupValues[1].trim()
@@ -771,16 +704,71 @@ private fun parseCallColonSyntax(rawInner: String, knownNames: Set<String>): Adk
   val body = match.groupValues[2].trim()
   if (body.isEmpty()) return AdkToolCall(toolName = toolName)
   val argsMap = linkedMapOf<String, String>()
-  for (entry in body.split(',')) {
-    val idx = entry.indexOf(':')
+  // Split only at top-level commas so quoted commas and nested [...] / {...} stay intact.
+  for (entry in splitTopLevelCallArgs(body)) {
+    val idx = findFirstUnquotedColon(entry)
     if (idx > 0) {
       val key = entry.substring(0, idx).trim().trim('"', '\'')
-      val value = entry.substring(idx + 1).trim().trim('"', '\'')
+      val value = unquoteTopLevelCallValue(entry.substring(idx + 1).trim())
       if (key.isNotEmpty()) argsMap[key] = value
     }
   }
   return AdkToolCall(toolName = toolName, arguments = argsMap)
 }
+
+// Split `key:val,arr:[1,2],note:"a, b"` on commas at quote/bracket/brace depth 0.
+private fun splitTopLevelCallArgs(body: String): List<String> {
+  val segments = mutableListOf<String>()
+  val current = StringBuilder()
+  var inDouble = false
+  var inSingle = false
+  var escaped = false
+  var depth = 0
+
+  for (ch in body) {
+    when {
+      escaped -> { current.append(ch); escaped = false }
+      ch == '\\' && (inDouble || inSingle) -> { current.append(ch); escaped = true }
+      ch == '"' && !inSingle -> { inDouble = !inDouble; current.append(ch) }
+      ch == '\'' && !inDouble -> { inSingle = !inSingle; current.append(ch) }
+      !inDouble && !inSingle && (ch == '{' || ch == '[') -> { depth += 1; current.append(ch) }
+      !inDouble && !inSingle && (ch == '}' || ch == ']') -> { if (depth > 0) depth -= 1; current.append(ch) }
+      !inDouble && !inSingle && depth == 0 && ch == ',' -> {
+        current.toString().trim().takeIf { it.isNotEmpty() }?.let(segments::add)
+        current.setLength(0)
+      }
+      else -> current.append(ch)
+    }
+  }
+  current.toString().trim().takeIf { it.isNotEmpty() }?.let(segments::add)
+  return segments
+}
+
+private fun findFirstUnquotedColon(entry: String): Int {
+  var inDoubleQuotes = false
+  var inSingleQuotes = false
+  var escaped = false
+  for (idx in entry.indices) {
+    val ch = entry[idx]
+    when {
+      escaped -> escaped = false
+      ch == '\\' && (inDoubleQuotes || inSingleQuotes) -> escaped = true
+      ch == '"' && !inSingleQuotes -> inDoubleQuotes = !inDoubleQuotes
+      ch == '\'' && !inDoubleQuotes -> inSingleQuotes = !inSingleQuotes
+      !inDoubleQuotes && !inSingleQuotes && ch == ':' -> return idx
+    }
+  }
+  return -1
+}
+
+private fun unquoteTopLevelCallValue(rawValue: String): String =
+  when {
+    rawValue.length >= 2 && rawValue.startsWith('"') && rawValue.endsWith('"') ->
+      rawValue.substring(1, rawValue.length - 1).replace("\\\"", "\"")
+    rawValue.length >= 2 && rawValue.startsWith('\'') && rawValue.endsWith('\'') ->
+      rawValue.substring(1, rawValue.length - 1).replace("\\'", "'")
+    else -> rawValue
+  }
 
 private fun jsonElementToArgString(element: JsonElement): String =
   when (element) {
@@ -813,6 +801,10 @@ object AdkKitchenToolsEngine {
     snapshot: KitchenDomainToolState,
     candidateSwaps: List<CandidateMealSwapSpec>,
   ): SafetyAuditVerdict = com.familykitchen.board.domain.auditCandidateMealSwaps(snapshot, candidateSwaps)
+
+  /** Delegates to top-level [com.familykitchen.board.domain.parseAllModelToolCalls]. */
+  fun parseAllModelToolCalls(rawOutput: String): List<AdkToolCall> =
+    com.familykitchen.board.domain.parseAllModelToolCalls(rawOutput)
 
   /** Delegates to top-level [com.familykitchen.board.domain.parseModelToolCallOrNull]. */
   fun parseModelToolCallOrNull(rawOutput: String): AdkToolCall? =

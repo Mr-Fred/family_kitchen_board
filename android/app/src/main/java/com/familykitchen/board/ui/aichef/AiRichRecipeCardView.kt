@@ -101,10 +101,12 @@ fun AiRichRecipeSuggestionCard(
   val extendedColors = KitchenTheme.extendedColors
   val recipe = richCard.recipe
   val match = richCard.matchSummary
-  // Clamp todayDayIndex into 0..6 and default slot selection to DINNER whenever allowed (EC-01).
+  // Clamp todayDayIndex into 0..6 and honor richCard.preferredSlotType before DINNER fallback.
   val safeTodayIndex = todayDayIndex.coerceIn(0, 6)
   val eligibleSlots = recipe.allowedSlots.ifEmpty { MealSlotType.entries }
+  val preferredSlot = richCard.preferredSlotType
   val defaultSlot = when {
+    preferredSlot != null && preferredSlot in eligibleSlots -> preferredSlot
     MealSlotType.DINNER in eligibleSlots -> MealSlotType.DINNER
     else -> eligibleSlots.first()
   }
@@ -362,8 +364,9 @@ private fun richCardSlotLabel(slot: MealSlotType): String =
   }
 
 /**
- * Warm Culinary Substitution Tip Card with `48.dp` interactive `"Update recipe swap"` and
- * `"Check new calories"` chips and automatic `"Sous-Chef Rule:"` prefix deduplication.
+ * Warm Culinary Substitution Tip Card with optional `48.dp` interactive `"Update recipe swap"` and
+ * `"Check new calories"` chips (shown only when [showSwapActions] is `true`) and automatic
+ * `"Sous-Chef Rule:"` prefix deduplication.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -371,6 +374,7 @@ fun CulinarySubstitutionTipCard(
   tipText: String,
   onApplySwapClick: () -> Unit,
   onCheckCaloriesClick: () -> Unit,
+  showSwapActions: Boolean = true,
   modifier: Modifier = Modifier,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -387,28 +391,30 @@ fun CulinarySubstitutionTipCard(
       }
     }
 
-    // Interactive 48.dp chips trigger PantryExpiryEngine.swapRecipeIngredient and calorie audit.
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      Box(modifier = Modifier.defaultMinSize(minHeight = 48.dp).clip(CircleShape).clickable(onClick = onApplySwapClick), contentAlignment = Alignment.Center) {
-        Surface(
-          shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
-          border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
-        ) {
-          Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(Icons.Filled.SwapHoriz, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
-            Text("Update recipe swap", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+    // Render 48.dp swap/calorie chips strictly when tipText resolves a real ingredient swap pair.
+    if (showSwapActions) {
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(modifier = Modifier.defaultMinSize(minHeight = 48.dp).clip(CircleShape).clickable(onClick = onApplySwapClick), contentAlignment = Alignment.Center) {
+          Surface(
+            shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
+          ) {
+            Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              Icon(Icons.Filled.SwapHoriz, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
+              Text("Update recipe swap", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+            }
           }
         }
-      }
 
-      Box(modifier = Modifier.defaultMinSize(minHeight = 48.dp).clip(CircleShape).clickable(onClick = onCheckCaloriesClick), contentAlignment = Alignment.Center) {
-        Surface(
-          shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
-          border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
-        ) {
-          Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(Icons.Filled.QueryStats, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(15.dp))
-            Text("Check new calories", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+        Box(modifier = Modifier.defaultMinSize(minHeight = 48.dp).clip(CircleShape).clickable(onClick = onCheckCaloriesClick), contentAlignment = Alignment.Center) {
+          Surface(
+            shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp,
+          ) {
+            Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              Icon(Icons.Filled.QueryStats, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(15.dp))
+              Text("Check new calories", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+            }
           }
         }
       }

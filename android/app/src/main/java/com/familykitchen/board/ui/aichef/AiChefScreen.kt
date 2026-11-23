@@ -134,9 +134,16 @@ private val PRIMARY_PROTEIN_IDS: Set<String> = setOf(
   "ing_turkey_breast", "ing_turkey_ham", "ing_egg", "ing_tofu",
 )
 
+// Explicit substitution verbs distinguishing actionable ingredient swaps from pure chef technique notes.
+private val CHEF_SUBSTITUTION_INTENT_REGEX: Regex = Regex(
+  "\\b(?:swap\\w*|replac\\w*|substitut\\w*|instead\\s+of|in\\s+place\\s+of)\\b|1\\s*:\\s*1",
+  RegexOption.IGNORE_CASE,
+)
+
 /**
  * Resolves the `(fromIngredientId, toIngredientId)` substitution pair described by [tipText] on
- * [recipe] against [catalog], avoiding hardcoded `"ing_greek_yogurt"` swaps when another local or
+ * [recipe] against [catalog], returning `null` on pure chef technique notes (so dead swap/calorie
+ * chips never appear) and avoiding hardcoded `"ing_greek_yogurt"` swaps when another local or
  * pantry substitute (such as `ing_kangkong`, `ing_amaranth_greens`, `ing_bangus`, `ing_calamansi`,
  * `ing_red_palm_oil`, or `ing_gata`) is named.
  */
@@ -147,6 +154,8 @@ fun resolveChefSubstitutionPair(
 ): Pair<String, String>? {
   if (recipe.bomLines.isEmpty()) return null
   val tipLower = tipText.removePrefix("Sous-Chef Rule:").trim().lowercase()
+  // Pure cooking-technique notes ("Remove skillet from heat...", "Toast cut-side down...") have no swap pair.
+  if (!CHEF_SUBSTITUTION_INTENT_REGEX.containsMatchIn(tipLower)) return null
   val effectiveCatalog = (catalog + LOCAL_MARKET_PRESET_INGREDIENTS).distinctBy { it.ingredientId }
   val catalogById = effectiveCatalog.associateBy { it.ingredientId }
   val bomIds = recipe.bomLines.map { it.ingredientId }.toSet()
@@ -252,6 +261,8 @@ fun AiChefScreen(
   val toggleSetup: () -> Unit = onToggleModelSetup ?: { internalSetupExpanded = !internalSetupExpanded }
   // Defensively disambiguate any legacy duplicate turnIds so LazyColumn keys never collide.
   val safeTurnHistory = remember(turnHistory) { chefScreenEnsureUniqueTurnIds(turnHistory) }
+  // Merge latest assistant follow-ups with default quick prompts (deduplicated, <=5, zero / or ()).
+  val dockedQuickPrompts = remember(safeTurnHistory) { chefScreenBuildDockedQuickPrompts(safeTurnHistory) }
 
   // Smoothly bring item 0 into view after 1-tap Cloud Vision switch.
   LaunchedEffect(scrollToSetupTrigger) {
@@ -300,9 +311,8 @@ fun AiChefScreen(
           item(key = "savor_edge_ai_setup") {
             EdgeAiRuntimeSetupPanel(
               runtimeState = runtimeState, activeProfile = activeDeviceProfile, isExpanded = setupExpanded,
-              onToggleExpanded = toggleSetup,
+              onToggleExpanded = toggleSetup, onImportModelClick = onLaunchModelPicker,
               onSelectProfile = { profile -> onAction(AiChefAction.SelectDeviceProfile(profile)) },
-              onImportModelClick = onLaunchModelPicker,
               cloudConfig = cloudConfig, isVerifyingCloudKey = isVerifyingCloudKey,
               isRefreshingCloudModels = isRefreshingCloudModels, onAction = onAction,
             )
@@ -310,9 +320,7 @@ fun AiChefScreen(
         }
 
         if (!permissionNotice.isNullOrBlank()) {
-          item(key = "savor_permission_notice") {
-            PermissionFeedbackBanner(message = permissionNotice, onDismiss = onDismissPermissionNotice)
-          }
+          item(key = "savor_permission_notice") { PermissionFeedbackBanner(message = permissionNotice, onDismiss = onDismissPermissionNotice) }
         }
 
         // Time-of-day aware editorial welcome card when no conversation turns exist yet.
@@ -334,12 +342,7 @@ fun AiChefScreen(
             isIngredientsQueued = turn.proposal?.proposalId in queuedIngredientProposalIds,
             isVisualRestockConfirmed = turn.turnId in confirmedVisualTurnIds,
             currencySymbol = currencySymbol, todayDayIndex = todayDayIndex, catalog = catalog,
-            onAction = onAction,
-            onQuickPromptFill = { prompt ->
-              composerText = prompt
-              onAction(AiChefAction.SelectQuickPrompt(prompt))
-            },
-            onNavigateToBoard = onNavigateToBoard, onNavigateToGroceryList = onNavigateToGroceryList,
+            onAction = onAction, onNavigateToBoard = onNavigateToBoard, onNavigateToGroceryList = onNavigateToGroceryList,
           )
         }
 
@@ -362,10 +365,7 @@ fun AiChefScreen(
           enter = fadeIn(tween(180)) + expandVertically(tween(200)),
           exit = fadeOut(tween(220)) + shrinkVertically(tween(220)),
         ) {
-          AgentCommitUndoBar(
-            summary = lastUndoSummary, onUndo = onUndoLastAgentAction,
-            onViewOrAdjust = onAdjustLastAgentAction, onDismiss = onDismissAgentActionBanner,
-          )
+          AgentCommitUndoBar(summary = lastUndoSummary, onUndo = onUndoLastAgentAction, onViewOrAdjust = onAdjustLastAgentAction, onDismiss = onDismissAgentActionBanner)
         }
 
         // Non-silent multimodal Vision Gate blocks Send until Gemma 4 or Cloud Vision is Ready.
@@ -391,15 +391,13 @@ fun AiChefScreen(
         if (!blockedByVisionGate && (runtimeState is AiRuntimeState.Importing || runtimeState is AiRuntimeState.Loading)) {
           ModelOperationProgressBanner(runtimeState = runtimeState, onCancelDownload = { onAction(AiChefAction.CancelActiveModelDownload) })
         }
-
         if (isPreprocessingImage) ImagePreprocessingBanner(imageLabel = preprocessingImageLabel)
-
         VoiceInputStatusStrip(voiceState = voiceState, activeLocale = selectedVoiceLocale, onStopListening = { onAction(AiChefAction.StopVoiceInput) })
 
-        // Docked quick-action suggestion chips shown directly above composer when input is empty.
+        // Single deduplicated quick-action chip strip docked above composer when input is empty.
         if (composerText.isEmpty() && attachedImagePath == null && !isGenerating) {
-          chefScreenQuickPromptChipRow { prompt ->
-            composerText = prompt
+          chefScreenQuickPromptChipRow(prompts = dockedQuickPrompts) { prompt ->
+            composerText = ""
             onAction(AiChefAction.SelectQuickPrompt(prompt))
           }
         }
@@ -414,19 +412,12 @@ fun AiChefScreen(
           onRemovePhoto = { onAction(AiChefAction.ClearAttachedImage) },
           onLaunchCameraCapture = onLaunchCameraCapture, onLaunchGalleryPicker = onLaunchGalleryPicker,
           onToggleVoice = {
-            when {
-              voiceState is VoiceInputState.Listening -> onAction(AiChefAction.StopVoiceInput)
-              else -> onRequestVoiceInput(selectedVoiceLocale)
-            }
+            if (voiceState is VoiceInputState.Listening) onAction(AiChefAction.StopVoiceInput) else onRequestVoiceInput(selectedVoiceLocale)
           },
           onToggleLocale = {
-            selectedVoiceLocale = when (selectedVoiceLocale) {
-              VoiceInputPort.LOCALE_EN_US -> VoiceInputPort.LOCALE_FR_FR
-              else -> VoiceInputPort.LOCALE_EN_US
-            }
+            selectedVoiceLocale = if (selectedVoiceLocale == VoiceInputPort.LOCALE_EN_US) VoiceInputPort.LOCALE_FR_FR else VoiceInputPort.LOCALE_EN_US
           },
-          onResetConversation = { onAction(AiChefAction.ResetConversation) },
-          onSubmitPrompt = submitCurrentPrompt,
+          onResetConversation = { onAction(AiChefAction.ResetConversation) }, onSubmitPrompt = submitCurrentPrompt,
         )
       }
     }
@@ -435,10 +426,13 @@ fun AiChefScreen(
 
 // Horizontal row of 44.dp+ quick-prompt pills docking above the empty composer.
 @Composable
-private fun chefScreenQuickPromptChipRow(onSelectPrompt: (String) -> Unit) {
+private fun chefScreenQuickPromptChipRow(
+  prompts: List<String>,
+  onSelectPrompt: (String) -> Unit,
+) {
   val extendedColors = KitchenTheme.extendedColors
   Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-    SAVOR_QUICK_ACTION_PROMPTS.forEach { prompt ->
+    prompts.forEach { prompt ->
       Box(modifier = Modifier.defaultMinSize(minHeight = 44.dp).clip(CircleShape).clickable { onSelectPrompt(prompt) }, contentAlignment = Alignment.Center) {
         Surface(
           shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -569,7 +563,7 @@ private fun chefScreenChatTurnView(
   isSwapsApplied: Boolean, isIngredientsQueued: Boolean,
   isVisualRestockConfirmed: Boolean, currencySymbol: String,
   todayDayIndex: Int, catalog: List<IngredientCatalogItem>,
-  onAction: (AiChefAction) -> Unit, onQuickPromptFill: (String) -> Unit,
+  onAction: (AiChefAction) -> Unit,
   onNavigateToBoard: () -> Unit, onNavigateToGroceryList: () -> Unit,
 ) {
   val extendedColors = KitchenTheme.extendedColors
@@ -621,10 +615,11 @@ private fun chefScreenChatTurnView(
         // Structured Rich Recipe Suggestion Card with Tonight Dinner picker and dynamic swap.
         if (richCard != null) {
           val isSaved = richCard.recipe.isSavedFavorite || richCard.recipe.recipeId in savedRecipeIds
+          val fallbackSlot = richCard.preferredSlotType ?: MealSlotType.DINNER
           AiRichRecipeSuggestionCard(
             richCard = richCard, isSaved = isSaved,
             onStartCookingMode = { onAction(AiChefAction.StartCookModeFromAi(richCard.recipe)) },
-            onAddToPlan = { onAction(AiChefAction.AddRecipeToPlanFromAi(richCard.recipe, dayIndex = todayDayIndex, slotType = MealSlotType.DINNER)) },
+            onAddToPlan = { onAction(AiChefAction.AddRecipeToPlanFromAi(richCard.recipe, dayIndex = todayDayIndex, slotType = fallbackSlot)) },
             onToggleSave = { onAction(AiChefAction.ToggleSaveRecipe(richCard.recipe.recipeId)) },
             onQueueMissingStaples = { deltas -> onAction(AiChefAction.QueueMissingRecipeStaples(deltas)) },
             currencySymbol = currencySymbol, todayDayIndex = todayDayIndex,
@@ -632,18 +627,21 @@ private fun chefScreenChatTurnView(
               onAction(AiChefAction.AddRecipeToPlanFromAi(richCard.recipe, dayIndex = dayIdx, slotType = slotType))
             },
           )
-          // Resolve the actual named substitute ingredient rather than hardcoding Greek yogurt.
+          // Show swap/calorie chips strictly when tipText resolves a real ingredient substitution pair.
           richCard.substitutionTip?.takeIf { it.isNotBlank() }?.let { tip ->
             val combinedCatalog = catalog + richCard.matchSummary.matchedIngredients + richCard.matchSummary.missingStaples
+            val swapPair = resolveChefSubstitutionPair(recipe = richCard.recipe, tipText = tip, catalog = combinedCatalog)
             CulinarySubstitutionTipCard(
               tipText = tip,
+              showSwapActions = swapPair != null,
               onApplySwapClick = {
-                val swapPair = resolveChefSubstitutionPair(recipe = richCard.recipe, tipText = tip, catalog = combinedCatalog)
                 if (swapPair != null) {
                   onAction(AiChefAction.ApplyRecipeSubstitution(richCard.recipe.recipeId, swapPair.first, swapPair.second))
                 }
               },
-              onCheckCaloriesClick = { onQuickPromptFill("What is the updated calorie count?") },
+              onCheckCaloriesClick = {
+                onAction(AiChefAction.SelectQuickPrompt("What is the updated calorie count?"))
+              },
             )
           }
         }
@@ -667,22 +665,23 @@ private fun chefScreenChatTurnView(
             BrainBoosterIngredientsCard(proposal = proposal, isQueued = isIngredientsQueued, onQueueIngredients = { onAction(AiChefAction.QueueSuggestedIngredients(proposal)) }, onNavigateToGroceryList = onNavigateToGroceryList)
           }
         }
-
-        val followUps = proposal?.followUpPrompts ?: turn.toolCallResult?.followUpPrompts.orEmpty()
-        if (followUps.isNotEmpty()) {
-          Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            followUps.forEach { followUp ->
-              Box(modifier = Modifier.defaultMinSize(minHeight = 44.dp).clip(CircleShape).clickable { onQuickPromptFill(followUp) }, contentAlignment = Alignment.Center) {
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow, border = BorderStroke(1.dp, extendedColors.borderSubtle), shadowElevation = 0.dp) {
-                  Text(followUp, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
-                }
-              }
-            }
-          }
-        }
       }
     }
   }
+}
+
+// Merge latest assistant follow-ups + default quick prompts (deduplicated, <=5, zero `/` or `()`).
+private fun chefScreenBuildDockedQuickPrompts(turns: List<AiChatTurn>): List<String> {
+  val lastAssistant = turns.lastOrNull { it.role == AiChatRole.ASSISTANT }
+  val contextual = lastAssistant?.proposal?.followUpPrompts
+    ?: lastAssistant?.toolCallResult?.followUpPrompts.orEmpty()
+  val seenLower = HashSet<String>()
+  return (contextual + SAVOR_QUICK_ACTION_PROMPTS)
+    .map { it.trim() }
+    .filter { it.isNotEmpty() && '/' !in it && '(' !in it && ')' !in it }
+    .filter { seenLower.add(it.lowercase()) }
+    .take(5)
+    .ifEmpty { SAVOR_QUICK_ACTION_PROMPTS }
 }
 
 // Guarantees unique LazyColumn item keys even if a legacy persisted snapshot carried duplicate turnIds.

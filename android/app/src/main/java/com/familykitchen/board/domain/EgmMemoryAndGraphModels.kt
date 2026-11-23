@@ -18,6 +18,98 @@ const val DEFAULT_MAX_EPISODIC_DIGESTS: Int = 8
 const val MAX_GOLDFISH_FACT_SLICE: Int = 5
 
 /**
+ * Typed parameter schema for a single argument on an [AdkToolDeclaration].
+ *
+ * @property name Canonical JSON argument key.
+ * @property type JSON Schema primitive/container type (`"string"`, `"integer"`, `"array"`).
+ * @property description Concise explanation of how the Goldfish agent should populate [name].
+ * @property required `true` when callers must supply [name].
+ * @property enumValues Optional closed set of allowed string constants.
+ */
+@Serializable
+data class AdkToolParameterSpec(
+  val name: String,
+  val type: String,
+  val description: String,
+  val required: Boolean = false,
+  val enumValues: List<String> = emptyList(),
+)
+
+/**
+ * Typed ADK-style `BaseTool` / `FunctionDeclaration` contract exposing a bounded SavorAI capability.
+ *
+ * @property name Stable snake_case tool identifier (`"get_expiring_pantry_slice"`, etc.).
+ * @property description Single-sentence summary injected into allowed [GoldfishTaskBrief]s.
+ * @property parameters Ordered typed parameter specifications.
+ * @property isReadOnly `true` when executing the tool never mutates household state.
+ * @property requiresUserConfirmation `true` when the tool's output must be confirmed by a human (`HITL`).
+ */
+@Serializable
+data class AdkToolDeclaration(
+  val name: String,
+  val description: String,
+  val parameters: List<AdkToolParameterSpec> = emptyList(),
+  val isReadOnly: Boolean = true,
+  val requiresUserConfirmation: Boolean = false,
+) {
+  /** Renders a token-thrifty `name(param: type): description` signature for Goldfish prompts. */
+  fun toCompactSignature(): String {
+    // Keep tool descriptions under ~18 tokens each so <=6 tools fit in <120 prompt tokens.
+    val params = parameters.joinToString(", ") { "${it.name}${if (it.required) "" else "?"}:${it.type}" }
+    return "$name($params) - $description"
+  }
+}
+
+/**
+ * Validated tool invocation parsed from Gemma 4 `<|tool_call|>`, fenced JSON, or test callers.
+ *
+ * @property toolName Target [AdkToolDeclaration.name] to invoke.
+ * @property arguments String-encoded argument map (JSON arrays/objects serialized verbatim).
+ */
+@Serializable
+data class AdkToolCall(
+  val toolName: String,
+  val arguments: Map<String, String> = emptyMap(),
+)
+
+/**
+ * Candidate board swap pair (`slotId -> recipeId`) inspected by `audit_candidate_meal_swaps` and
+ * packaged by `propose_meal_board_swaps`.
+ *
+ * @property slotId Target [MealSlot.slotId] on the active `WeeklyBoard`.
+ * @property recipeId Candidate replacement [Recipe.recipeId].
+ * @property rationale Optional culinary/nutritional explanation surfaced on proposal cards.
+ */
+@Serializable
+data class CandidateMealSwapSpec(
+  val slotId: String,
+  val recipeId: String,
+  val rationale: String = "",
+)
+
+/**
+ * Immutable output returned by `executeKitchenDomainTool`.
+ *
+ * @property toolName Invoked [AdkToolDeclaration.name].
+ * @property isSuccess `true` when the tool executed cleanly without hard constraint rejection.
+ * @property requiresUserConfirmation `true` when a human must confirm before mutating storage (`HITL`).
+ * @property summaryText Concise human-readable summary of the returned slice or audit verdict.
+ * @property payloadJson Compact JSON observation fed back into the stateless Goldfish synthesis pass.
+ * @property safetyVerdict Populated on `audit_candidate_meal_swaps` and `propose_meal_board_swaps`.
+ * @property proposedMenuOptimization Confirmation-gated proposal built by `propose_meal_board_swaps`.
+ */
+@Serializable
+data class AdkToolResult(
+  val toolName: String,
+  val isSuccess: Boolean = true,
+  val requiresUserConfirmation: Boolean = false,
+  val summaryText: String,
+  val payloadJson: String,
+  val safetyVerdict: SafetyAuditVerdict? = null,
+  val proposedMenuOptimization: AiMenuOptimizationProposal? = null,
+)
+
+/**
  * Pure domain read-only projection of persisted household kitchen state consumed by deterministic
  * ADK tools in `AdkKitchenToolsEngine` without coupling `domain/` to `ports/`.
  */
@@ -287,6 +379,7 @@ data class SafetyAuditVerdict(
  * @property allowedToolNames Canonical ADK tool names permitted during this Goldfish pass.
  * @property allowedToolSignatures Compact `name(params): description` schemas for [allowedToolNames].
  * @property repairViolations Structured critic violations injected **only** on `LoopAgent` repair pass.
+ * @property kitchenContextLine Optional single-line scheduled-meals & urgent-stock snapshot (`0` chat turns).
  */
 @Serializable
 data class GoldfishTaskBrief(
@@ -297,6 +390,7 @@ data class GoldfishTaskBrief(
   val allowedToolNames: List<String> = emptyList(),
   val allowedToolSignatures: List<String> = emptyList(),
   val repairViolations: List<SafetyConstraintViolation> = emptyList(),
+  val kitchenContextLine: String? = null,
 ) {
   /**
    * Renders this isolated task brief into a deterministic single-node prompt string containing
@@ -307,11 +401,14 @@ data class GoldfishTaskBrief(
    */
   fun renderIsolatedPromptEnvelope(outputContractHint: String = DEFAULT_GOLDFISH_OUTPUT_HINT): String =
     buildList {
-      // Emit strictly bounded role, <=5 facts, allowed tools, optional critic feedback, & user intent.
+      // Emit strictly bounded role, <=5 facts, optional board brief, tools, critic feedback, & user intent.
       add("GOLDFISH_ROLE: ${role.name}")
       add("INSTRUCTION: $roleInstruction")
       val factsLine = if (relevantFacts.isEmpty()) "NONE" else relevantFacts.joinToString(" | ") { "[${it.category.name}] ${it.summary}" }
       add("ELEPHANT_FACTS (${relevantFacts.size}/$MAX_GOLDFISH_FACT_SLICE): $factsLine")
+      if (!kitchenContextLine.isNullOrBlank()) {
+        add("KITCHEN_SNAPSHOT_BRIEF: $kitchenContextLine")
+      }
       val toolsLine = when {
         allowedToolSignatures.isNotEmpty() -> allowedToolSignatures.joinToString(" ; ")
         allowedToolNames.isNotEmpty() -> allowedToolNames.joinToString(", ")
@@ -682,6 +779,7 @@ fun selectRelevantElephantFacts(
  * @param toolDeclarations Available ADK tool declarations filtered to [role]'s allowed tools.
  * @param maxFacts Maximum semantic facts to inject (`<= 5`).
  * @param repairViolations Optional `SafetyConstraintViolation` list on `LoopAgent` iteration 2.
+ * @param kitchenContextLine Optional compact scheduled-meals and urgent-stock snapshot (`0` chat turns).
  * @return Immutable, context-isolated [GoldfishTaskBrief].
  */
 fun buildGoldfishTaskBrief(
@@ -691,6 +789,7 @@ fun buildGoldfishTaskBrief(
   toolDeclarations: List<AdkToolDeclaration> = AdkKitchenToolsEngine.declarationsForRole(role),
   maxFacts: Int = MAX_GOLDFISH_FACT_SLICE,
   repairViolations: List<SafetyConstraintViolation> = emptyList(),
+  kitchenContextLine: String? = null,
 ): GoldfishTaskBrief {
   // Bind only tools explicitly whitelisted on the active Goldfish specialist role.
   val cleanIntent = userIntent.trim()
@@ -705,6 +804,7 @@ fun buildGoldfishTaskBrief(
     allowedToolNames = matchedDeclarations.map { it.name }.ifEmpty { role.defaultAllowedTools },
     allowedToolSignatures = matchedDeclarations.map { it.toCompactSignature() },
     repairViolations = repairViolations,
+    kitchenContextLine = kitchenContextLine?.trim()?.takeIf { it.isNotEmpty() },
   )
 }
 
